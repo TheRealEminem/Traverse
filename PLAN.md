@@ -371,6 +371,24 @@ Blueprint chunk 4: projects list with health and progress, the project page (ove
 **Done when:** Team view matches Plane: on 2026-10-18 that was 34 open items, Mark 23, Mickey 5, Elijah 2, 4 with no
 one. Assigning a task offers Elijah and Mickey from Plane.
 
+**Result (2026-10-19, branch `claude/chunk-5-plane-mirror-ebcfba`, not yet live-checked).**
+- **`modules/plane`:** settings (`plane.personal_api_key`, write-only; plain `api_key` wouldn't be a secret to the
+  host, which only hides names ending in `_api_key`), workspace slug, base URL (Plane Cloud), projects to mirror,
+  `plane.me`, pull interval; `POST /api/plane/test`; a GET-only client (paging, 429/5xx backoff, readable errors);
+  `plane/pull` writing a whole snapshot in one transaction, touching only changed rows (gone items get `removed_at`).
+- **Team view** `#/plane/team` (wide): totals, per-person cards with a state split, by state, by project, and a
+  searchable item table filtered by person, project, past due and no one (filters in the hash); items open in Plane.
+- **People directory:** `Module.people`, `core/server/people.py` (merges modules and `family.call("people.search")`,
+  you first as `core:me`, same email shown once, a note when the other app is closed), `GET /api/people`,
+  `PersonPicker` in blocks.tsx. Plane members are `plane:<id>`; the key's owner (or `plane.me`) is `core:me`.
+- **Verified:** 169 tests with `TRAVERSE_MODULES=tasks,plane` (fixtures rebuild the 2026-10-18 workspace: 34 open,
+  Mark 23, Mickey 5, Elijah 2, no one 4). Team view looked at in Day and Dusk at 1440 and 375.
+- **Not done:** the live check (Mark pastes his key in Settings → Plane, tests, mirrors the 7 real projects and
+  compares the counts and that `/browse/KEY-N/` links open); `app.json` still lacks `plane` (run with
+  `TRAVERSE_MODULES=tasks,plane`). Settings → Plane and PersonPicker were tried in a browser (You first, Elijah and
+  Mickey from Plane, "Use “ana” as a name" giving ref null, keyboard choice giving `plane:<id>`), but no screen
+  uses PersonPicker yet: chunk 3's task page is where assignees will pick with it.
+
 ### Chunk 6 · Linking (M)
 
 - Link a Traverse project to a Plane project, with the state mapping (§3.2) chosen per project.
