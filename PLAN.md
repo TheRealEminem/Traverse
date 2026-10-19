@@ -14,7 +14,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | # | Chunk | Size | Status |
 | --- | --- | --- | --- |
 | 0 | Family source of truth: `TrailmixFamily`, The Lodge's look out of `core/`, shared helpers promoted | M | ◐ 2026-10-18: committed on The Lodge's `family/source-of-truth` (a48764e, 00644eb) and TrailmixFamily (up to 84ea14d); The Lodge's main untouched |
-| 1 | Traverse from the family: repo, `app.json`, `identity/`, an empty app that launches | S | ◐ built 2026-10-18 on `chunk-1/traverse-from-family`, for Mark to look at |
+| 1 | Traverse from the family: repo, `app.json`, `identity/`, an empty app that launches | S | ☑ 2026-10-18 on `chunk-1/traverse-from-family` |
 | 2 | Tasks v2 data: projects, milestones, items, updates (migration step 2) | M | ☐ |
 | 3 | My tasks, quick add, the task page | M | ☐ |
 | 4 | Projects list and project page, milestones, progress | M | ☐ |
@@ -42,7 +42,7 @@ Mac sharing data, keys and basic preferences.
 | --- | --- | --- | --- | --- |
 | F1 | A backup before an update migrates the database | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
 | F2 | Gemini's default model (`gemini-2.5-flash` is closed to new accounts) | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
-| F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ◐ 2026-10-18: built (family 3a26cf7) and tried end to end with The Lodge's `family/link` branch; result notes still to write |
+| F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ☑ 2026-10-18 (family 3a26cf7); The Lodge has it on its `family/link` branch |
 | F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ☐ |
 | F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☐ |
 | F6 | AI pricing and usage: what each AI call costs, and a running total | M | before chunk 9 | ☐ |
@@ -444,6 +444,31 @@ Splitting them keeps each app the owner of its data and still shares what's trul
 **Done when:** a key saved in Traverse shows as set in The Lodge (once The Lodge has taken this family version);
 changing your name or the appearance in one changes the other; Traverse's assignee picker lists The Lodge's people
 while The Lodge is open, and says how to see them when it isn't; a call without the token gets 403.
+
+**Result (2026-10-18, family f3b4e31 to 3a26cf7).**
+- **Built as designed:** `core/server/family.py` (the family folder and `family.db`, shared settings, registry with a
+  heartbeat, token, `call()`), `Module.offers`, settings that read and save shared keys through the family, the
+  `GET /api/family` and `POST /api/family/call/<offer>` endpoints (the call endpoint passes the sign-in check and
+  checks the family token itself), open screens refreshing on family changes, `core.appearance` as a setting (the
+  browser keeps a copy for the first paint, and a choice made before the setting existed is kept), `<PREFIX>_PORT`,
+  and Settings → "Your family apps". ARCHITECTURE.md describes it, and `Module.count` too.
+- **The Lodge** has it on its own branch, `family/link` (85e43c5, pinned to 3a26cf7), with People offering
+  `people.search` (names that start with the search first, then names with a word that does, then names that
+  contain it, then other matches; you as `core:me`) and `people.get`. Not merged: main and the installed app are
+  untouched. Mark's `shared-sheet` work in The Lodge's folder was left as it was.
+- **Found on the way:** the shared `conftest.py` failed when `node_modules` was a link from elsewhere (now skipped),
+  and the host's family tests assumed no real module offered `people.search` and that no app was called "lodge"
+  (now a stand-in, "Faraway").
+- **Verified:** 16 host tests and 4 People tests (91 and 224 in the two apps). End to end, with Traverse and The
+  Lodge's branch running together on a throwaway family folder and a copy of The Lodge's data with every key and
+  sync secret blanked: each app listed the other as open with its offers; a fake key saved in Traverse showed as set
+  in The Lodge (the page got only the hint); your name and the appearance saved in The Lodge showed in Traverse, and
+  switching to Day in Traverse's Settings turned The Lodge's window to Day within seconds; a People-only setting
+  stayed in The Lodge; Traverse found The Lodge's people, and "mark" came back as `core:me`; calls without the token,
+  or with a wrong one, got 403; with The Lodge stopped, it showed as closed, the call said "Open The Lodge to see
+  this here.", and Traverse still had the shared key.
+- **Not yet:** Traverse has no assignee picker until chunk 5; it will use `people.search` there. The installed apps
+  haven't been rebuilt with this, so the real family folder hasn't been created yet.
 
 ### F4 · Updater and releases (M)
 
