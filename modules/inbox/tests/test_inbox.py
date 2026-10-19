@@ -22,9 +22,9 @@ Mickey Ruiz  9:21 AM
 """
 
 READING = Reading(title="Acme quote thread", proposals=[
-    Proposal(text="Send Acme the revised quote", assignee_name="Elijah Park", due_on="2026-10-23", priority=0,
+    Proposal(text="Send Acme the revised quote", assignee_name="Elijah Park", when_said="by Friday", due_on="2026-10-23",
              quote="I'll send it to them by Friday."),
-    Proposal(text="Update the pricing sheet", assignee_name="Mickey Ruiz", due_on="2026-10-20", priority=0,
+    Proposal(text="Update the pricing sheet", assignee_name="Mickey Ruiz", when_said="tomorrow", due_on="2026-10-20",
              quote="I can update the pricing sheet tomorrow so the numbers match."),
     Proposal(text="Book the kickoff call with Acme", assignee_name="Dale Morgan", when_said="next Tuesday",
              due_on="2026-10-27", urgency_said="urgent", priority=4,
@@ -102,12 +102,18 @@ def test_a_title_you_give_is_kept(client, fake_structured):
 
 
 def test_odd_answers_are_tidied_not_guessed(fake_structured):
+    said = "Call Sam ASAP, by Friday at the latest. Ship it Feb 30."
     assert extract.tidy(Proposal(text="  Call   Sam. ", assignee_name="nobody", due_on="Friday", urgency_said="ASAP",
-                                 priority=9, quote=" x ")) == {
+                                 priority=9, quote=" x "), said) == {
         "text": "Call Sam", "assignee_name": None, "due_on": None, "priority": 4, "quote": "x"}
-    assert extract.tidy(Proposal(text="Call Sam", priority=3, quote="x"))["priority"] == 0   # no urgency words: a guess
-    assert extract.tidy(Proposal(text="  ", quote="")) is None
-    assert extract.tidy(Proposal(text="Ship", due_on="2026-02-30", quote="")) ["due_on"] is None
+    assert extract.tidy(Proposal(text="Call Sam", priority=3, quote="x"), said)["priority"] == 0   # no urgency words: a guess
+    assert extract.tidy(Proposal(text="Call Sam", due_on="2026-10-19", quote="x"), said)["due_on"] is None  # nor when-words
+    made_up = Proposal(text="Call Sam", when_said="today", due_on="2026-10-19", urgency_said="urgent", priority=4, quote="x")
+    assert extract.tidy(made_up, said)["due_on"] is None and extract.tidy(made_up, said)["priority"] == 0  # not in the text
+    assert extract.tidy(Proposal(text="Call Sam", when_said="By  friday", due_on="2026-10-23", quote="x"), said)["due_on"] == "2026-10-23"
+    assert extract.tidy(Proposal(text="Call Sam", quote="- Call Sam."), said)["quote"] == "Call Sam."
+    assert extract.tidy(Proposal(text="  ", quote=""), said) is None
+    assert extract.tidy(Proposal(text="Ship", when_said="Feb 30", due_on="2026-02-30", quote=""), said)["due_on"] is None
 
 
 def test_nothing_found_means_nothing_waits(client, fake_structured):

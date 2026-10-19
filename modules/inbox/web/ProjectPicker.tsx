@@ -19,7 +19,7 @@ export default function ProjectPicker({ value, onChange }: { value: ProjectChoic
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const onDown = (e: PointerEvent) => !box.current?.contains(e.target as Node) && close(false);
     window.addEventListener("pointerdown", onDown, true);
     return () => window.removeEventListener("pointerdown", onDown, true);
   }, [open]);
@@ -34,21 +34,22 @@ export default function ProjectPicker({ value, onChange }: { value: ProjectChoic
     };
   }, [q]);
 
-  const options: Option[] = [...(hits ?? []), ...(value ? [null] : [])];
-  const choose = (o: Option) => {
+  function close(refocus = true) {
     setOpen(false);
     setQ("");
-    trigger.current?.focus();
+    if (refocus) trigger.current?.focus();
+  }
+  const options: Option[] = [...(hits ?? []), ...(value ? [null] : [])];
+  const choose = (o: Option) => {
+    close();
     if ((o?.ref ?? null) !== (value?.ref ?? null)) onChange(o);
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "ArrowDown") setActive((a) => Math.min(options.length - 1, a + 1));
     else if (e.key === "ArrowUp") setActive((a) => Math.max(0, a - 1));
     else if (e.key === "Enter" && options.length) choose(options[active]);
-    else if (e.key === "Escape") {
-      setOpen(false);
-      trigger.current?.focus();
-    } else return;
+    else if (e.key === "Escape") close();
+    else return;
     e.preventDefault();
   };
 
@@ -60,7 +61,7 @@ export default function ProjectPicker({ value, onChange }: { value: ProjectChoic
         className="btn btn-sm btn-soft max-w-full"
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? close(false) : setOpen(true))}
       >
         <ProjectIcon size={16} className={value ? "text-forest" : ""} />
         <span className="truncate">{value ? value.title : "Choose a project"}</span>
