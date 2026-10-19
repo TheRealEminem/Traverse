@@ -68,23 +68,56 @@ export interface Meta {
   priorities: Labelled<number>[];
 }
 
+/** Worked out from a project's (or milestone's) top-level tasks; never stored. */
+export interface Rollup {
+  total: number;
+  done: number;
+  counted: number; // all but dropped
+  progress: number | null; // done ÷ counted, null when there's nothing to count
+  late: number;
+  next_due: string | null;
+  by_status: Record<Status, number>;
+}
+
+export type Health = "on_track" | "at_risk" | "off_track";
+
 export interface ProjectSummary {
   id: string;
   name: string;
+  summary: string | null;
+  brief: string;
   status: string;
+  health: Health | null;
+  start_on: string | null;
+  due_on: string | null;
+  owner_ref: string | null;
+  owner_name: string | null;
+  tags: string[];
   archived: boolean;
+  created_at: string;
+  rollup: Rollup;
 }
 
 export interface Milestone {
   id: string;
+  project_id: string;
   name: string;
   due_on: string | null;
   done: boolean;
+  done_at: string | null;
+  rollup: Rollup;
+}
+
+export interface ProjectUpdate extends Update {
+  health: Health | null;
 }
 
 export interface ProjectDetail extends ProjectSummary {
   milestones: Milestone[];
+  latest_status: ProjectUpdate | null;
 }
+
+export type ProjectChanges = Partial<Pick<ProjectSummary, "name" | "summary" | "brief" | "status" | "health" | "start_on" | "due_on" | "owner_ref" | "owner_name" | "archived">>;
 
 export interface ListParams {
   project?: string;
@@ -95,7 +128,7 @@ export interface ListParams {
   parent?: string;
 }
 
-const query = (params: ListParams) => {
+const query = (params: ListParams | Record<string, string>) => {
   const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== "") as [string, string][]).toString();
   return q ? `?${q}` : "";
 };
@@ -112,6 +145,18 @@ export const tasksApi = {
   block: (id: string, blockedBy: string) => request<unknown>(`/tasks/${id}/blockers`, json("POST", { blocked_by: blockedBy })),
   unblock: (id: string, blockedBy: string) => request<unknown>(`/tasks/${id}/blockers/${blockedBy}`, { method: "DELETE" }),
   comment: (id: string, body: string) => request<Update>(`/tasks/${id}/updates`, json("POST", { body })),
-  projects: () => request<ProjectSummary[]>("/tasks/projects"),
+  projects: (status?: string, archived = false) =>
+    request<ProjectSummary[]>(`/tasks/projects${query({ ...(status ? { status } : {}), ...(archived ? { archived: "true" } : {}) })}`),
   project: (id: string) => request<ProjectDetail>(`/tasks/projects/${id}`),
+  createProject: (body: ProjectChanges & { name: string }) => request<{ id: string }>("/tasks/projects", json("POST", body)),
+  updateProject: (id: string, changes: ProjectChanges) => request<ProjectDetail>(`/tasks/projects/${id}`, json("PATCH", changes)),
+  removeProject: (id: string) => request<void>(`/tasks/projects/${id}`, { method: "DELETE" }),
+  projectUpdates: (id: string) => request<ProjectUpdate[]>(`/tasks/projects/${id}/updates`),
+  postUpdate: (id: string, body: { kind: "status" | "comment"; body: string; health?: Health | null }) =>
+    request<ProjectUpdate>(`/tasks/projects/${id}/updates`, json("POST", body)),
+  addMilestone: (projectId: string, name: string, dueOn?: string | null) =>
+    request<Milestone>(`/tasks/projects/${projectId}/milestones`, json("POST", { name, due_on: dueOn ?? null })),
+  updateMilestone: (id: string, changes: { name?: string; due_on?: string | null; done?: boolean }) =>
+    request<Milestone>(`/tasks/milestones/${id}`, json("PATCH", changes)),
+  removeMilestone: (id: string) => request<void>(`/tasks/milestones/${id}`, { method: "DELETE" }),
 };

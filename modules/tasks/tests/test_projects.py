@@ -72,6 +72,7 @@ def test_search_finds_projects_and_items_and_describe_names_them():
     assert module.describe(f"tasks:{p}")["title"] == "Riverbend relaunch"
     assert module.describe(f"tasks:{item}")["title"] == "Draft the riverbend outline"
     assert module.describe(f"tasks:{item}")["href"] == f"#/tasks/t/{item}"
+    assert module.describe(f"tasks:{p}")["href"] == f"#/tasks/projects/{p}"
 
 
 def test_export_and_the_backup_label(tmp_path):
