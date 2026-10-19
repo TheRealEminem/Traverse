@@ -1,0 +1,10 @@
+{
+  "name": "Starter",
+  "id": "starter",
+  "tagline": "a new trail",
+  "bundleId": "local.family.starter",
+  "envPrefix": "STARTER",
+  "port": 8790,
+  "updateRepo": "",
+  "modules": ["notes", "tasks"]
+}
