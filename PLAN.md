@@ -21,7 +21,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☐ |
 | 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ☐ |
 | 7 | **Push to Plane**: previews, changed fields only, conflict stops, log and undo | L | ☐ |
-| 8 | Board view and drag | M | ☐ |
+| 8 | Board view and drag | M | ◐ 2026-10-19 (family bf6d30a) on `chunk-8/board`; the Plane part waits for chunk 7 |
 | 9 | Inbox: capture anything, AI proposes work items, you review | L | ☐ |
 | 10 | Meetings from Trailmix | S–M | ☐ |
 | 11 | MCP server in the host: Claude Desktop and Claude Code can use Traverse | M | ☐ |
@@ -402,6 +402,26 @@ never overwritten.
 Blueprint chunk 5. Dragging between columns changes status locally; for linked tasks, that change waits to be sent.
 
 **Done when:** drag between columns updates status, the order sticks, and linked tasks show "1 change to send".
+
+**Result (2026-10-19, family bf6d30a).**
+- **The board** (`#/tasks/projects/<id>/board`, its own address so it can use the full width): To do, Doing, Waiting
+  and Done, each headed by its name and count, on `inset-surface`. Cards (`rounded-lg bg-surface border shadow-sm`)
+  show the title, milestone, Blocked/Urgent/High, subtasks, the due label and someone else's avatar; they lift 1px on
+  hover and fade while dragged, and a forest line shows where a card will land. Dropped tasks stay off the board; the
+  List view keeps them.
+- **Moving:** a card dropped in another column changes status and place in one request (`move` takes `within:
+  "project"`, which orders across milestones, and a `status`). The project's **List view** follows your order now
+  (open first, done last): drag a task to reorder it, or into another milestone's group to move it there; an empty
+  group takes a drop and says so while you drag.
+- **Keyboard:** on the board, arrows move between cards, Alt + ← → moves a card to the next column, Alt + ↑ ↓ up or
+  down; in lists, Alt + ↑ ↓ moves a task. Focus stays on what you moved.
+- **Verified:** a module test (a card dropped after another milestone's card keeps its milestone and takes the
+  column's status; 116 tests in all). In a browser on example tasks: dragging a card into the empty Waiting column
+  ("Drop here" while over it); Alt + → then Alt + ↑ on a card (status and order changed, focus kept); the order after
+  a reload; dragging a task into another milestone's group in the List view; Alt + ↑ there. The drags were made with
+  the browser's own drag events from a script, since an automated pointer can't start a native drag.
+- **Not yet:** "linked tasks show 1 change to send" needs Plane links (chunk 7). Native drag doesn't work with touch
+  in WebKit, so on a phone-sized window the board moves only by keyboard, or from the task page's status.
 
 ### Chunk 9 · Inbox (L)
 
