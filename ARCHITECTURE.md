@@ -192,6 +192,7 @@ the 8780–8799 range, and keep a list here:
 | `startup` | Runs once after every module is loaded. |
 | `count` | `(a database) -> {"people": 381}`: what it holds, read from any copy of the database, to label backups in Settings, Your data. |
 | `offers` | `{"people.search": handler(args)}`: questions other family apps on this Mac may ask it (§8, the family link). A handler gets a dict and returns plain data. |
+| `people` | `(q, limit) -> [{id, name, email?, detail?, is_self?}]`: its part of the people directory (`core/server/people.py`, `GET /api/people`, `PersonPicker`). Refs come back as `<id>:<person id>`; `is_self` comes back as `core:me`. |
 
 ### Web half: `modules/<id>/web/index.tsx` default-exports a `ModuleWeb`
 
