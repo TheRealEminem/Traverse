@@ -17,7 +17,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 1 | Traverse from the family: repo, `app.json`, `identity/`, an empty app that launches | S | ☑ 2026-10-18 on `chunk-1/traverse-from-family` |
 | 2 | Tasks v2 data: projects, milestones, items, updates (migration step 2) | M | ☑ 2026-10-19 (family 842c525) on `chunk-2/tasks-v2` |
 | 3 | My tasks, quick add, the task page | M | ☑ 2026-10-19 (family 1584a3a) on `chunk-3/my-tasks` |
-| 4 | Projects list and project page, milestones, progress | M | ☐ |
+| 4 | Projects list and project page, milestones, progress | M | ☑ 2026-10-19 on `chunk-4/projects` |
 | 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☐ |
 | 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ☐ |
 | 7 | **Push to Plane**: previews, changed fields only, conflict stops, log and undo | L | ☐ |
@@ -332,6 +332,29 @@ Blueprint chunk 3 and §8: `TaskRow`, My tasks with Today · This week · Everyt
 Blueprint chunk 4: projects list with health and progress, the project page (overview, list), milestones.
 
 **Done when:** a real Cold Connect project, with milestones and tasks, reads right.
+
+**Result (2026-10-19).**
+- **Projects** (`#/tasks/projects?status=…`): Active, Planned, Done, All and Archived. Each row has the project's tile
+  (its initial: projects get no colors), name and summary, health, a progress bar with the words beside it, its due
+  date (late in trail) and owner. A new project starts from its name and opens straight away.
+- **A project** (`#/tasks/projects/<id>?view=overview|list`): an editable name and summary, a meta line (status when
+  not Active, health, owner, due), and New task, Archive and Delete. **Overview:** progress with what's doing, waiting
+  and late; status, owner, start and due; the brief in Markdown (shown formatted, with an edit button); milestones
+  with their own progress and due dates, ticked, renamed or deleted in place; "How it's going": the latest status
+  update, a form whose health ("Just a note", On track, At risk, Off track) sets the project's, and earlier updates;
+  linked things. **List:** the project's tasks grouped by milestone, each group with its progress, due date and an add
+  field, then "No milestone". New task opens the List with its add field ready.
+- **Decided:** the project page lives at `#/tasks/projects/<id>` rather than the blueprint's `#/tasks/p/<id>`, so the
+  sidebar knows it belongs to Projects; the module now shows as "Projects". Reordering by drag waits for chunk 8.
+- **Fixed on the way (shared):** the sidebar lit up every entry the page's address started with (My tasks as well as
+  Projects); it now marks only the most specific one.
+- **Verified:** 115 tests, types and build. In a browser with example projects: the list in every filter; a project's
+  overview and list; ticking a milestone, posting an "At risk" update (the project's health followed), and New task
+  focusing the add field; Day and Dusk at 1440px and 375px.
+- **For The Lodge:** taking this family version adds Projects to its sidebar too. A setting to hide projects in an app
+  that doesn't want them (the blueprint's `tasks.projects`) belongs with chunk 13's settings.
+- **Not done:** the "real Cold Connect project" part of done-when needs Plane (chunks 5 and 6), which brings real
+  projects in; until then it was checked with example projects.
 
 ### Chunk 5 · Plane connection, mirror, Team view, people (M–L)
 

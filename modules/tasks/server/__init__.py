@@ -10,7 +10,7 @@ from . import hooks, routes, store
 
 MODULE = Module(
     id="tasks",
-    name="Tasks",
+    name="Projects",
     router=routes.router,
     migrations=store.MIGRATIONS,
     subscribe={

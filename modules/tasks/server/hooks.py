@@ -57,9 +57,9 @@ def source_deleted(payload: dict) -> None:
     db.execute("UPDATE tasks_updates SET author_ref = NULL WHERE author_ref = ?", (ref,))
 
 
-# Where an item or a project opens. Until the project page exists (chunk 4), a project opens the task list.
+# Where an item or a project opens.
 ITEM_HREF = "#/tasks/t/{id}"
-PROJECT_HREF = "#/tasks"
+PROJECT_HREF = "#/tasks/projects/{id}"
 
 
 def describe(row_id: str) -> dict | None:
