@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-app/
+build/
+data/
+.venv/
+__pycache__/
+.pytest_cache/
+mac/.build/
+mac/Sources/AppHost/Mark.swift
+.DS_Store
+*.tsbuildinfo
+.claude/settings.local.json
