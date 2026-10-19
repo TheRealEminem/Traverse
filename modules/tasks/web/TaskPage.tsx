@@ -1,6 +1,6 @@
 // A task, as its own page (#/tasks/t/<id>), so any link can open it: from a meeting, search, or the Mac menu.
 // Every field saves as you leave it.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { LinkedList } from "@core/components/blocks";
 import { BackIcon, ChatIcon, TrashIcon } from "@core/components/icons";
@@ -13,40 +13,8 @@ import { useShell } from "@core/shell";
 import { tasksApi } from "./api";
 import type { Status, Task, TaskDetail } from "./api";
 import { formatMinutes, parseMinutes } from "./dates";
+import { Field } from "./Field";
 import { Check, TaskList } from "./TaskRow";
-
-/** A field that saves when you leave it or press Return (Escape puts it back). */
-function Field({ value, onSave, label, placeholder, className = "", type = "text", bare = false }: {
-  value: string;
-  onSave: (v: string) => void;
-  label: string;
-  placeholder?: string;
-  className?: string;
-  type?: "text" | "date";
-  /** No field styling (the title, which looks like the page's heading until you edit it). */
-  bare?: boolean;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  return (
-    <input
-      type={type}
-      aria-label={label}
-      className={bare ? className : `field ${className}`}
-      value={draft}
-      placeholder={placeholder}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => draft !== value && onSave(draft)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        if (e.key === "Escape") {
-          setDraft(value);
-          (e.target as HTMLInputElement).blur();
-        }
-      }}
-    />
-  );
-}
 
 function Block({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
@@ -134,6 +102,11 @@ export default function TaskPage({ params }: RouteProps) {
         <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-hint text-ink-soft">
           {status && <StatusChip tone={status.tone} label={status.label} />}
           {task.blocked && <StatusChip tone="trail" label="Blocked" />}
+          {task.project_id && projectList && (
+            <a href={`#/tasks/projects/${task.project_id}`} className="hover:text-forest">
+              {projectList.find((p) => p.id === task.project_id)?.name}
+            </a>
+          )}
           {task.came_from && (
             <a href={task.came_from.href} className="hover:text-forest">
               From {task.came_from.title}
