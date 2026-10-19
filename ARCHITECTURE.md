@@ -94,7 +94,7 @@ These keep modules combinable. Breaking one now means a rewrite when the apps me
 ```
 app.json                  who the app is and which modules it's made of
 family.lock               the TrailmixFamily commit this app's shared code comes from (written by scripts/sync-family)
-VERSION                   the version number (release tags override it)
+VERSION                   the version number (a release tag must match it)
 core/
   server/                 the host's server (Python package "core.server")
     app.py                creates the FastAPI app, loads modules, the host's own API
@@ -137,11 +137,13 @@ scripts/
   check                   everything CI checks (tests, types, build, style rules)
   build-app.sh            build the Mac app (and the disk image with --dmg)
   install-app.sh          check, build, back up, and swap the new app into /Applications, with a rollback
+  smoke-test.sh           try a built app's updater end to end: update, go back, beta updates, busy, skip
+  promote-beta.sh         make the newest beta the release everyone gets, once it's been tried
   new-module              start a module from scripts/module-template
   sync-family             take a family version and pin it (--check: warn about drift; --push: send a change back)
 conftest.py, pytest.ini   test setup: throwaway data, fake AI, skips tests of modules that are off
 Dockerfile                the server for Linux
-.github/workflows/        tests on every push; build and release the Mac app on a version tag
+.github/workflows/        tests on every push; a beta of the Mac app on a version tag, promoted after a few days
 ```
 
 ## 5. Identity: app.json
@@ -287,11 +289,12 @@ other for data, while each stays its own app:
 
 ## 10. The Mac app (`mac/`)
 
-- `HostApp.swift`: the menu bar item (Open, updates, Open at Login, Quit). It starts the server, then opens the window.
+- `HostApp.swift`: the menu bar item (Open, updates, Open at login, Quit). It starts the server, then opens the window.
 - `BundledServer.swift`: runs `python -m uvicorn core.server.app:app` from `Resources/app` with `<PREFIX>_DATA_DIR`,
   `_UI_DIR` and `_PARENT_PID` set, restarts it up to three times in two minutes, then explains the failure in the menu.
 - `MainWindow.swift`: the WebKit window, the `app` bridge, the Edit/View/Window menus, and external links opening in the browser.
-- `Updater.swift`: GitHub releases → checksum check → same bundle ID and valid signature → swap in place → relaunch.
+- `Updater.swift`: GitHub releases → checksum check → same bundle ID and valid signature → swap in place, keeping
+  the old version for Go back → relaunch; beta updates and skipping a version. Its decisions are in `UpdateRules/` (§11).
 - `Mark.swift`: the menu bar icon. Each app draws its own motif there.
 - **Native features a module needs** (global hotkeys, recording audio, notifications) live in `mac/`. They talk to
   the module through the server: the native side calls the module's API (Trailmix's recorder checks in once a second
@@ -308,9 +311,46 @@ other for data, while each stays its own app:
 | New module | `scripts/new-module journal "Journal"` |
 | Build the Mac app | `scripts/build-app.sh` → `dist-app/<Name>.app`; add `--dmg` for the disk image and checksum |
 | Update the installed app | `scripts/install-app.sh` (checks, builds, backs up, swaps, verifies; all on this Mac) |
-| Release | bump `VERSION`, `git tag v0.2.0 && git push --tags`. CI builds and publishes, and installed apps offer the update. |
+| Release | bump `VERSION` and commit, then `git tag v0.2.0 && git push origin v0.2.0`. CI publishes a beta, which reaches everyone a few days later (below). |
+| Check the updater's rules | `swift run --package-path mac UpdateChecks` (`build-app.sh` runs them too) |
+| Try the updater end to end | `scripts/smoke-test.sh dist-app/<Name>.app dist-app/<Name>-<version>-arm64.dmg` (CI runs it before publishing) |
 | Server install | `docker build -t app . && docker run -p 8790:8790 -v app-data:/data -e APP_ACCESS_TOKEN=… app` |
 | Try the built app without touching real data | `env -i HOME=$HOME PATH=/usr/bin:/bin STARTER_DATA_DIR=/tmp/x STARTER_NO_OPEN=1 dist-app/Starter.app/Contents/MacOS/Starter` (prints "Would open …"; the server answers on the port) |
+
+**Releases: a beta first, then everyone.**
+1. **Tag.** Bump `VERSION`, commit, and push the tag `v<VERSION>`. `release.yml`, on a Mac builder, refuses a tag that
+   doesn't match `VERSION`, builds with `scripts/build-app.sh --dmg` (which runs the updater's checks), runs
+   `scripts/smoke-test.sh`, and publishes `<Name>-<version>-arm64.dmg` and its `.sha256` as a **pre-release** in
+   app.json's `updateRepo`. With no `updateRepo`, nothing is published and the build stays an artifact of the run.
+   A repo other than the app's own (a public one, for private code) needs a `RELEASE_TOKEN` secret that can write to it.
+2. **Beta.** Installed apps with Beta updates on are offered it; everyone else isn't.
+3. **Promote.** `promote.yml` runs `scripts/promote-beta.sh` every day. Once the newest pre-release has been out
+   3 days (`BETA_DAYS`) with no open issue labelled `blocks release` (`BLOCKING_LABEL`), it becomes the full, latest
+   release, and every installed app is offered it. Run the workflow by hand to check now: "dry run" only says what
+   it would do, and a tag promotes that pre-release however long it's been out. `DRY_RUN=1 scripts/promote-beta.sh`
+   does the same from this Mac.
+4. **Hold it back** by labelling an issue `blocks release`; close it or take the label off to let the beta through.
+   The label needs creating only the first time someone uses it.
+
+**Updates in the app** (`mac/Sources/AppHost/Updater.swift`; the decisions are in `mac/Sources/UpdateRules/`, checked
+by `mac/Checks/UpdateChecks` with the Command Line Tools alone):
+- It looks at the repo's recent releases at launch and every six hours, and offers the newest version that's newer
+  than itself: full releases, plus pre-releases with **Beta updates** on (the Updates submenu; off unless you turn it
+  on). Never a skipped version.
+- **Install version X…** downloads the disk image, checks it against the published SHA-256, checks that the app inside
+  has the same bundle ID and a valid signature, swaps it in place and restarts. The version it replaced is kept in
+  the data folder, at `updates.noindex/previous/<Name>.app` (one copy, the size of the app).
+- **Skip this version** stops it being offered; a newer version still is. **Offer X again** undoes that.
+- **Go back to X…** (Updates submenu, once an update has kept a version) asks first, then returns to the kept
+  version, checked the same way with no download, and skips the version you left. Your data stays: migrations only
+  add (rule 4), so the older version ignores steps it doesn't know, and starting a different version keeps a
+  "before-update" backup first. A fresh install has nothing to go back to.
+- **Not while busy:** before starting, and again just before swapping (waiting up to a minute), it asks the server,
+  `GET /api/jobs/busy` (background jobs queued or running). While the app is busy it says so and offers Try again.
+- Your choices are in `updates.noindex/choices.json` in the data folder, so `<PREFIX>_DATA_DIR` keeps a test apart
+  from the real app. For tests: `<PREFIX>_UPDATE_URL` (a stand-in release list), `_UPDATE_DELAY`,
+  `_UPDATE_NO_RELAUNCH`, and `_UPDATE_TEST=install` or `go-back` (does that after the first check, and writes each
+  state to stderr).
 
 Tests: `conftest.py` gives every test a throwaway data folder, the whole app (`client`), a fake AI (`fake_ai`)
 and `jobs.drain()` to wait for background work. The host's tests use a stand-in "probe" module, so they pass
