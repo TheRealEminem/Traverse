@@ -1,6 +1,6 @@
 {
-  "commit": "3a26cf7d624467430f23b7cc07bcae7f187182e6",
-  "subject": "Family link tests: the other app is a stand-in, not The Lodge",
-  "synced_on": "2026-10-18",
+  "commit": "842c525cd3cf6ff2cf4ccc1f6cb041628e51b732",
+  "subject": "Tasks v2: projects, milestones, work items, blockers and updates",
+  "synced_on": "2026-10-19",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }

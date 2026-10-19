@@ -15,7 +15,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | --- | --- | --- | --- |
 | 0 | Family source of truth: `TrailmixFamily`, The Lodge's look out of `core/`, shared helpers promoted | M | ◐ 2026-10-18: committed on The Lodge's `family/source-of-truth` (a48764e, 00644eb) and TrailmixFamily (up to 84ea14d); The Lodge's main untouched |
 | 1 | Traverse from the family: repo, `app.json`, `identity/`, an empty app that launches | S | ☑ 2026-10-18 on `chunk-1/traverse-from-family` |
-| 2 | Tasks v2 data: projects, milestones, items, updates (migration step 2) | M | ☐ |
+| 2 | Tasks v2 data: projects, milestones, items, updates (migration step 2) | M | ☑ 2026-10-19 (family 842c525) on `chunk-2/tasks-v2` |
 | 3 | My tasks, quick add, the task page | M | ☐ |
 | 4 | Projects list and project page, milestones, progress | M | ☐ |
 | 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☐ |
@@ -267,6 +267,34 @@ Blueprint chunk 2: migration step 2 from `schema/tasks-v2-projects.sql`, adjuste
 including an upgrade test from The Lodge's v1 rows. Made in `TrailmixFamily/modules/tasks`, never in an app.
 
 **Done when:** v1 to-dos survive the upgrade, and the API round-trips projects, milestones, items and updates.
+
+**Result (2026-10-19, family 842c525).**
+- **Migration step 2** is the guide's `tasks-v2-projects.sql` with one change: `priority` is 0 none, 1 low, 2 medium,
+  3 high, 4 urgent (D7, Plane's scale).
+- **The store** is split by job: `store.py` (the migrations and the checks every write uses, each raising a sentence a
+  person can read), `items.py`, `projects.py`, `vocab.py` (served at `GET /api/tasks/meta`) and `hooks.py` (contracts,
+  describe, search, export, backup count). As the blueprint asks, one function changes status and keeps `done` and
+  `completed_at` in step, every write re-indexes search and says `tasks.changed`, and deleting says `item.deleted`
+  (for an item's subtasks too) and forgets its links.
+- **Decided along the way:**
+  - subtasks live wherever their parent does and move with it;
+  - a milestone decides its item's project;
+  - blockers refuse loops;
+  - progress counts top-level items only;
+  - assignees and owners are a column and a link, except `core:me`, which has no profile to show it on;
+  - deleting a project leaves its items in no project (archiving keeps it whole);
+  - links to a task or project open `#/tasks` until chunk 3 adds their pages.
+- **Action items** (`actions.found`) now go into the project their source is linked to when there's exactly one, accept
+  `{text, due_on, assignee_ref, assignee_name, priority}` as well as plain text, and **replace only the earlier items
+  you haven't touched**: anything you edited, ticked, filed or wrote notes on stays (before, every open one was
+  replaced). A deleted person or source leaves its name on items and projects and clears the ref.
+- **The API** is the blueprint's §9 (without the AI draft, chunk 12), plus blockers and item updates; the current Tasks
+  page works unchanged.
+- **Verified:** 25 tests in the module (114 in Traverse), including step 1 to step 2 on a database of v1 to-dos (ticked,
+  open, from a source), the new tables' constraints and cascades, and every API path and error. Step 2 also ran cleanly
+  on a copy of The Lodge's real database (integrity and foreign keys fine), though The Lodge has no to-dos yet.
+- **Worth knowing:** the update backup (F1) runs when the app's version changes, so a release that adds a migration
+  step should also bump `VERSION`, as every installed update does.
 
 ### Chunk 3 · My tasks, quick add, the task page (M)
 
