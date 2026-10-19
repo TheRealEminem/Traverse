@@ -1,6 +1,6 @@
 {
-  "commit": "842c525cd3cf6ff2cf4ccc1f6cb041628e51b732",
-  "subject": "Tasks v2: projects, milestones, work items, blockers and updates",
+  "commit": "1584a3a2cfeba9e65bf0378a98ecaa765851ceb7",
+  "subject": "Tasks: My tasks, quick add and the task page",
   "synced_on": "2026-10-19",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }

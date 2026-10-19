@@ -21,6 +21,22 @@ def today() -> date:
     return date.today()
 
 
+# Yours: nobody's on it, or you are. Anything with someone else's ref or name is theirs.
+# (IS, not =, so a task with a name but no ref is someone else's rather than unknown.)
+MINE_SQL = "((assignee_ref IS NULL AND assignee_name IS NULL) OR assignee_ref IS 'core:me')"
+
+
+def _assignee_sql(assignee: str | None) -> tuple[str | None, list]:
+    """assignee: a ref, "mine" or "others"."""
+    if not assignee:
+        return None, []
+    if assignee == "mine":
+        return MINE_SQL, []
+    if assignee == "others":
+        return f"NOT {MINE_SQL}", []
+    return "assignee_ref = ?", [assignee]
+
+
 def _ref(item_id: str) -> str:
     return links.ref("tasks", item_id)
 
@@ -128,24 +144,27 @@ def get(item_id: str) -> dict | None:
 def query(*, project: str | None = None, assignee: str | None = None, status: str | None = None,
           when: str | None = None, q: str | None = None, parent: str | None = "top") -> list[dict]:
     """Items, open first, then by due day (none last), priority and your order.
-    project: an id, or "none" for items in no project. status: one status, "open" or "all" (default: everything).
-    when: "late", "today" (late or due today), "week" (due within seven days) or "waiting".
-    parent: "top" (default: no subtasks), "any", or an item's id for its subtasks."""
+    project: an id, or "none" for items in no project. assignee: a ref, "mine" (nobody's, or yours) or "others".
+    status: a status, several separated by commas, "open" or "all" (default: everything).
+    when: "late", "today" (late or due today), "week" (due within seven days) or "waiting" (open and waiting, or
+    someone else's). parent: "top" (default: no subtasks), "any", or an item's id for its subtasks."""
     where, args = [], []
     if project == "none":
         where.append("project_id IS NULL")
     elif project:
         where.append("project_id = ?")
         args.append(project)
-    if assignee:
-        where.append("assignee_ref = ?")
-        args.append(assignee)
+    who, who_args = _assignee_sql(assignee)
+    if who:
+        where.append(who)
+        args += who_args
     if status == "open":
         where.append(f"status IN ({','.join('?' * len(vocab.OPEN))})")
         args += list(vocab.OPEN)
     elif status and status != "all":
-        where.append("status = ?")
-        args.append(store.one_of(status, vocab.ITEM_STATUSES, "Status"))
+        wanted = [store.one_of(s.strip(), vocab.ITEM_STATUSES, "Status") for s in status.split(",") if s.strip()]
+        where.append(f"status IN ({','.join('?' * len(wanted))})")
+        args += wanted
     if when:
         t = today()
         open_sql = f"status IN ({','.join('?' * len(vocab.OPEN))})"
@@ -159,7 +178,8 @@ def query(*, project: str | None = None, assignee: str | None = None, status: st
             where += [open_sql, "due_on <= ?"]
             args += [*vocab.OPEN, (t + timedelta(days=7)).isoformat()]
         elif when == "waiting":
-            where.append("status = 'waiting'")
+            where += [open_sql, f"(status = 'waiting' OR NOT {MINE_SQL})"]
+            args += list(vocab.OPEN)
         else:
             raise ValueError("when must be late, today, week or waiting")
     if parent == "top":
@@ -353,10 +373,11 @@ def _waits_on(item_id: str) -> set[str]:
 
 
 def counts(assignee: str | None = None) -> dict:
-    """For the sidebar badge: open items, those due today, and those late."""
+    """For the sidebar badge: open items, those due today, and those late. assignee as in query()."""
     t = today().isoformat()
     open_sql = f"status IN ({','.join('?' * len(vocab.OPEN))})"
-    extra, args = ("AND assignee_ref = ?", [assignee]) if assignee else ("", [])
+    who, args = _assignee_sql(assignee)
+    extra = f"AND {who}" if who else ""
     row = db.one(
         f"SELECT count(*) AS open, sum(due_on = ?) AS due_today, sum(due_on < ?) AS late FROM tasks_items "
         f"WHERE {open_sql} {extra}", (t, t, *vocab.OPEN, *args))

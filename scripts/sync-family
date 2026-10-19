@@ -69,7 +69,7 @@ compare_with() {
       # Content only: a file that's new, deleted, or whose checksum (c) or size (s) differs. Times don't count.
       out="$(rsync -rlnc --delete --itemize-changes "${IGNORE[@]}" "$src/" "$dst/" | grep -E '^\*deleting|^[<>ch.][fL](\+|c|.s)' || true)"
       if [ -n "$out" ]; then
-        echo "$out" | sed -E "s#^\*deleting +(.*)#  ${path}\1  (only in this app)#; s#^[<>ch][^ ]* (.*)#  ${path}\1  (changed here)#"
+        echo "$out" | sed -E "s#^\*deleting +(.*)#  ${path}\1  (only in this app)#; s#^[<>ch.][fL]\+[^ ]* (.*)#  ${path}\1  (not in this app)#; s#^[<>ch][^ ]* (.*)#  ${path}\1  (changed here)#"
         differ=1
       fi
     elif [ ! -e "$dst" ] || ! cmp -s "$src" "$dst"; then

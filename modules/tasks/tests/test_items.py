@@ -98,6 +98,22 @@ def test_lists_filter_by_project_assignee_status_and_when():
     assert items.counts("core:me") == {"open": 1, "due_today": 0, "late": 1}
 
 
+def test_mine_means_nobodys_or_yours_and_waiting_collects_the_rest():
+    yours = items.create("Yours", assignee_ref="core:me")
+    nobody = items.create("Nobody's")
+    ana = items.create("Ana's", assignee_ref="crm:ana1", assignee_name="Ana Ruiz")
+    typed = items.create("Ben's", assignee_name="Ben")
+    stuck = items.create("Waiting on a reply", status="waiting")
+    doing = items.create("Doing", status="doing")
+    ids = lambda rows: sorted(r["id"] for r in rows)  # noqa: E731
+    assert ids(items.query(assignee="mine", status="todo,doing")) == sorted([yours, nobody, doing])
+    assert ids(items.query(when="waiting")) == sorted([ana, typed, stuck])
+    assert ids(items.query(assignee="others")) == sorted([ana, typed])
+    assert items.counts("mine")["open"] == 4
+    with pytest.raises(ValueError, match="Status must be one of"):
+        items.query(status="todo,finished")
+
+
 def test_an_assignee_is_a_column_and_a_link_and_you_need_no_link():
     item = items.create("Send the outline", assignee_ref="crm:ana1", assignee_name="Ana Ruiz")
     ref = f"tasks:{item}"
