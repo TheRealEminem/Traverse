@@ -1,5 +1,5 @@
 // The review screen: one capture, the work items the AI proposed from it, and where accepted ones are filed.
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Empty, JobStatus, LinkedList } from "@core/components/blocks";
 import {
@@ -114,7 +114,7 @@ function ProposalRow({ p, from, act }: { p: Proposal; from: string | null; act: 
         </div>
         {p.quote && (
           <p className="mt-2.5 border-l-2 border-line-strong pl-3 text-hint leading-relaxed text-ink-soft">
-            “{p.quote}”{from && <span className="whitespace-nowrap"> · {from}</span>}
+            “{p.quote}”{from && <span> · {from}</span>}
           </p>
         )}
       </div>
@@ -163,20 +163,35 @@ function DecidedRow({ p, act }: { p: Proposal; act: Act }) {
 function TitleField({ capture }: { capture: Capture }) {
   const { toast } = useShell();
   const [value, setValue] = useState(capture.title);
+  const field = useRef<HTMLTextAreaElement>(null);
   useEffect(() => setValue(capture.title), [capture.title]);
+  useLayoutEffect(() => {
+    // Grows with the title, so a long one wraps instead of being cut off.
+    const el = field.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
   const save = () => {
     const next = value.trim();
     if (!next || next === capture.title) return setValue(capture.title);
     inboxApi.rename(capture.id, next).catch((e: Error) => toast(e.message, "error"));
   };
   return (
-    <input
+    <textarea
+      ref={field}
+      rows={1}
       aria-label="Title"
-      className="page-title w-full bg-transparent outline-none"
+      className="page-title block w-full resize-none overflow-hidden bg-transparent outline-none"
       value={value}
-      onChange={(e) => setValue(e.target.value)}
+      onChange={(e) => setValue(e.target.value.replace(/\n/g, " "))}
       onBlur={save}
-      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.target as HTMLTextAreaElement).blur();
+        }
+      }}
     />
   );
 }

@@ -84,7 +84,7 @@ def test_it_is_off_by_default_and_then_reads_nothing(client, fake_trailmix):
 def test_a_finished_meetings_open_action_items_wait_in_the_inbox_saying_which_meeting(client, fake_trailmix, fake_structured):
     """Chunk 10's "done when": yesterday's meeting's action items wait in the inbox, each saying where it came from."""
     fake_structured.reply = Reading(title="ignored", proposals=[
-        Proposal(text="Send Acme the revised quote", assignee_name="Elijah", due_on="2026-10-23",
+        Proposal(text="Send Acme the revised quote", assignee_name="Elijah", when_said="by Friday", due_on="2026-10-23",
                  quote="Elijah to send Acme the revised quote by Friday"),
         Proposal(text="Update the pricing sheet", assignee_name="Mickey", quote="Mickey: update the pricing sheet"),
     ])
