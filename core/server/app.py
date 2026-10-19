@@ -275,6 +275,12 @@ def delete_link(from_ref: str, to_ref: str, kind: str | None = None):
     links.remove(from_ref, to_ref, kind)
 
 
+@core_router.get("/jobs/busy")
+def jobs_busy():
+    """Whether background work is queued or running. The Mac app doesn't update or go back while it is."""
+    return {"busy": jobs.busy()}
+
+
 @core_router.post("/jobs/{job_id}/go", status_code=202)
 def job_go(job_id: str, body: JobGo):
     jobs.go(job_id, force=body.force)
