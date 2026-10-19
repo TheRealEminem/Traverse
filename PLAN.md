@@ -336,8 +336,10 @@ one. Assigning a task offers Elijah and Mickey from Plane.
 - **Verified:** 169 tests with `TRAVERSE_MODULES=tasks,plane` (fixtures rebuild the 2026-10-18 workspace: 34 open,
   Mark 23, Mickey 5, Elijah 2, no one 4). Team view looked at in Day and Dusk at 1440 and 375.
 - **Not done:** the live check (Mark pastes his key in Settings → Plane, tests, mirrors the 7 real projects and
-  compares the counts and that `/browse/KEY-N/` links open); PersonPicker and the Settings section not yet looked at
-  in a browser; `app.json` still lacks `plane` (run with `TRAVERSE_MODULES=tasks,plane`).
+  compares the counts and that `/browse/KEY-N/` links open); `app.json` still lacks `plane` (run with
+  `TRAVERSE_MODULES=tasks,plane`). Settings → Plane and PersonPicker were tried in a browser (You first, Elijah and
+  Mickey from Plane, "Use “ana” as a name" giving ref null, keyboard choice giving `plane:<id>`), but no screen
+  uses PersonPicker yet: chunk 3's task page is where assignees will pick with it.
 
 ### Chunk 6 · Linking (M)
 
