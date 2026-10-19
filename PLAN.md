@@ -43,7 +43,7 @@ Mac sharing data, keys and basic preferences.
 | F1 | A backup before an update migrates the database | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
 | F2 | Gemini's default model (`gemini-2.5-flash` is closed to new accounts) | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
 | F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ☑ 2026-10-18 (family 3a26cf7); The Lodge has it on its `family/link` branch |
-| F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ☐ |
+| F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ◐ 2026-10-19 built on `claude/family-f4-updater-8da213`; not yet in the family |
 | F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☐ |
 | F6 | AI pricing and usage: what each AI call costs, and a running total | M | before chunk 9 | ☐ |
 | F7 | Trailmix joins the family link (reads shared keys and preferences, offers its meetings) | S–M | Mark's call | ☐ a change in Trailmix's own repo |
@@ -639,6 +639,45 @@ while The Lodge is open, and says how to see them when it isn't; a call without 
 From Trailmix's `Updater.swift` and workflows: a beta channel, **Go back** to the previous version, skip a version,
 no update in the middle of something the app marks as busy, and CI that publishes a pre-release which is promoted
 after a few days with no blocking issue. Before Traverse's first release (chunk 14).
+
+**Result (2026-10-19, on `claude/family-f4-updater-8da213`, not yet sent to the family).**
+- **Updater** (`mac/Sources/AppHost/Updater.swift`): reads the repo's recent releases rather than "latest", and offers
+  the newest version newer than itself. Pre-releases are offered only with **Beta updates** on, which is off by
+  default. An update keeps the version it replaced in the data folder (`updates.noindex/previous/<Name>.app`).
+  **Go back** returns to that version, checked the same way (same bundle ID, valid signature), and skips the one you
+  left. **Skip this version** and **Offer X again** handle skipping. Before starting, and again before swapping (waiting
+  up to a minute), it asks `GET /api/jobs/busy` and refuses while jobs are queued or running. The checksum, bundle ID
+  and signature checks are unchanged. Choices live in `updates.noindex/choices.json`, so `<PREFIX>_DATA_DIR` keeps
+  tests hermetic.
+- **Rules apart from AppKit:** `mac/Sources/UpdateRules` (which version to offer, channel, skip, go back, reading
+  GitHub's JSON, the busy answer) with 41 checks in `mac/Checks/UpdateChecks`, run by `swift run --package-path mac
+  UpdateChecks` and by every `build-app.sh`. No XCTest needed.
+- **Menu:** "Install version X…" with "Skip this version" under it, and an "Updates" submenu (Beta updates, Offer X
+  again, Go back to X…, which asks first). The menu's items are now in sentence case (DESIGN.md §11).
+- **Server:** `GET /api/jobs/busy` → `{"busy": jobs.busy()}`, with a test (busy while a job runs, not while one
+  waits for you).
+- **CI:** `release.yml` runs on a `v*` tag and refuses one that doesn't match `VERSION`. It builds, runs the smoke
+  test, then publishes a pre-release to app.json's `updateRepo` (`RELEASE_TOKEN` for another repo). With no
+  `updateRepo` it publishes nothing. `promote.yml` runs daily, calling `scripts/promote-beta.sh` (Trailmix's
+  auto-promote, made generic): after 3 days with no open issue labelled `blocks release`, it promotes; it also
+  takes a dry run or a tag by hand. `build-app.sh` now writes the version it was given into the bundle, so
+  the server and Info.plist agree.
+- **Smoke test, generic and cheap:** `scripts/smoke-test.sh <app> <dmg>` relabels a copy of the build as 0.0.1. With
+  a stand-in for GitHub and the server, it checks that a beta isn't offered with Beta updates off, that nothing
+  updates while busy, that with Beta updates on the beta installs and the old version is kept, that Go back returns
+  to it and skips the new one, and that the skipped version isn't offered again.
+- **Verified:** `swift build -c release` (no warnings); `build-app.sh --dmg`; UpdateChecks 41/41 (and they fail
+  when a rule is broken); the smoke test passed on Traverse 0.1.0; `scripts/check-app.py` all good; `scripts/check`
+  (115 tests, style clear, the expected family-drift note). The workflows parse, and their shell steps pass
+  `bash -n` (no actionlint installed). `promote-beta.sh` was dry-run against fixtures for each case. `gh` returns
+  an empty list for a label that doesn't exist yet.
+- **Not done / for the family push:** `scripts/sync-family`'s `SHARED` list must gain `.github/workflows/promote.yml`,
+  `scripts/promote-beta.sh` and `scripts/smoke-test.sh`, or `--push` leaves them behind (`mac/` is a folder, so it's
+  covered). The workflows haven't run on GitHub. Go back is one step, from the kept copy: there's no download of
+  older releases as in Trailmix, so a fresh install has nothing to go back to. CI doesn't run `check-app.py`. F5
+  should make Lockdown stop the update check. Traverse's updates stay off until `updateRepo` names a repo its apps
+  can read (a private repo's releases need a token). Spotted, not changed: the menu's "Inbox" opens `crm/inbox`,
+  which Traverse doesn't have.
 
 ### F5 · Lockdown (M)
 
