@@ -22,8 +22,8 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ☐ |
 | 7 | **Push to Plane**: previews, changed fields only, conflict stops, log and undo | L | ☐ |
 | 8 | Board view and drag | M | ◐ 2026-10-19 (family bf6d30a) on `chunk-8/board`; the Plane part waits for chunk 7 |
-| 9 | Inbox: capture anything, AI proposes work items, you review | L | ☐ |
-| 10 | Meetings from Trailmix | S–M | ☐ |
+| 9 | Inbox: capture anything, AI proposes work items, you review | L | ☑ 2026-10-19 on `claude/chunk-9-inbox-362a27` |
+| 10 | Meetings from Trailmix | S–M | ☑ 2026-10-19 on `claude/chunk-9-inbox-362a27` |
 | 11 | MCP server in the host: Claude Desktop and Claude Code can use Traverse | M | ☐ |
 | 12 | AI in the app: status drafts, break a task down | M | ☐ |
 | 13 | Home card, search, export, Settings, the auto-sync switch | M | ☐ |
@@ -453,6 +453,41 @@ Blueprint chunk 5. Dragging between columns changes status locally; for linked t
 **Done when:** a pasted Slack thread becomes three proposed tasks with the right people, and accepting them files
 them into the right project.
 
+**Result (2026-10-19).**
+- **`modules/inbox`** (Traverse's own module): `inbox_captures` (source paste, file, claude or trailmix; title, raw
+  text, status new → review → done, where it came from), `inbox_proposals` (text, assignee name, due day, priority on
+  Plane's 0–4 scale, the sentence it came from; proposed, accepted or dropped) and `inbox_imports` (each Trailmix
+  meeting seen, by uid). Random text ids throughout.
+- **Capture:** paste, or a .txt, .md or .eml file (the page reads the file and sends its text, so no upload
+  dependency). An email keeps its From, To, Cc and Date lines, and its date is the day "Friday" is read from.
+  Over 60,000 characters is refused with a sentence saying why.
+- **The `inbox/extract` job** (never in a request) calls `ai.structured` with a small schema and shows which AI wrote
+  the proposals ("Proposed by Ollama · qwen2.5:7b"). Reading again replaces only proposals still waiting.
+- **Review** (`#/inbox/<id>`): accept, edit (who, due, priority) or drop each one, Accept all, and bring a dropped one
+  back. Accepting publishes `actions.found` with `source_ref` `inbox:<id>` and the items as dicts. Each announcement
+  carries everything accepted from the capture so far (tasks replaces a source's untouched items), except items
+  you've since deleted in Tasks, which would otherwise come back. Your own name becomes `core:me`.
+- **Projects:** the picker finds them through `GET /api/search` (the tasks module marks project hits with the
+  snippet "Project"; if that changes, `inbox/web/api.ts` follows it), and choosing one adds
+  `inbox:<id> → tasks:<project id>` (kind `about`), so tasks files the items there. No call to the tasks API, no
+  read of its tables.
+- Also: a Home card, the sidebar's Inbox with a count of captures waiting for review, search, describe, export, a
+  backup count and an empty state.
+- **Small local models, learned on qwen2.5:7b:** counting from a date put "next Tuesday" on the wrong day, so the
+  prompt carries a table of when-words with their dates ("next Tuesday = 2026-10-27"), and the model copies the
+  words (`when_said`, `urgency_said`) before the values it reads from them. A due day or a priority stands only when
+  those words are really in the text (it made up the meeting's own day as a due date, and priorities from nothing).
+  Naming the reader in the prompt pulled every "I" in a chat towards them, so it's only said for meetings.
+- **Verified:** 21 tests with the fake AI (`fake_structured`), including the done-when: a pasted Slack thread
+  becomes three proposals with Elijah, Mickey and Mark and their days, and accepting them files them into the chosen
+  project. A real run on Ollama (qwen2.5:7b) through the screen: the right three people, Friday 23, tomorrow (Tue
+  20) and next Tuesday (27); picking "Acme launch" and Accept all filed all three there, with Mark's as `core:me`.
+  Left over: "urgent" in Mark's message also landed on Elijah's item (priority is editable before accepting).
+  Screens checked in Day and Dusk at 375px and 1440px.
+- **Not yet:** `app.json` doesn't list `inbox`, so a plain `scripts/check` skips its tests; run it with
+  `TRAVERSE_MODULES=tasks,inbox` (140 pass) until `inbox` is added. Assignees are names until the people directory
+  (chunk 5). F6 (AI cost) isn't in yet, so a cloud provider's extractions aren't priced.
+
 ### Chunk 10 · Meetings from Trailmix (S–M)
 
 A recurring job reads summarized meetings from Trailmix's API and drops their action items into the inbox, linked
@@ -460,6 +495,21 @@ to the meeting. Off when Trailmix isn't running or the setting is off. (If the a
 meetings, so this switches off there; see §7.)
 
 **Done when:** yesterday's recorded meeting's action items wait in the inbox, each saying which meeting it came from.
+
+**Result (2026-10-19).**
+- **The `inbox/trailmix` job**, every five minutes while Settings → Inbox → "Meetings from Trailmix" is on (off by
+  default, and paused while off). It reads `GET /api/meetings`, then `GET /api/meetings/{id}` for each finished meeting
+  from the last two weeks (the list has no uid), and skips any uid it has seen, even when its capture was deleted or
+  Trailmix's ids change. Each meeting's open action items (ticked ones are done) become one capture, titled with
+  the meeting, dated by it (so "Friday" means the Friday after the meeting), with "Open in Trailmix", and read like
+  any other capture. The capture also links to `meetings:<uid>`, for a meetings module later (ARCHITECTURE.md §13).
+- Only GETs; Trailmix and its repository are untouched. When Trailmix isn't running nothing happens, and Settings
+  says so ("Trailmix isn't running"), with Check now. A Trailmix that asks for a sign-in is reported, not tried.
+- **Verified:** 5 tests against a fake Trailmix (an httpx mock transport that fails any request that isn't a GET).
+  Live and read-only on this Mac: Trailmix had 124 meetings, 13 finished in the last two weeks; the 6 with open
+  action items came in as captures (and a seventh, recorded that morning, came in on its own a few minutes later),
+  each saying its meeting and date, and Ollama read them into proposals. This was a development copy with its own
+  data; Mark's real Traverse data wasn't touched.
 
 ### Chunk 11 · MCP server (M)
 
