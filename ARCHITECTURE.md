@@ -190,6 +190,8 @@ the 8780–8799 range, and keep a list here:
 | `search` | `(q, limit) -> [{id, title, snippet}]`: its part of the sidebar search. |
 | `describe` | `id -> {title, href}`: how its things appear in other modules' links and in search. |
 | `startup` | Runs once after every module is loaded. |
+| `count` | `(a database) -> {"people": 381}`: what it holds, read from any copy of the database, to label backups in Settings, Your data. |
+| `offers` | `{"people.search": handler(args)}`: questions other family apps on this Mac may ask it (§8, the family link). A handler gets a dict and returns plain data. |
 
 ### Web half: `modules/<id>/web/index.tsx` default-exports a `ModuleWeb`
 
@@ -220,6 +222,7 @@ another module's.
 | Be searchable | `Module.search` | Results are merged into the sidebar search. |
 | Fresh screens | `useLive(load, deps)` | Refetches whenever anything changes on the server: every 2s while visible, and at once after the app's own changes. |
 | Feedback | `useShell().toast / confirm`, `JobStatus`, `JobChip`, `LinkedList`, `Section` | See `DESIGN.md` for the visual rules. |
+| Ask another family app | `family.call("people.search", q="ana")` | Its own modules first, then a running family app that offers it. Raises `family.Unavailable` with a sentence for the screen ("Open The Lodge to see this here"). Only from server code, and never as a substitute for events between modules in one app. |
 
 Backups (`core/server/backup.py`) are the host's: a daily SQLite online backup in `<data folder>/backups/` (kept 14),
 "Back up now", and restore, which makes a backup of what it replaces, copies the chosen one over the live database,
@@ -249,7 +252,26 @@ What happens when you summarize a note:
   (`actions.found`). Its shape is written down in `contracts.py`.
 - **Link:** a lasting relationship between two things, shown on both sides.
 - **Search/describe:** making your things findable and nameable elsewhere.
+- **Offer:** a question another family *app* on the same Mac may ask (`Module.offers`, answered over localhost
+  with the family token). Use it for data that lives in another app, such as The Lodge's people seen from Traverse.
 - **Never:** importing another module, querying its tables, or calling its HTTP API from the server.
+
+**The family link** (`core/server/family.py`). Family apps installed on one Mac share some settings and ask each
+other for data, while each stays its own app:
+
+- *Shared settings:* the AI settings, your name and the appearance live in `family.db` in the family folder
+  (`~/Library/Application Support/Trailmix Family/`), which every family app opens directly, so they're there even
+  while the other apps are closed. Each app also keeps its own copy, and Settings → Your family apps → "Share keys
+  and preferences" turns sharing off for one app. An app joining fills in what the family lacks, and never
+  replaces what it holds.
+- *Registry:* each running app records its port and its modules' offers in `family_apps`, with a heartbeat each
+  minute. `GET /api/family` lists the installed apps and which are open.
+- *Calls:* `POST /api/family/call/<offer>` answers another family app, only with the family token (`X-Family-Token`,
+  kept in `family.db`), so a web page can't reach an app's data through localhost. Data never leaves the Mac, and
+  no app copies another's tables.
+- The Mac app joins by default. A development copy (data in `./data`) or a server install joins only when
+  `TRAILMIX_FAMILY_DIR` names a folder (`off` turns it off); tests use a throwaway one. A development copy beside
+  the installed app sets `<PREFIX>_PORT` so it registers its own port.
 
 ## 9. Screens and navigation
 

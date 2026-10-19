@@ -87,6 +87,23 @@ export const inApp = !!bridge;
 export const quitApp = () => bridge?.postMessage("quit");
 export const revealInFinder = (path: string) => bridge?.postMessage(`reveal:${path}`);
 
+/** A family app installed on this Mac (core/server/family.py). */
+export interface FamilyApp {
+  id: string;
+  name: string;
+  version: string;
+  running: boolean;
+  offers: string[];
+  seen_at: string;
+  self: boolean;
+}
+export interface FamilyStatus {
+  enabled: boolean;
+  folder: string | null;
+  sharing: boolean;
+  apps: FamilyApp[];
+}
+
 export interface BackupItem {
   name: string;
   kind: "auto" | "manual" | "before-restore" | "before-update";
@@ -110,6 +127,7 @@ export const api = {
 
   settings: () => request<SettingsState>("/settings"),
   putSettings: (changes: Record<string, SettingValue>) => request<SettingsState>("/settings", json("PUT", changes)),
+  family: () => request<FamilyStatus>("/family"),
   providers: () => request<ProviderInfo[]>("/ai/providers"),
   providerModels: (id: ProviderId) => request<{ models: string[] }>(`/ai/providers/${id}/models`),
   providerTest: (id: ProviderId) => request<{ message: string }>(`/ai/providers/${id}/test`, json("POST")),

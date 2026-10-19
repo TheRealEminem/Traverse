@@ -42,7 +42,7 @@ Mac sharing data, keys and basic preferences.
 | --- | --- | --- | --- | --- |
 | F1 | A backup before an update migrates the database | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
 | F2 | Gemini's default model (`gemini-2.5-flash` is closed to new accounts) | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
-| F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ☐ design below, for Mark to review |
+| F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ◐ 2026-10-18: built (family 3a26cf7) and tried end to end with The Lodge's `family/link` branch; result notes still to write |
 | F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ☐ |
 | F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☐ |
 | F6 | AI pricing and usage: what each AI call costs, and a running total | M | before chunk 9 | ☐ |
