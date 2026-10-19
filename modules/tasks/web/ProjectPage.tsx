@@ -15,13 +15,14 @@ import { useShell } from "@core/shell";
 import { tasksApi } from "./api";
 import type { Health, Meta, Milestone, ProjectChanges, ProjectDetail, Task } from "./api";
 import { HealthChip, Progress } from "./bits";
+import { Board } from "./Board";
 import { dueLabel } from "./dates";
 import { Field } from "./Field";
-import { ListIcon, MilestoneIcon, MountainIcon } from "./icons";
+import { BoardIcon, ListIcon, MilestoneIcon, MountainIcon } from "./icons";
 import { dueWords } from "./Projects";
 import { Check, TaskList } from "./TaskRow";
 
-type View = "overview" | "list";
+type View = "overview" | "list" | "board";
 
 function Block({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
   return (
@@ -293,14 +294,20 @@ function List({ project, meta, tasks, onChanged, addRef }: { project: ProjectDet
   const { toast } = useShell();
   const add = (text: string, milestone_id: string | null) =>
     tasksApi.create({ text, project_id: project.id, milestone_id }).then(onChanged, (e: Error) => toast(e.message, "error"));
-  const loose = tasks.filter((t) => !t.milestone_id);
+  // Dragging (or Alt + ↑ ↓) puts a task after another in a group; into another group, it changes milestone.
+  const moveTo = (milestone_id: string | null) => (id: string, after_id: string | null) =>
+    void tasksApi.move(id, { project_id: project.id, milestone_id, after_id }).then(onChanged, (e: Error) => toast(e.message, "error"));
+  const ordered = tasks.slice().sort((a, b) => Number(a.done || a.status === "dropped") - Number(b.done || b.status === "dropped") || a.sort - b.sort);
+  const loose = ordered.filter((t) => !t.milestone_id);
   return (
     <div className="flex flex-col gap-8">
       <section className="animate-enter">
         <AddTask inputRef={addRef} placeholder={`Add a task to ${project.name}`} onAdd={(text) => add(text, null)} />
+        <p className="mt-2 px-1 text-meta text-ink-faint">Drag a task to reorder it or move it to another milestone, or use Alt + ↑ ↓.</p>
       </section>
       {project.milestones.map((m) => {
-        const mine = tasks.filter((t) => t.milestone_id === m.id);
+        const mine = ordered.filter((t) => t.milestone_id === m.id);
+        const due = m.due_on && !m.done ? dueLabel(m.due_on) : null;
         return (
           <section key={m.id} className="animate-enter">
             <h2 className="eyebrow mb-2 flex flex-wrap items-baseline justify-between gap-x-3 px-1">
@@ -309,22 +316,20 @@ function List({ project, meta, tasks, onChanged, addRef }: { project: ProjectDet
               </span>
               <span className="font-normal tabular-nums">
                 {m.rollup.counted ? `${m.rollup.done} of ${m.rollup.counted} done` : "No tasks yet"}
-                {m.due_on && !m.done && ` · ${dueWords(dueLabel(m.due_on)!.text, dueLabel(m.due_on)!.tone)}`}
+                {due && ` · ${dueWords(due.text, due.tone)}`}
               </span>
             </h2>
-            {mine.length > 0 && (
-              <div className="mb-2">
-                <TaskList tasks={mine} meta={meta} onChanged={onChanged} label={m.name} />
-              </div>
-            )}
+            <div className="mb-2">
+              <TaskList tasks={mine} meta={meta} onChanged={onChanged} label={m.name} onMove={moveTo(m.id)} />
+            </div>
             <AddTask placeholder={`Add to ${m.name}`} onAdd={(text) => add(text, m.id)} />
           </section>
         );
       })}
-      {loose.length > 0 && (
+      {(loose.length > 0 || project.milestones.length > 0) && (
         <section className="animate-enter">
           <h2 className="eyebrow mb-2 px-1">{project.milestones.length ? "No milestone" : "Tasks"}</h2>
-          <TaskList tasks={loose} meta={meta} onChanged={onChanged} label="Tasks in no milestone" />
+          <TaskList tasks={loose} meta={meta} onChanged={onChanged} label="Tasks in no milestone" onMove={moveTo(null)} />
         </section>
       )}
       {tasks.length === 0 && project.milestones.length === 0 && (
@@ -336,12 +341,17 @@ function List({ project, meta, tasks, onChanged, addRef }: { project: ProjectDet
 
 // ── The page ──────────────────────────────────────────────────────────
 
-export default function ProjectPage({ params }: RouteProps) {
+/** The board has its own address, so it can use the full width of the window. */
+export function ProjectBoard(props: RouteProps) {
+  return <ProjectPage {...props} board />;
+}
+
+export default function ProjectPage({ params, board = false }: RouteProps & { board?: boolean }) {
   const id = params.id;
   const { toast } = useShell();
   const [confirm, dialog] = useConfirm();
   const [query, setQuery] = useQueryParams();
-  const view: View = query.get("view") === "list" ? "list" : "overview";
+  const view: View = board ? "board" : query.get("view") === "list" ? "list" : "overview";
   const { data: project, reload, error } = useLive<ProjectDetail>(() => tasksApi.project(id), [id]);
   const { data: tasks, reload: reloadTasks } = useLive(() => tasksApi.list({ project: id }), [id]);
   const { data: meta } = useLive(tasksApi.meta);
@@ -392,7 +402,7 @@ export default function ProjectPage({ params }: RouteProps) {
           <BackIcon size={16} /> Projects
         </a>
         <div className="flex items-center gap-1.5">
-          <button className="btn btn-sm btn-primary" onClick={() => setQuery({ view: "list", new: "1" })}>
+          <button className="btn btn-sm btn-primary" onClick={() => navigate(`tasks/projects/${id}?view=list&new=1`)}>
             <PlusIcon size={16} /> New task
           </button>
           <button className="btn btn-sm btn-ghost" onClick={() => void save({ archived: !project.archived })}>
@@ -449,16 +459,19 @@ export default function ProjectPage({ params }: RouteProps) {
           label="Project views"
           size="sm"
           value={view}
-          onChange={(v) => setQuery({ view: v === "overview" ? null : v })}
+          onChange={(v) => (v === "board" ? navigate(`tasks/projects/${id}/board`) : navigate(`tasks/projects/${id}${v === "list" ? "?view=list" : ""}`))}
           options={[
             { id: "overview", label: "Overview", icon: <MountainIcon size={14} /> },
             { id: "list", label: <>List {open > 0 && <span className="ml-1 tabular-nums text-ink-soft">{open}</span>}</>, icon: <ListIcon size={14} /> },
+            { id: "board", label: "Board", icon: <BoardIcon size={14} /> },
           ]}
         />
       </div>
 
       {view === "overview" ? (
         <Overview project={project} meta={meta ?? null} save={save} reload={refresh} />
+      ) : view === "board" && tasks ? (
+        <Board project={project} tasks={tasks} meta={meta ?? null} onChanged={refresh} />
       ) : tasks ? (
         <List project={project} meta={meta ?? null} tasks={tasks} onChanged={refresh} addRef={addRef} />
       ) : (

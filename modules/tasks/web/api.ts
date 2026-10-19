@@ -18,6 +18,7 @@ export interface Task {
   project_id: string | null;
   milestone_id: string | null;
   parent_id: string | null;
+  sort: number; // your order within its list (fractional)
   source: string; // manual | action-item | ai | import
   source_ref: string | null;
   created_at: string;
@@ -142,6 +143,9 @@ export const tasksApi = {
   update: (id: string, changes: Partial<Task>) => request<TaskDetail>(`/tasks/${id}`, json("PATCH", changes)),
   setDone: (id: string, done: boolean) => request<unknown>(`/tasks/${id}`, json("PATCH", { done })),
   remove: (id: string) => request<void>(`/tasks/${id}`, { method: "DELETE" }),
+  /** Puts a task after another (null: first). within "project" orders it across milestones (the board). */
+  move: (id: string, body: { project_id: string | null; milestone_id: string | null; after_id: string | null; within?: "milestone" | "project"; status?: Status }) =>
+    request<unknown>(`/tasks/${id}/move`, json("POST", body)),
   block: (id: string, blockedBy: string) => request<unknown>(`/tasks/${id}/blockers`, json("POST", { blocked_by: blockedBy })),
   unblock: (id: string, blockedBy: string) => request<unknown>(`/tasks/${id}/blockers/${blockedBy}`, { method: "DELETE" }),
   comment: (id: string, body: string) => request<Update>(`/tasks/${id}/updates`, json("POST", { body })),

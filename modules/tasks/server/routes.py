@@ -165,10 +165,11 @@ def delete_item(task_id: str):
 
 @router.post("/{task_id}/move")
 def move_item(task_id: str, body: dict = Body(...)):
-    _only(body, {"project_id", "milestone_id", "after_id"})
+    _only(body, {"project_id", "milestone_id", "after_id", "within", "status"})
     with answers():
         return _with_source(items.move(task_id, project_id=body.get("project_id"), milestone_id=body.get("milestone_id"),
-                                       after_id=body.get("after_id")))
+                                       after_id=body.get("after_id"), within=body.get("within", "milestone"),
+                                       status=body.get("status")))
 
 
 @router.post("/{task_id}/blockers")
