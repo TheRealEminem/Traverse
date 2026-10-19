@@ -37,8 +37,9 @@ def _only(body: dict, allowed: set[str]) -> dict:
 
 
 def _with_source(item: dict) -> dict:
-    """An item, with where it came from described by that module (None if it's gone or its module is off)."""
-    return {**item, "source": module.describe(item["source_ref"]) if item.get("source_ref") else None}
+    """An item, with where it came from (came_from) described by that module: None if it's gone or its module is
+    off. ("source" stays the item's kind of source: manual, action-item, ai, import.)"""
+    return {**item, "came_from": module.describe(item["source_ref"]) if item.get("source_ref") else None}
 
 
 # ── Fixed paths ───────────────────────────────────────────────────────

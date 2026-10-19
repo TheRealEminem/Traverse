@@ -16,7 +16,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 0 | Family source of truth: `TrailmixFamily`, The Lodge's look out of `core/`, shared helpers promoted | M | ◐ 2026-10-18: committed on The Lodge's `family/source-of-truth` (a48764e, 00644eb) and TrailmixFamily (up to 84ea14d); The Lodge's main untouched |
 | 1 | Traverse from the family: repo, `app.json`, `identity/`, an empty app that launches | S | ☑ 2026-10-18 on `chunk-1/traverse-from-family` |
 | 2 | Tasks v2 data: projects, milestones, items, updates (migration step 2) | M | ☑ 2026-10-19 (family 842c525) on `chunk-2/tasks-v2` |
-| 3 | My tasks, quick add, the task page | M | ☐ |
+| 3 | My tasks, quick add, the task page | M | ☑ 2026-10-19 (family 1584a3a) on `chunk-3/my-tasks` |
 | 4 | Projects list and project page, milestones, progress | M | ☐ |
 | 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☐ |
 | 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ☐ |
@@ -301,6 +301,31 @@ including an upgrade test from The Lodge's v1 rows. Made in `TrailmixFamily/modu
 Blueprint chunk 3 and §8: `TaskRow`, My tasks with Today · This week · Everything · Waiting, the task page.
 
 **Done when:** add, tick, date and open tasks from the keyboard, at 375px and 1440px.
+
+**Result (2026-10-19, family 1584a3a).**
+- **My tasks** (`#/tasks?when=today|week|all|waiting`): "mine" means nobody's or yours, still to do or doing. Today
+  shows Late and Today; This week adds the next seven days; Everything adds Later, No date and "Not in a project yet"
+  (meeting action items, each with Move to…); Waiting on others is anything marked Waiting or given to someone else.
+  Tabs carry counts (and short names on a phone). Recently done tasks wait behind Show done.
+- **TaskRow and TaskList** for every task list: a round check, the title, a meta line (project, where it came from,
+  subtasks done), chips (status, Blocked, Urgent; High as a flag), someone else's avatar, and the due label (late in
+  trail, today and tomorrow in sun). ↑ ↓ move across every list on the page, Space ticks, Return opens. A ticked task
+  shows done for a moment before it leaves the list (tick again to take it back) and saves when it leaves, or at once
+  if you go elsewhere. Rows show nothing for Low and Medium priority, to keep lists calm.
+- **Quick add:** Return adds and keeps you in the field; "n" goes to it; the sidebar's **New task** opens it. On Today
+  it adds a task due today; on Waiting, one marked Waiting.
+- **The task page** (`#/tasks/t/<id>`): editable title, status, project, milestone, assignee (a name for now; the
+  PersonPicker arrives with chunk 5), due and start days, priority, estimate ("45", "2h", "1h30"), notes, subtasks,
+  "Waiting on" (blockers), comments, where it came from, linked things, and Delete behind a confirm.
+- **Sidebar and Home:** My tasks with a count of late and due-today tasks; Home's card is "What's next" this week.
+- **API:** `assignee=mine|others`, status lists (`todo,doing`), and `when=waiting` also takes someone else's open
+  tasks. Found while building: the API had replaced each task's `source` (its kind) with where it came from; that's
+  now `came_from`. Task links from other modules open the task page.
+- **Verified:** 26 module tests (115 in Traverse). In a browser with example tasks in the development database: the
+  groups and counts; ↓ across lists, Space ticking a task and the save reaching the server, Return opening it; on the
+  task page, priority, a subtask and a comment saved from the page; Day and Dusk at 1440px and 375px (where the chips
+  drop under the title). Fixed on the way: the title's size on the task page, tabs overflowing on a phone, and the
+  tab highlight measuring before the counts arrived.
 
 ### Chunk 4 · Projects (M)
 
