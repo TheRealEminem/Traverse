@@ -1,0 +1,6 @@
+{
+  "commit": "d2f4765168775ff57a61b87568d7b81b68d31b02",
+  "subject": "README: Traverse's own modules are still to come; tasks is the family's",
+  "synced_on": "2026-10-18",
+  "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
+}

@@ -14,7 +14,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | # | Chunk | Size | Status |
 | --- | --- | --- | --- |
 | 0 | Family source of truth: `TrailmixFamily`, The Lodge's look out of `core/`, shared helpers promoted | M | ◐ 2026-10-18: committed on The Lodge's `family/source-of-truth` (a48764e, 00644eb) and TrailmixFamily (up to 84ea14d); The Lodge's main untouched |
-| 1 | Traverse from the family: repo, `app.json`, `identity/`, an empty app that launches | S | ☐ |
+| 1 | Traverse from the family: repo, `app.json`, `identity/`, an empty app that launches | S | ◐ built 2026-10-18 on `chunk-1/traverse-from-family`, for Mark to look at |
 | 2 | Tasks v2 data: projects, milestones, items, updates (migration step 2) | M | ☐ |
 | 3 | My tasks, quick add, the task page | M | ☐ |
 | 4 | Projects list and project page, milestones, progress | M | ☐ |
@@ -33,6 +33,20 @@ Milestones: **A** "it runs" = 0–1 · **B** "my work, locally" = 2–4 · **C**
 **D** "shares with the team" = 7–8 · **E** "AI does the typing" = 9–12 · **F** "shipped" = 13–14.
 
 Sizes are relative effort (S ≈ one sitting, M ≈ a few, L ≈ many), not calendar time.
+
+**Family track** (§6b): work on the shared host in `TrailmixFamily`, done from Traverse and taken by The Lodge when
+Mark chooses. Asked for 2026-10-18: the Trailmix adoptions from `TRAILMIX-COMPARISON.md`, and family apps on one
+Mac sharing data, keys and basic preferences.
+
+| # | Family chunk | Size | When | Status |
+| --- | --- | --- | --- | --- |
+| F1 | A backup before an update migrates the database | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
+| F2 | Gemini's default model (`gemini-2.5-flash` is closed to new accounts) | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
+| F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ☐ design below, for Mark to review |
+| F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ☐ |
+| F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☐ |
+| F6 | AI pricing and usage: what each AI call costs, and a running total | M | before chunk 9 | ☐ |
+| F7 | Trailmix joins the family link (reads shared keys and preferences, offers its meetings) | S–M | Mark's call | ☐ a change in Trailmix's own repo |
 
 ---
 
@@ -226,6 +240,26 @@ identical to `TrailmixFamily/core/`.
 
 **Done when:** Traverse launches on 8793 with an empty sidebar in Day and Dusk, and The Lodge still runs beside it.
 
+**Result (2026-10-18).**
+- **Git and GitHub:** Traverse is a git repository with private GitHub repos for it
+  (`TheRealEminem/Traverse`) and for the family (`TheRealEminem/TrailmixFamily`); The Lodge's was already private
+  and now has the `family/source-of-truth` branch too. The design guides are tracked in `_reference/`.
+- **From the family:** `scripts/sync-family` pulled the shared code in and pinned it (`family.lock`, now d2f4765).
+  `app.json` as in §5 with `tasks` as its one module so far (the sidebar has Home and Tasks), `VERSION` 0.1.0,
+  `package.json` and `package-lock.json` from The Lodge without its network canvas, and a `requirements.txt` of the
+  host's four packages. Port 8793 is in ARCHITECTURE.md's table.
+- **`identity/`:** The Lodge's tokens, value for value; the mark (the sky tile, a low sun, a trail crossing a slope
+  to a cairn); a first scene (a trail across a mountainside toward a saddle, cairns along it, the nearest large;
+  Day by day, sunset at Dusk, pointer parallax unless motion is reduced); the route motif for `Ambient`; the dashed
+  route badge; "Pick up the trail"; the favicon; the menu bar mark; `AppIcon.icns`, drawn from the favicon by
+  `mac/make-icon.swift`; and `identity/DESIGN.md`.
+- **Found on the way:** `scripts/dev` used whatever `python3` was first on the PATH, which can be macOS's 3.9; it now
+  picks 3.11 or newer (in the family). AppKit's SVG reader ignores `stroke-opacity`, so the mark's faint lines use
+  `opacity`.
+- **Verified:** `scripts/check` passes (75 tests, types, build, family code the same as d2f4765, style rules). In a
+  browser on 8793 while The Lodge ran on 8791: Home with the scene, the Tasks page with the new badge, Day and Dusk.
+- **Not done:** the Mac app isn't built yet (chunk 14); the scene is a first version.
+
 ### Chunk 2 · Tasks v2 data (M)
 
 Blueprint chunk 2: migration step 2 from `schema/tasks-v2-projects.sql`, adjusted for D7 (five priorities), plus
@@ -342,6 +376,95 @@ conflicting edit still waits.
 ### Chunk 14 · Mac (M)
 
 Mark, `Mark.swift`, icon, build and install. **Done when:** Traverse.app installs beside The Lodge and both run.
+
+## 6b. Family track
+
+Shared host work, made in Traverse, sent to `TrailmixFamily` with `scripts/sync-family --push`, committed there, and
+pinned in Traverse. The Lodge gets each one when Mark runs `scripts/sync-family` in it. The adoptions come from
+`TRAILMIX-COMPARISON.md` §4, in its order.
+
+### F1 · A backup before an update migrates the database (S)
+
+Trailmix backs up once on the first start of each new version (`backup` before `migrate`). The family host backs up
+daily, so an update could migrate the database with no fresh copy. On startup, before any migration, the host
+compares `VERSION` with the version that last opened the database; when they differ, it makes a backup of kind
+"before-update" (three kept), then records the new version.
+
+**Done when:** starting a new version leaves a "Kept before an update" backup in Settings → Your data, starting the
+same version again doesn't, and a fresh install makes none.
+
+**Result (2026-10-18, family 5166181).** `backup.before_update()` runs first in the host's startup and
+`backup.record_version()` after the migrations, keeping the version in an undeclared `core.opened_by_version`
+setting. A failed backup is logged and never stops the app. Four tests (a new version once, a database with no
+recorded version once, a fresh install never, three kept). On Traverse's preview database, which predated it,
+the first restart made exactly one.
+
+### F2 · Gemini's default model (S)
+
+`ai.gemini_model` defaults to `gemini-flash-latest`, as in Trailmix. A model someone chose stays as it is.
+
+**Result (2026-10-18, family 5166181).** Done, with its test updated.
+
+### F3 · Family link: apps on one Mac share keys, preferences and data (M–L)
+
+Mark wants every family app installed on his Mac to share API keys, basic preferences and data, and to stay
+flexible and compatible later. The design uses two mechanisms, because keys and data behave differently:
+
+**Keys and preferences: a shared file, readable while any one app is closed.**
+- A family folder, `~/Library/Application Support/Trailmix Family/` (private to the user: 0700 folder, 0600 file),
+  holds `family.db`, one small SQLite database that every family app on the Mac opens directly (WAL, so several can
+  write).
+- A fixed list of shared settings, in the host: the AI settings (`ai.*`: provider, fallback, models, keys, the Ollama
+  address), `core.your_name`, `core.appearance` (Day, Dusk or System; today it's kept in the browser, so it moves to
+  a setting, with the browser copy kept for the first paint) and, with F5, `core.lockdown`.
+- Reading a shared setting gives the family's value; saving one writes it to the family and keeps a local copy, so
+  backups, restores and a merged app still have everything. Keys stay write-only, as now.
+- Settings has "Share keys and preferences with your other family apps", on by default. Off: this app keeps its own.
+- A change in one app reaches the others' open screens within a few seconds (a change counter in `family.db`,
+  checked the way `useLive` already polls).
+
+**Data: live calls between running apps, on localhost only.**
+- Each app writes its row in `family_apps` at startup and every minute: id, name, version, port and its **offers**,
+  the questions it can answer for other apps (People: `people.search`, `people.get`; Traverse: `tasks.mine`,
+  `tasks.create`, `projects.list`). `GET /api/family` lists the installed apps and which are running.
+- A module declares offers in a new optional `Module.offers` field. A module in another app asks with
+  `family.call("people.search", q="ana")`, which finds a running app that offers it and calls its
+  `/api/family/call/<offer>`. When none is running it says so ("Open The Lodge to see your people"), and the
+  screen still works.
+- Calls carry a family token kept in `family.db`. Without it the endpoint refuses, so a web page in a browser can't
+  reach an app's data through localhost.
+- Data stays where it lives: no app copies another's tables. In a merged app, `family.call` answers from its own
+  modules first, so the same code works in both shapes.
+- Server installs (Docker) don't join unless `TRAILMIX_FAMILY_DIR` is set. Nothing leaves the Mac.
+
+**Why not one or the other.** Live API calls alone would lose keys and preferences whenever the other app isn't
+running; a shared file alone would mean one app reading another's tables, which breaks the family's main rule.
+Splitting them keeps each app the owner of its data and still shares what's truly common.
+
+**Done when:** a key saved in Traverse shows as set in The Lodge (once The Lodge has taken this family version);
+changing your name or the appearance in one changes the other; Traverse's assignee picker lists The Lodge's people
+while The Lodge is open, and says how to see them when it isn't; a call without the token gets 403.
+
+### F4 · Updater and releases (M)
+
+From Trailmix's `Updater.swift` and workflows: a beta channel, **Go back** to the previous version, skip a version,
+no update in the middle of something the app marks as busy, and CI that publishes a pre-release which is promoted
+after a few days with no blocking issue. Before Traverse's first release (chunk 14).
+
+### F5 · Lockdown (M)
+
+One switch, shared through the family link, that stops every cloud call: AI providers (at `ai.configured()`, the
+one choke point), update checks and anything a module adds. From Trailmix's Lockdown.
+
+### F6 · AI pricing and usage (M)
+
+A host `pricing.py` and a usage table: what each AI call cost, by provider and module, with a running total in
+Settings → AI. Before chunk 9, when the inbox starts spending money on extraction.
+
+### F7 · Trailmix joins the family link (S–M, Mark's call)
+
+Trailmix reads the shared keys and preferences from `family.db` and offers `meetings.recent` and `meetings.get`.
+It's a change in Trailmix's own repository, independent of the rest. Until then, chunk 10 reads its local API.
 
 ## 7. Risks and spikes
 
