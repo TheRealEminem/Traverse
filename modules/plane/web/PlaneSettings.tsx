@@ -57,7 +57,7 @@ export default function PlaneSettings() {
       <ControlRow
         icon={<KeyIcon size={16} />}
         label="Personal API key"
-        hint="In Plane: Profile settings → Personal access tokens. It stays on this Mac and isn't shown again."
+        hint="Plane → Profile settings → Personal access tokens. Never shown again."
         wrap
       >
         <SecretSetting label="Plane API key" hint={hints["plane.personal_api_key"]} onSave={(v) => void save({ "plane.personal_api_key": v })} />
@@ -71,7 +71,7 @@ export default function PlaneSettings() {
           onSave={(v) => void save({ "plane.workspace_slug": v.replace(/^https?:\/\/[^/]+\//, "").replace(/\/.*$/, "") })}
         />
       </ControlRow>
-      <ControlRow icon={<PlugIcon size={16} />} label="Server" hint="Plane Cloud is https://api.plane.so. Change it only for a Plane you host yourselves." wrap>
+      <ControlRow icon={<PlugIcon size={16} />} label="Server" hint="Plane Cloud, or the address of a Plane you host." wrap>
         <TextSetting
           label="Plane server"
           mono
