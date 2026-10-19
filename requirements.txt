@@ -1,0 +1,5 @@
+# The server: enough for the Mac app and for a Linux server / Docker install.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27
+anthropic>=1.0

@@ -1,0 +1,12 @@
+{
+  "name": "Traverse",
+  "id": "traverse",
+  "tagline": "what's next, and who's on it",
+  "bundleId": "com.traverse.app",
+  "envPrefix": "TRAVERSE",
+  "port": 8793,
+  "updateRepo": "",
+  "modules": [
+    "tasks"
+  ]
+}
