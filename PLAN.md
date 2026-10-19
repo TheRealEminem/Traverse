@@ -18,7 +18,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 2 | Tasks v2 data: projects, milestones, items, updates (migration step 2) | M | ☑ 2026-10-19 (family 842c525) on `chunk-2/tasks-v2` |
 | 3 | My tasks, quick add, the task page | M | ☑ 2026-10-19 (family 1584a3a) on `chunk-3/my-tasks` |
 | 4 | Projects list and project page, milestones, progress | M | ☑ 2026-10-19 on `chunk-4/projects` |
-| 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☐ |
+| 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ◐ 2026-10-19 on `claude/chunk-5-plane-mirror-ebcfba`; the live check waits for Mark's Plane key |
 | 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ☐ |
 | 7 | **Push to Plane**: previews, changed fields only, conflict stops, log and undo | L | ☐ |
 | 8 | Board view and drag | M | ◐ 2026-10-19 (family bf6d30a) on `chunk-8/board`; the Plane part waits for chunk 7 |
@@ -34,6 +34,16 @@ Milestones: **A** "it runs" = 0–1 · **B** "my work, locally" = 2–4 · **C**
 
 Sizes are relative effort (S ≈ one sitting, M ≈ a few, L ≈ many), not calendar time.
 
+**Merged 2026-10-19** on `merge/plane-inbox-updater` (from `chunk-8/board`): chunk 5 (`claude/chunk-5-plane-mirror-ebcfba`),
+chunks 9-10 (`claude/chunk-9-inbox-362a27`) and F4 (`claude/family-f4-updater-8da213`), which were built in parallel
+sessions. `app.json` now runs `tasks`, `plane` and `inbox`; the shared parts (the people directory, the updater and
+release flow) are in the family at 44da03f, and sync-family shares the three new release files. One conflict (the
+progress table in this file) and one test that still read a task's origin as `source` rather than `came_from`. All 198
+tests pass, the Mac app builds, the update checks pass, and Home, Team, Inbox and Settings → Plane load in a browser.
+Still open: Plane's live check needs Mark's key (chunk 5); the Mac menu's Inbox item opens The Lodge's People inbox,
+which Traverse doesn't have; the release workflows haven't run on GitHub yet; and updates stay off until `updateRepo`
+names a repository the installed app can read.
+
 **Family track** (§6b): work on the shared host in `TrailmixFamily`, done from Traverse and taken by The Lodge when
 Mark chooses. Asked for 2026-10-18: the Trailmix adoptions from `TRAILMIX-COMPARISON.md`, and family apps on one
 Mac sharing data, keys and basic preferences.
@@ -43,7 +53,7 @@ Mac sharing data, keys and basic preferences.
 | F1 | A backup before an update migrates the database | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
 | F2 | Gemini's default model (`gemini-2.5-flash` is closed to new accounts) | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
 | F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ☑ 2026-10-18 (family 3a26cf7); The Lodge has it on its `family/link` branch |
-| F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ◐ 2026-10-19 built on `claude/family-f4-updater-8da213`; not yet in the family |
+| F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ☑ 2026-10-19 (family 44da03f); its workflows haven't run on GitHub yet |
 | F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☐ |
 | F6 | AI pricing and usage: what each AI call costs, and a running total | M | before chunk 9 | ☐ |
 | F7 | Trailmix joins the family link (reads shared keys and preferences, offers its meetings) | S–M | Mark's call | ☐ a change in Trailmix's own repo |

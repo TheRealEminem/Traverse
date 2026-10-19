@@ -263,7 +263,7 @@ def test_accepting_files_them_into_the_chosen_project_with_their_people_and_date
         ("Send Acme the revised quote", project_id, "Elijah Park", "2026-10-23", 0),
         ("Update the pricing sheet", project_id, "Mickey Ruiz", "2026-10-20", 0),
     ]
-    assert filed[0]["source"]["href"] == f"#/inbox/{capture_id}"
+    assert filed[0]["came_from"]["href"] == f"#/inbox/{capture_id}"
     got = _capture(client, capture_id)
     assert got["status"] == "done" and all(p["status"] == "accepted" for p in got["proposals"])
     linked = {(l["title"], l["kind"]) for l in client.get("/api/links", params={"ref": f"inbox:{capture_id}"}).json()}
