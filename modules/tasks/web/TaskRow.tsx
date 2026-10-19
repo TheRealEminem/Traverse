@@ -1,7 +1,7 @@
 // One task in a list, used everywhere a task is listed: the round check, the title, a meta line, chips, who's on
 // it, and when it's due. A list of them is keyboard-driven: ↑ ↓ move between rows, Space ticks, Return opens.
 import { useEffect, useRef, useState } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { Avatar } from "@core/components/blocks";
 import { CheckIcon, FlagIcon } from "@core/components/icons";
 import { StatusChip } from "@core/components/ui";
@@ -10,6 +10,7 @@ import { useShell } from "@core/shell";
 import { tasksApi } from "./api";
 import type { Meta, Task } from "./api";
 import { dueLabel } from "./dates";
+import { afterForStep, dragProps, useDragging, useDropZone } from "./dnd";
 
 const isMine = (t: Task) => (!t.assignee_ref && !t.assignee_name) || t.assignee_ref === "core:me";
 
@@ -54,6 +55,8 @@ export function TaskRow({
   tabIndex = -1,
   onKeyDown,
   extra,
+  drag,
+  style,
 }: {
   task: Task;
   meta: Meta | null;
@@ -64,6 +67,9 @@ export function TaskRow({
   onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
   /** Something the list adds at the end of the row, like "Move to…". */
   extra?: ReactNode;
+  /** When the list lets you drag its tasks: what dragProps() gives. */
+  drag?: ReturnType<typeof dragProps>;
+  style?: CSSProperties;
 }) {
   const status = task.status !== "todo" && task.status !== "done" ? meta?.statuses.find((s) => s.value === task.status) : null;
   const detail = [
@@ -94,6 +100,8 @@ export function TaskRow({
     <div
       role="listitem"
       data-task-row=""
+      {...(drag ?? {})}
+      style={{ ...(drag?.style ?? {}), ...(style ?? {}) }}
       tabIndex={tabIndex}
       aria-label={`${task.text}${done ? ", done" : ""}`}
       onKeyDown={onKeyDown}
@@ -136,6 +144,7 @@ export function TaskList({
   onChanged,
   extra,
   label,
+  onMove,
 }: {
   tasks: Task[];
   meta: Meta | null;
@@ -143,6 +152,8 @@ export function TaskList({
   onChanged: () => void;
   extra?: (t: Task) => ReactNode;
   label: string;
+  /** Lets you drag tasks into and around this list (and move them with Alt + ↑ ↓): where a task should go. */
+  onMove?: (id: string, afterId: string | null) => void;
 }) {
   const { toast } = useShell();
   const [focus, setFocus] = useState(0);
@@ -198,8 +209,20 @@ export function TaskList({
     timers.current.set(t.id, { timer, done: next });
   };
 
+  const ids = tasks.map((t) => t.id);
+  const dragging = useDragging();
+  const { zone, lineFor } = useDropZone(ids, (id, afterId) => onMove?.(id, afterId));
+
   const keys = (i: number, t: Task) => (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (onMove && e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      // Alt + ↑ ↓ moves the task itself; focus follows it once the list has reloaded.
+      e.preventDefault();
+      const after = afterForStep(ids, t.id, e.key === "ArrowDown" ? 1 : -1);
+      if (after !== undefined) {
+        onMove(t.id, after);
+        window.setTimeout(() => document.querySelector<HTMLElement>(`[data-task-row][data-drag-id="${t.id}"]`)?.focus(), 350);
+      }
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       // Across every list on the page (Late, Today…), in the order they're shown.
       e.preventDefault();
       const all = Array.from(document.querySelectorAll<HTMLElement>("[data-task-row]"));
@@ -215,8 +238,25 @@ export function TaskList({
     }
   };
 
+  if (onMove && tasks.length === 0) {
+    // An empty list still takes a dropped task, and says so while one is being dragged.
+    return (
+      <div
+        {...zone}
+        role="list"
+        aria-label={label}
+        className={`rounded-lg border border-dashed px-4 text-center text-hint text-ink-soft transition-[padding,border-color] ${
+          dragging ? "border-forest/50 py-4" : "border-transparent py-0"
+        }`}
+      >
+        {dragging ? "Drop a task here" : null}
+      </div>
+    );
+  }
+  if (tasks.length === 0) return null;
+
   return (
-    <div role="list" aria-label={label} className="panel divide-y divide-line overflow-hidden">
+    <div role="list" aria-label={label} className="panel divide-y divide-line overflow-hidden" {...(onMove ? zone : {})}>
       {tasks.map((t, i) => (
         <TaskRow
           key={t.id}
@@ -228,6 +268,8 @@ export function TaskList({
           tabIndex={i === Math.min(focus, tasks.length - 1) ? 0 : -1}
           onKeyDown={keys(i, t)}
           extra={extra?.(t)}
+          drag={onMove ? dragProps(t.id, dragging) : undefined}
+          style={onMove ? lineFor(i) : undefined}
         />
       ))}
     </div>

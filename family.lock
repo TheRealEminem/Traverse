@@ -1,6 +1,6 @@
 {
-  "commit": "021a90964be93245abe9eea213a349f758a31e3a",
-  "subject": "Projects: the projects list and the project page",
+  "commit": "8f4640dc3ea6566df6803dc3532494e53844f8e9",
+  "subject": "Tasks: the board, and dragging tasks into place",
   "synced_on": "2026-10-19",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }

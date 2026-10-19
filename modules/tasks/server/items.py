@@ -294,21 +294,31 @@ def _move_subtasks(item_id: str, project_id, milestone_id) -> None:
         _move_subtasks(child["id"], project_id, milestone_id)
 
 
-def move(item_id: str, *, project_id=None, milestone_id=None, after_id: str | None = None) -> dict:
-    """Puts a top-level item into a project and milestone (or none), right after `after_id` there (first when None)."""
+def move(item_id: str, *, project_id=None, milestone_id=None, after_id: str | None = None, within: str = "milestone",
+         status: str | None = None) -> dict:
+    """Puts a top-level item into a project and milestone (or none), right after `after_id` (first when None).
+    within: "milestone" orders it among its milestone's items (the list view); "project" among all the project's
+    top-level items, whatever their milestone (the board, where a column mixes milestones). status, when given, is
+    set too, so a card dropped in another column changes in one step."""
     row = _row(item_id)
     if row is None:
         raise KeyError(item_id)
     if row["parent_id"]:
         raise ValueError("A subtask moves with its parent")
+    store.one_of(within, ("milestone", "project"), "within")
     project_id, milestone_id, _ = _place(project_id, milestone_id, None, item_id)
-    scope_sql, scope_args = _scope(project_id, milestone_id, None)
     if after_id == item_id:
         raise ValueError("A task can't go after itself")
+    if within == "project":
+        scope_sql, scope_args = "parent_id IS NULL AND project_id IS ?", (project_id,)
+    else:
+        scope_sql, scope_args = _scope(project_id, milestone_id, None)
     sort = store.sort_after("tasks_items", f"{scope_sql} AND id <> ?", (*scope_args, item_id), after_id)
     db.execute("UPDATE tasks_items SET project_id = ?, milestone_id = ?, sort = ?, updated_at = ? WHERE id = ?",
                (project_id, milestone_id, sort, db.now(), item_id))
     _move_subtasks(item_id, project_id, milestone_id)
+    if status is not None and status != row["status"]:
+        set_status(item_id, status, quiet=True)
     store.changed(project_id, item_id=item_id)
     if project_id != row["project_id"]:
         store.changed(row["project_id"], item_id=item_id)

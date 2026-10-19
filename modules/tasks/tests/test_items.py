@@ -144,6 +144,21 @@ def test_moving_puts_an_item_where_you_drop_it():
     assert [i["text"] for i in items.query(project=p)] == ["B", "A", "C"]
 
 
+def test_the_board_orders_across_milestones_and_changes_status_in_one_step():
+    p = projects.create("Relaunch")
+    m1, m2 = projects.add_milestone(p, "Designs")["id"], projects.add_milestone(p, "Build")["id"]
+    a = items.create("A", milestone_id=m1)
+    b = items.create("B", milestone_id=m2)
+    c = items.create("C", milestone_id=m1, status="doing")
+    # In the To do column (A, B), drop C after B: it keeps its milestone, takes the column's status.
+    moved = items.move(c, project_id=p, milestone_id=m1, after_id=b, within="project", status="todo")
+    assert (moved["status"], moved["milestone_id"]) == ("todo", m1)
+    todo = [i["text"] for i in items.query(project=p, status="todo")]
+    assert todo.index("C") == todo.index("B") + 1
+    with pytest.raises(ValueError, match="within must be one of"):
+        items.move(a, project_id=p, milestone_id=m1, within="everywhere")
+
+
 def test_action_items_go_to_the_project_their_source_is_linked_to():
     p = projects.create("Riverbend relaunch")
     links.add(f"tasks:{p}", "crm:meeting1", "discussed-in")
