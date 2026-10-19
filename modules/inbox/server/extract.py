@@ -90,12 +90,19 @@ def prompt_for(capture: dict, your_name: str) -> str:
     return "\n".join(lines)
 
 
-def tidy(found: Proposal) -> dict | None:
-    """One proposal as the inbox keeps it, or None when there's no work in it. Odd values are dropped, not guessed."""
+def _said(words: str | None, text: str) -> bool:
+    """Whether words the model says it copied are really in the text (small models make some up)."""
+    words = " ".join((words or "").split()).casefold().strip(" .,\"'")
+    return bool(words) and words in " ".join(text.split()).casefold()
+
+
+def tidy(found: Proposal, text_read: str) -> dict | None:
+    """One proposal as the inbox keeps it, or None when there's no work in it. Odd values are dropped, not guessed:
+    a day or a priority stands only when the words it came from are in the text."""
     text = " ".join((found.text or "").split()).rstrip(".")
     if not text:
         return None
-    due = (found.due_on or "").strip()
+    due = (found.due_on or "").strip() if _said(found.when_said, text_read) else ""
     try:
         due = date.fromisoformat(due).isoformat() if len(due) == 10 else None
     except ValueError:
@@ -103,10 +110,9 @@ def tidy(found: Proposal) -> dict | None:
     name = " ".join((found.assignee_name or "").split()) or None
     if name and name.casefold() in ("nobody", "none", "unknown", "n/a", "unassigned"):
         name = None
-    # A priority with no words saying how urgent is a guess (small models make them): it stays at none.
-    priority = min(4, max(0, int(found.priority or 0))) if (found.urgency_said or "").strip() else 0
+    priority = min(4, max(0, int(found.priority or 0))) if _said(found.urgency_said, text_read) else 0
     return {"text": text[:300], "assignee_name": name[:80] if name else None, "due_on": due, "priority": priority,
-            "quote": " ".join((found.quote or "").split())[:500]}
+            "quote": " ".join((found.quote or "").split()).lstrip("-*• ")[:500]}
 
 
 def provider_words(pid: str) -> str:
@@ -121,7 +127,7 @@ def extract(job: Job) -> None:
         return  # deleted meanwhile
     job.stage("Reading")
     reading, pid = ai.structured(prompt_for(capture, settings.section("core")["your_name"].strip()), SYSTEM, Reading)
-    found = [p for p in (tidy(p) for p in reading.proposals[: store.MAX_PROPOSALS]) if p]
+    found = [p for p in (tidy(p, capture["raw_text"]) for p in reading.proposals[: store.MAX_PROPOSALS]) if p]
     store.replace_proposed(capture["id"], found)
     changes = {"read_by": provider_words(pid), "read_at": db.now(), "status": "review"}
     title = " ".join((reading.title or "").split())
