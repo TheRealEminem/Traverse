@@ -1,6 +1,6 @@
 {
-  "commit": "bf6d30aa676d6f2419701fbb4803a19071cc4f46",
-  "subject": "Tasks: the board, and dragging tasks into place",
+  "commit": "44da03f6399e3493c19a0e256fbc038f278627e0",
+  "subject": "The people directory, and the updater with beta releases",
   "synced_on": "2026-10-19",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }
