@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Development: the server (reloads when Python changes) on the app's port, and Vite on :5173 with hot reload.
+# Open http://localhost:5173. Restart this after editing tailwind.config.js (Vite doesn't reload it).
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+PORT="$(python3 -c 'import json; print(json.load(open("app.json"))["port"])')"
+
+if [ ! -x .venv/bin/uvicorn ]; then
+  echo "› Setting up Python (first run only)…"
+  # The family needs Python 3.11 or newer; macOS's own python3 is older, so take the newest one installed.
+  PYTHON=""
+  for p in python3.14 python3.13 python3.12 python3.11 python3; do
+    if command -v "$p" >/dev/null && "$p" -c 'import sys; sys.exit(sys.version_info < (3, 11))'; then PYTHON="$p"; break; fi
+  done
+  [ -n "$PYTHON" ] || { echo "Python 3.11 or newer is needed (brew install python@3.12)." >&2; exit 1; }
+  "$PYTHON" -m venv .venv
+  .venv/bin/pip install -q -r requirements.txt pytest
+fi
+[ -d node_modules ] || { echo "› Installing web packages (first run only)…"; npm install --silent; }
+
+trap 'kill 0' EXIT
+.venv/bin/uvicorn core.server.app:app --host 127.0.0.1 --port "$PORT" --reload --reload-dir core --reload-dir modules &
+npm run dev
