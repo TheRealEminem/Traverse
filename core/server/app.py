@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ai, auth, backup, config, db, events, family, jobs, links, module, schedule, search, settings
+from . import ai, auth, backup, config, db, events, family, jobs, links, module, people, schedule, search, settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("core")
@@ -254,6 +254,12 @@ async def ai_test(pid: str):
 @core_router.get("/search")
 def search_all(q: str = "", limit: int = 8):
     return search.search(q, limit)
+
+
+@core_router.get("/people")
+async def people_find(q: str = "", limit: int = 8):
+    """The people directory (people.py): every module's people and other family apps', you first as core:me."""
+    return await run_in_threadpool(people.find, q, limit)
 
 
 @core_router.get("/links")
