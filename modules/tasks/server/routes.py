@@ -36,24 +36,27 @@ def _only(body: dict, allowed: set[str]) -> dict:
     return body
 
 
-def _with_source(item: dict, linked: dict | None = None) -> dict:
+def _with_source(item: dict, linked: dict | None = None, shared: dict | None = None) -> dict:
     """An item, with where it came from (came_from) described by that module: None if it's gone or its module is
     off. ("source" stays the item's kind of source: manual, action-item, ai, import, linked.) A linked item also
-    says what it's linked to and what's waiting for a choice (synced), from `linked` when the caller looked it up
-    for a whole list."""
+    says what it's linked to and what's waiting for a choice (synced), and any item where its changes wait to be
+    sent (sharing), from `linked` and `shared` when the caller looked them up for a whole list."""
     if linked is None:
         linked = synced.about([item["id"]])
+    if shared is None:
+        shared = synced.sharing([item["id"]])
     about = linked.get(item["id"])
     if about:
         there = module.describe(about["ref"])
         about = {**about, "title": there["title"] if there else None}
     return {**item, "came_from": module.describe(item["source_ref"]) if item.get("source_ref") else None,
-            "synced": about}
+            "synced": about, "sharing": shared.get(item["id"], [])}
 
 
 def _with_sources(found: list[dict]) -> list[dict]:
-    linked = synced.about([i["id"] for i in found])
-    return [_with_source(i, linked) for i in found]
+    ids = [i["id"] for i in found]
+    linked, shared = synced.about(ids), synced.sharing(ids)
+    return [_with_source(i, linked, shared) for i in found]
 
 
 # ── Fixed paths ───────────────────────────────────────────────────────
@@ -197,6 +200,15 @@ def resolve_synced(task_id: str, body: dict = Body(...)):
     _only(body, {"field", "keep"})
     with answers("That task isn't linked"):
         return _with_source(synced.resolve(task_id, body.get("field", ""), body.get("keep", "")))
+
+
+@router.post("/{task_id}/share")
+def share(task_id: str):
+    """"Send to Plane": asks for what you've changed to be sent (a task not linked yet, in a linked project: to be
+    made there). Nothing is sent from here; it waits for your approval where it's going."""
+    with answers():
+        asked = synced.share(task_id)
+    return {**_with_source(items.get(task_id)), "asked": asked}
 
 
 @router.delete("/{task_id}/synced")

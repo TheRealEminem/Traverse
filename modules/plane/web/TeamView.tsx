@@ -628,7 +628,7 @@ function NotSetUp({ team }: { team: Team }) {
       <Empty icon={<UsersIcon size={20} />} title={team.configured ? "Choose which projects to mirror" : "Connect Plane to see your team"}>
         {team.configured
           ? "Pick the Plane projects that count in Settings → Plane, and their open items will appear here by person, state and project."
-          : "Paste your Plane API key and workspace in Settings → Plane. Traverse only reads from Plane: nothing is sent there."}
+          : "Paste your Plane API key and workspace in Settings → Plane. Traverse reads Plane, and sends only what you approve."}
       </Empty>
       <div className="mt-4 flex justify-center">
         <a className="btn btn-md btn-primary" href="#/settings">

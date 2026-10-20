@@ -1,16 +1,24 @@
 """Plane: the connection to the team's Plane workspace. Traverse's own module (D5), never shared with other apps.
 
-It only reads Plane (PLAN.md §3.4): a recurring pull mirrors the chosen projects' items, states, labels and cycles and
-the workspace's members into plane_* tables; the Team view shows who's on what; and the members join the host's people
+It reads Plane (PLAN.md §3.4): a recurring pull mirrors the chosen projects' items, states, labels and cycles and the
+workspace's members into plane_* tables; the Team view shows who's on what; and the members join the host's people
 directory, with you as core:me. Linking (chunk 6, linking.py) ties Plane projects to Traverse projects and brings items
-in as linked tasks that follow Plane, through the shared work.* contracts. Nothing is ever written to Plane from here.
+in as linked tasks that follow Plane, through the shared work.* contracts. And it sends to Plane only what you
+approve (chunk 7, push.py): your changes to linked tasks, field by field, after checking nobody changed them there
+meanwhile, and new tasks in linked projects. It never deletes anything in Plane (§3.3).
 """
 from core.server import contracts
 from core.server.module import Module
 
-from . import linking, people, pull, routes, store
+from . import linking, people, pull, push, routes, store
 
 SETTING_KEYS = {"plane.personal_api_key", "plane.workspace_slug", "plane.base_url", "plane.projects"}
+
+
+def _deleted(payload: dict) -> None:
+    """contracts.ITEM_DELETED: a linked Traverse project is unlinked; a task's waiting changes are forgotten."""
+    linking.local_deleted(payload)
+    push.local_deleted(payload)
 
 
 def _settings_changed(payload: dict) -> None:
@@ -33,12 +41,16 @@ MODULE = Module(
         "projects": [],                         # the Plane project ids to mirror
         "me": "",                               # the member who is you; empty: whoever the API key belongs to
         "pull_minutes": 5,                      # 0: only when you press "Pull now"
+        # Send checks against Plane and says what it would write, but writes nothing (§3.3, rule 8). On until you
+        # turn it off, so the first sends are trials.
+        "dry_run": True,
     },
     choices={"pull_minutes": (0, 2, 5, 15, 30)},
-    jobs={"pull": pull.pull},
-    lanes={"pull": "cloud"},
+    jobs={"pull": pull.pull, push.KIND: push.send},
+    lanes={"pull": "cloud", push.KIND: "interactive"},    # a push is something you're waiting for
     recurring={"pull": pull.every},
-    subscribe={"core.settings.changed": _settings_changed, contracts.ITEM_DELETED: linking.local_deleted},
+    subscribe={"core.settings.changed": _settings_changed, contracts.ITEM_DELETED: _deleted,
+               contracts.WORK_SHARE_REQUESTED: push.requested},
     search=store.search,
     describe=store.describe,
     export=store.export,

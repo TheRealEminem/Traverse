@@ -1,5 +1,5 @@
-"""The plane API, mounted at /api/plane. Nothing here writes to Plane: the only thing that reaches Plane is a GET.
-Linking and bringing in change only Traverse."""
+"""The plane API, mounted at /api/plane. Nothing here writes to Plane itself: linking and bringing in change only
+Traverse, and the outbox's Send approves a push, whose job (push.py) checks against Plane and then writes."""
 from contextlib import contextmanager
 
 from fastapi import APIRouter, Body, HTTPException
@@ -7,7 +7,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from core.server import jobs
 
-from . import linking, pull, store, team
+from . import linking, pull, push, store, team
 from .client import PlaneError, web_url
 
 router = APIRouter()
@@ -123,3 +123,56 @@ def bring_in(body: dict = Body(...)):
         raise HTTPException(400, "items is a list of Plane item ids")
     with answers():
         return linking.bring(ids)
+
+
+# ── The outbox (chunk 7) ──────────────────────────────────────────────
+
+@router.get("/outbox")
+def outbox():
+    """What waits for you to send to Plane, field by field, and what was sent (with Undo)."""
+    return push.outbox()
+
+
+@router.get("/outbox/count")
+def outbox_count():
+    return {"waiting": push.count()}
+
+
+@router.post("/pushes/{push_id}/send")
+def send_push(push_id: str):
+    """Approves a push: its job reads the item from Plane again and writes only if nothing it sends changed there."""
+    with answers("That isn't in the outbox"):
+        push.approve(push_id)
+        return push.view(push_id)
+
+
+@router.post("/pushes/{push_id}/discard")
+def discard_push(push_id: str):
+    with answers("That isn't in the outbox"):
+        push.discard(push_id)
+        return push.view(push_id)
+
+
+@router.patch("/pushes/{push_id}")
+def change_push(push_id: str, body: dict = Body(...)):
+    """{"include": {"notes": true}}: which fields go."""
+    if set(body) - {"include"} or not isinstance(body.get("include"), dict):
+        raise HTTPException(400, "Say which fields to include: {\"include\": {\"notes\": true}}")
+    with answers("That isn't in the outbox"):
+        push.include(push_id, body["include"])
+        return push.view(push_id)
+
+
+@router.post("/pushes/{push_id}/choose")
+def choose(push_id: str, body: dict = Body(...)):
+    """A field changed in Plane since you last saw it: {"field": "due_on", "keep": "plane" | "mine"}."""
+    with answers("That isn't in the outbox"):
+        push.choose(push_id, body.get("field") or "", body.get("keep") or "")
+        return push.view(push_id)
+
+
+@router.post("/pushes/{push_id}/undo", status_code=201)
+def undo_push(push_id: str):
+    """Undo makes a new push of the values from before, waiting for you like any other."""
+    with answers("That isn't in the outbox"):
+        return push.view(push.undo(push_id))
