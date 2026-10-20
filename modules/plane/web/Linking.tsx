@@ -1,6 +1,6 @@
 // #/plane/links: which Traverse project each mirrored Plane project goes to, what its states mean there, and
 // bringing Plane items into Traverse as linked tasks (yours, or a project's). All of it changes only Traverse:
-// nothing is sent to Plane. ?project=<id> points at one project (where a link to a Plane project opens).
+// nothing is sent to Plane (that's the outbox's). ?project=<id> points at one project (where a link to a Plane project opens).
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Empty } from "@core/components/blocks";

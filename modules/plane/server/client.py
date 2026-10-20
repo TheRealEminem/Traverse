@@ -1,8 +1,11 @@
-"""A small, read-only client for Plane's REST API (https://developers.plane.so).
+"""A small client for Plane's REST API (https://developers.plane.so).
 
-It can only read. Every request goes through `_get`, which sends GET and nothing else, and there is no method that
-creates, changes, archives or deletes anything: Traverse never deletes in Plane (PLAN.md §3.3, rule 1), and in this
-chunk it doesn't write at all. tests/test_client.py fails if a writing method or verb ever appears here.
+It reads, and it can do exactly two things to Plane: change some fields of one work item (PATCH, only the fields
+given) and add a work item to a project (POST). Reads go through `_get`, which sends GET and nothing else; the two
+writes go through `_send`, which sends PATCH or POST and refuses anything else. There is no method that deletes,
+archives or replaces anything, and no way to send DELETE or PUT: Traverse never deletes in Plane (PLAN.md §3.3, rule
+1). tests/test_client.py fails if one ever appears here. Whether a write should happen at all (your approval, the
+check against the base) is push.py's business; this only carries it.
 
 Plane signs requests in with a personal API key in the X-API-Key header. Lists come back a page at a time (cursor
 and per_page, at most 100) and are followed to the end. Plane allows 60 requests a minute per key: a 429 waits for
@@ -24,6 +27,9 @@ PER_PAGE = 100
 MAX_PAGES = 500                 # 50,000 rows: far past any real workspace, but never an endless loop
 MAX_TRIES = 5                   # per request, for rate limits and Plane's own hiccups
 MAX_WAIT = 65.0                 # seconds; Plane's window is a minute
+# The work item fields Traverse may write (PLAN.md §3.2). A list sent (assignees) replaces Plane's list, so the caller
+# sends Plane's current list merged with your additions and removals (rule 5), never a list of its own.
+WRITABLE = ("name", "description_html", "state", "priority", "start_date", "target_date", "assignees")
 
 
 class PlaneError(Exception):
@@ -59,7 +65,7 @@ class PlaneClient:
         self._sleep = sleep
         self._http = httpx.Client(base_url=self.base_url, transport=transport, timeout=timeout,
                                   headers={"X-API-Key": api_key, "Accept": "application/json"})
-        self.requests = 0       # how many GETs this client made (shown after a pull, handy against the rate limit)
+        self.requests = 0       # how many requests this client made (shown after a pull, handy against the rate limit)
 
     def close(self) -> None:
         self._http.close()
@@ -98,6 +104,27 @@ class PlaneClient:
     def work_items(self, project_id: str) -> list[dict]:
         return list(self._pages(self._ws(f"projects/{project_id}/work-items/")))
 
+    def work_item(self, project_id: str, item_id: str) -> dict:
+        """One work item as Plane has it right now (read again just before anything is written to it)."""
+        return self._get(self._ws(f"projects/{project_id}/work-items/{item_id}/"))
+
+    # ── What Traverse may write, once you've approved it ────────────────
+
+    def update_work_item(self, project_id: str, item_id: str, changes: dict) -> dict:
+        """Changes only these fields of one work item (PATCH); every other field is left as Plane has it. Returns the
+        item as Plane answers."""
+        _writable(changes)
+        if not changes:
+            raise PlaneError("Nothing to change.")
+        return self._send("PATCH", self._ws(f"projects/{project_id}/work-items/{item_id}/"), changes)
+
+    def create_work_item(self, project_id: str, fields: dict) -> dict:
+        """Adds a work item to a project (POST). Returns it as Plane answers, with its new id."""
+        _writable(fields)
+        if not str(fields.get("name") or "").strip():
+            raise PlaneError("A work item needs a name.")
+        return self._send("POST", self._ws(f"projects/{project_id}/work-items/"), fields)
+
     # ── Paging, rate limits and errors ──────────────────────────────────
 
     def _ws(self, rest: str) -> str:
@@ -125,12 +152,27 @@ class PlaneClient:
         raise PlaneError(f"Plane kept sending more pages of {path} than Traverse expected. Try again later.")
 
     def _get(self, path: str, params: dict | None = None):
-        """The one place a request leaves Traverse for Plane. It is always a GET."""
+        """Every read. It is always a GET."""
+        return self._ask(lambda: self._http.get(path, params=params), path, again=True)
+
+    def _send(self, method: str, path: str, body: dict):
+        """Every write. Only PATCH (change some fields) or POST (add a work item): nothing that deletes or replaces.
+        A PATCH that timed out or met Plane's own error is sent again (the same values twice change nothing); a POST
+        isn't, since the first may have made the item."""
+        if method == "PATCH":
+            return self._ask(lambda: self._http.patch(path, json=body), path, again=True)
+        if method == "POST":
+            return self._ask(lambda: self._http.post(path, json=body), path, again=False)
+        raise PlaneError("Traverse only changes or adds work items in Plane. It never deletes anything there.")
+
+    def _ask(self, request: Callable[[], httpx.Response], path: str, again: bool):
+        """Sends one request, waiting out rate limits (which Plane answers before doing anything, so any request can
+        go again) and, when `again`, Plane's hiccups and timeouts."""
         for attempt in range(1, MAX_TRIES + 1):
             try:
-                r = self._http.get(path, params=params)
+                r = request()
             except httpx.TimeoutException as e:
-                if attempt < MAX_TRIES:
+                if again and attempt < MAX_TRIES:
                     self._sleep(self._backoff(attempt))
                     continue
                 raise PlaneError(f"Plane at {self.base_url} didn't answer in time. Try again in a moment.") from e
@@ -138,12 +180,11 @@ class PlaneClient:
                 raise PlaneError(f"Couldn't reach Plane at {self.base_url}. Check the address in Settings → Plane "
                                  f"and that this Mac is online.") from e
             self.requests += 1
-            if r.status_code == 429 or r.status_code >= 500:
-                if attempt < MAX_TRIES:
-                    wait = self._retry_after(r) if r.status_code == 429 else self._backoff(attempt)
-                    log.info("Plane said %s for %s; waiting %.1fs", r.status_code, path, wait)
-                    self._sleep(wait)
-                    continue
+            if (r.status_code == 429 or (again and r.status_code >= 500)) and attempt < MAX_TRIES:
+                wait = self._retry_after(r) if r.status_code == 429 else self._backoff(attempt)
+                log.info("Plane said %s for %s; waiting %.1fs", r.status_code, path, wait)
+                self._sleep(wait)
+                continue
             if r.status_code >= 400:
                 raise self._error(r, path)
             self._pace(r)
@@ -183,7 +224,11 @@ class PlaneClient:
         detail = ""
         try:
             body = r.json()
-            detail = str(body.get("detail") or body.get("error") or "") if isinstance(body, dict) else ""
+            if isinstance(body, dict):
+                detail = str(body.get("detail") or body.get("error") or "")
+                if not detail and body:          # a form's errors: {"target_date": ["…"]}
+                    field, said = next(iter(body.items()))
+                    detail = f"{field}: {said[0] if isinstance(said, list) and said else said}"
         except ValueError:
             pass
         code = r.status_code
@@ -196,6 +241,8 @@ class PlaneClient:
         elif code == 404 and path.startswith(f"/api/v1/workspaces/{self.workspace}/") and path.count("/") <= 6:
             message = f"Plane has no workspace called “{self.workspace}” that this key can see. It's the part " \
                       f"after app.plane.so/ in your Plane address."
+        elif code == 404 and "/work-items/" in path and not path.endswith("/work-items/"):
+            message = "That work item isn't in Plane any more. It may have been deleted, or moved to another project."
         elif code == 404:
             message = f"Plane couldn't find {path}. It may have been removed."
         elif code == 429:
@@ -207,3 +254,9 @@ class PlaneClient:
         if detail and code not in (401, 429) and code < 500:
             message = f"{message} Plane said: “{detail[:200]}”"
         return PlaneError(message, code)
+
+
+def _writable(fields: dict) -> None:
+    unknown = set(fields) - set(WRITABLE)
+    if unknown:
+        raise PlaneError(f"Traverse doesn't write {', '.join(sorted(unknown))} to Plane.")

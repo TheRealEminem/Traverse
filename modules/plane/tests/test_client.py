@@ -1,6 +1,8 @@
-"""The Plane client: it reads (with paging, rate limits and readable errors), and it cannot write."""
+"""The Plane client: it reads (with paging, rate limits and readable errors), changes or adds work items when asked,
+and cannot delete anything."""
 import ast
 import inspect
+import json
 import time
 from pathlib import Path
 
@@ -14,26 +16,46 @@ from modules.plane.tests.fakeplane import PROJECTS, WS, FakePlane
 
 ITEMS = f"/api/v1/workspaces/{WS}/projects/{PROJECTS['BD']}/work-items/"
 PROJECTS_PATH = f"/api/v1/workspaces/{WS}/projects/"
-WRITE_VERBS = {"post", "put", "patch", "delete", "request", "send", "stream"}
-WRITE_NAMES = ("create", "update", "delete", "remove", "archive", "unarchive", "add", "set", "post", "put", "patch",
-               "send", "write", "move", "assign", "transfer", "manage", "complete", "upload", "edit", "save")
+FORBIDDEN_CALLS = {"delete", "put", "request", "send", "stream", "build_request"}
+DELETING_NAMES = ("delete", "remove", "archive", "unarchive", "destroy", "trash", "purge", "erase", "drop", "clear",
+                  "replace", "put", "transfer")
 
 
-# ── It cannot write ────────────────────────────────────────────────────
+# ── It can never delete (PLAN.md §3.3, rule 1) ─────────────────────────
 
-def test_the_client_has_no_method_that_writes_or_deletes():
-    """Rule 1 of PLAN.md §3.3, checked in the source: no writing verbs, no writing method names, GET only."""
+def test_the_client_has_no_way_to_delete():
+    """Checked in the source: no DELETE or PUT anywhere, no method named like deleting, and the only writes are a PATCH
+    and a POST inside _send, reached only from the two writing methods."""
     source = Path(client_module.__file__).read_text()
     tree = ast.parse(source)
+    writers = set()
+    for fn in ast.walk(tree):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                assert node.func.attr not in FORBIDDEN_CALLS, f"client.py calls .{node.func.attr}() (line {node.lineno})"
+                if node.func.attr in ("post", "patch"):
+                    assert fn.name == "_send", f".{node.func.attr}() outside _send (line {node.lineno})"
+                if node.func.attr == "_send":
+                    writers.add(fn.name)
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-            assert node.func.attr not in WRITE_VERBS, f"client.py calls .{node.func.attr}() (line {node.lineno})"
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            assert node.value.upper() not in {"POST", "PUT", "PATCH", "DELETE"}, f"an HTTP write verb on line {node.lineno}"
-    methods = [name for name, _ in inspect.getmembers(PlaneClient, inspect.isfunction) if not name.startswith("_")]
+            assert node.value.upper() not in {"DELETE", "PUT"}, f"an HTTP {node.value} on line {node.lineno}"
+    methods = [name for name, _ in inspect.getmembers(PlaneClient, inspect.isfunction) if not name.startswith("__")]
     for name in methods:
-        assert not name.lower().startswith(WRITE_NAMES), f"PlaneClient.{name} sounds like it writes"
-    assert {"me", "projects", "members", "states", "labels", "cycles", "work_items"} <= set(methods)
+        assert not name.lstrip("_").lower().startswith(DELETING_NAMES), f"PlaneClient.{name} sounds like it deletes"
+    assert writers == {"update_work_item", "create_work_item"}
+    assert {"me", "projects", "members", "states", "labels", "cycles", "work_items", "work_item"} <= set(methods)
+
+
+def test_only_a_patch_or_a_post_can_be_sent():
+    fake = FakePlane()
+    c = fake.client()
+    for verb in ("DELETE", "PUT", "GET", "delete"):
+        with pytest.raises(PlaneError, match="never deletes"):
+            c._send(verb, ITEMS, {})
+    assert fake.requests == []
 
 
 def test_every_read_is_a_get():
@@ -41,8 +63,62 @@ def test_every_read_is_a_get():
     c = fake.client()
     pid = PROJECTS["SOFTWARE"]
     c.me(), c.projects(), c.members(), c.states(pid), c.labels(pid), c.cycles(pid), c.work_items(pid)
+    c.work_item(pid, fake.item("SOFTWARE-5")["id"])
     assert fake.requests and {r.method for r in fake.requests} == {"GET"}
     assert all(r.headers["X-API-Key"] == "plane_api_test" for r in fake.requests)
+
+
+# ── Writing, when asked ────────────────────────────────────────────────
+
+def test_a_change_sends_only_the_fields_given():
+    fake = FakePlane()
+    item = fake.item("DALEETING-6")
+    answer = fake.client().update_work_item(item["project"], item["id"], {"target_date": "2026-10-31"})
+    assert answer["target_date"] == "2026-10-31" and answer["name"] == "Write the case study draft"
+    [(method, path, body)] = fake.writes
+    assert (method, body) == ("PATCH", {"target_date": "2026-10-31"}) and path.endswith(f"/work-items/{item['id']}/")
+    assert fake.requests[-1].headers["X-API-Key"] == "plane_api_test"
+    assert json.loads(fake.requests[-1].content) == {"target_date": "2026-10-31"}
+
+
+def test_a_new_item_is_added_to_its_project():
+    fake = FakePlane()
+    made = fake.client().create_work_item(PROJECTS["SOFTWARE"], {"name": "Write the API docs", "priority": "high"})
+    assert made["id"] and made["sequence_id"] == 6 and made["priority"] == "high"
+    assert [w[0] for w in fake.writes] == ["POST"]
+
+
+def test_writes_refuse_fields_traverse_never_sends():
+    fake = FakePlane()
+    c = fake.client()
+    with pytest.raises(PlaneError, match="doesn't write labels"):
+        c.update_work_item(PROJECTS["SOFTWARE"], "x", {"labels": []})
+    with pytest.raises(PlaneError, match="needs a name"):
+        c.create_work_item(PROJECTS["SOFTWARE"], {"name": "  "})
+    assert fake.requests == []
+
+
+def test_a_post_that_fails_is_not_sent_again_but_a_patch_is():
+    fake = FakePlane()
+    item = fake.item("DALEETING-6")
+    path = f"/api/v1/workspaces/{WS}/projects/{item['project']}/work-items/"
+    fake.fail(f"POST {path}", 502)
+    with pytest.raises(PlaneError, match="Plane had a problem"):
+        fake.client().create_work_item(item["project"], {"name": "Once only"})
+    assert [w[0] for w in fake.writes] == [] and len(fake.requests) == 1        # tried once: it may have been made
+    fake.fail(f"PATCH {path}{item['id']}/", 502)
+    fake.client().update_work_item(item["project"], item["id"], {"priority": "low"})
+    assert item["priority"] == "low" and len(fake.requests) == 3                # the same values again change nothing
+
+
+def test_plane_saying_no_to_a_write_is_readable():
+    fake = FakePlane()
+    item = fake.item("DALEETING-6")
+    fake.fail(f"PATCH {fake.item_path('DALEETING-6')}", (400, {}))
+    with pytest.raises(PlaneError, match="Plane said no"):
+        fake.client().update_work_item(item["project"], item["id"], {"priority": "low"})
+    with pytest.raises(PlaneError, match="isn't in Plane any more"):
+        fake.client().work_item(item["project"], "no-such-item")
 
 
 # ── Paging ─────────────────────────────────────────────────────────────

@@ -2,16 +2,17 @@
 import { useState } from "react";
 import { SecretSetting, Section, TextSetting } from "@core/components/blocks";
 import { CheckIcon, ClockIcon, CloudIcon, KeyIcon, PersonIcon, icon } from "@core/components/icons";
-import { ControlRow, Select, Spinner, Switch } from "@core/components/ui";
+import { ControlRow, Select, Spinner, Switch, SwitchRow } from "@core/components/ui";
 import { useLive } from "@core/live";
 import { useSettings, useShell } from "@core/shell";
-import { Building2, Mountain, PlugZap } from "lucide-react";
+import { Building2, FlaskConical, Mountain, PlugZap } from "lucide-react";
 import { planeApi } from "./api";
 import { plural, since } from "./bits";
 
 const WorkspaceIcon = icon(Building2);
 const MountainIcon = icon(Mountain);
 const PlugIcon = icon(PlugZap);
+const TrialIcon = icon(FlaskConical);
 
 const EVERY = [
   { value: "2", label: "Every 2 minutes" },
@@ -53,7 +54,7 @@ export default function PlaneSettings() {
   const keyOwner = status?.me_from_key ? status.me?.name : undefined;
 
   return (
-    <Section icon={<CloudIcon size={16} />} title="Plane" blurb="Your team's Plane workspace. Traverse only reads from Plane: nothing is sent there.">
+    <Section icon={<CloudIcon size={16} />} title="Plane" blurb="Your team's Plane workspace. Traverse reads it, and sends only what you approve in the outbox.">
       <ControlRow
         icon={<KeyIcon size={16} />}
         label="Personal API key"
@@ -152,6 +153,17 @@ export default function PlaneSettings() {
           ]}
         />
       </ControlRow>
+      <SwitchRow
+        icon={<TrialIcon size={16} />}
+        label="Dry run"
+        hint={
+          get<boolean>("plane.dry_run") ?? true
+            ? "On: Send checks your changes against Plane and says what it would write, but writes nothing."
+            : "Off: Send writes what you approve in the outbox, after checking nobody changed it in Plane."
+        }
+        checked={get<boolean>("plane.dry_run") ?? true}
+        onChange={(on) => void save({ "plane.dry_run": on }).then((ok) => ok && toast(on ? "Dry run is on: nothing will be sent" : "Dry run is off"))}
+      />
       <ControlRow icon={<ClockIcon size={16} />} label="Read Plane" hint="While Traverse is open. Reading never changes anything in Plane." wrap>
         <Select
           label="How often to read Plane"

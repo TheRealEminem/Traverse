@@ -1,7 +1,13 @@
 """A fake Plane for the plane module's tests: it answers from fixtures/cold_connect.json (Plane's own shapes) through
-httpx's MockTransport, pages lists the way Plane does, records every request, and can be told to fail."""
+httpx's MockTransport, pages lists the way Plane does, records every request, and can be told to fail.
+
+It takes the writes Plane's API takes for work items: PATCH one (only the fields sent change; a list sent replaces
+the list, as Plane does) and POST a new one. Each is recorded in `writes` as (method, path, body). Anything else that
+would change something (DELETE, PUT) is refused with 405 and recorded too, so a test can show it never happens."""
 import copy
 import json
+import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -24,6 +30,9 @@ class FakePlane:
         self.page_size = 100                  # Plane's own cap; lower it to make lists come in several pages
         self.failures: dict[str, list] = {}   # path -> responses to give before answering normally
         self.slept: list[float] = []
+        self.writes: list[tuple[str, str, dict]] = []
+        self.lose_next_answer = False         # the next POST makes its item, then its answer never arrives
+        self._clock = datetime.now(timezone.utc)      # Plane keeps the real time (give or take its clock)
         self.transport = httpx.MockTransport(self.handle)
 
     # Changing what "Plane" holds
@@ -34,8 +43,24 @@ class FakePlane:
         ident, _, seq = key.rpartition("-")
         return next(i for i in self.items(ident) if i["sequence_id"] == int(seq))
 
+    def now(self) -> str:
+        """Plane's updated_at for the next change: a second later each time, in Plane's format."""
+        self._clock += timedelta(seconds=1)
+        return self._clock.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+    def edit(self, key: str, **changes) -> dict:
+        """A teammate changes an item in Plane."""
+        item = self.item(key)
+        item.update(changes, updated_at=self.now())
+        return item
+
+    def item_path(self, key: str) -> str:
+        item = self.item(key)
+        return f"/api/v1/workspaces/{WS}/projects/{item['project']}/work-items/{item['id']}/"
+
     def fail(self, path: str, *responses) -> None:
-        """The next requests to `path` get these: an int status, an (int, headers) pair, or an exception."""
+        """The next requests to `path` ("PATCH <path>" for one verb only) get these: an int status, an (int, headers)
+        pair, or an exception."""
         self.failures.setdefault(path, []).extend(responses)
 
     def client(self, api_key: str = "plane_api_test", workspace: str = WS, **kwargs) -> PlaneClient:
@@ -47,19 +72,80 @@ class FakePlane:
         path = request.url.path
         if request.headers.get("X-API-Key") != "plane_api_test":
             return httpx.Response(401, json={"detail": "Invalid API key"})
-        queued = self.failures.get(path)
+        queued = self.failures.get(f"{request.method} {path}") or self.failures.get(path)
         if queued:
             failure = queued.pop(0)
             if isinstance(failure, Exception):
                 raise failure
             status, headers = failure if isinstance(failure, tuple) else (failure, {})
             return httpx.Response(status, headers=headers, json={"detail": "Simulated failure"})
+        if request.method in ("PATCH", "POST"):
+            return self._write(request)
+        if request.method != "GET":
+            self.writes.append((request.method, path, {}))
+            return httpx.Response(405, json={"detail": f'Method "{request.method}" not allowed.'})
         if path not in self.data:
-            return httpx.Response(404, json={"detail": "Not found."})
+            found = self._one(path)
+            return httpx.Response(200, json=found) if found else httpx.Response(404, json={"detail": "Not found."})
         body = self.data[path]
         if not isinstance(body, dict) or "results" not in body:
             return httpx.Response(200, json=body)
         return httpx.Response(200, json=self._page(body, request))
+
+    WRITABLE = {"name", "description_html", "state", "priority", "start_date", "target_date", "assignees", "labels"}
+
+    def _one(self, path: str) -> dict | None:
+        """GET .../work-items/<id>/: one item."""
+        listing, _, item_id = path.rstrip("/").rpartition("/")
+        rows = self.data.get(listing + "/")
+        if not isinstance(rows, dict) or not listing.endswith("/work-items"):
+            return None
+        return next((i for i in rows["results"] if i["id"] == item_id), None)
+
+    def _write(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        body = json.loads(request.content or b"{}")
+        self.writes.append((request.method, path, body))
+        unknown = set(body) - self.WRITABLE
+        if unknown:
+            return httpx.Response(400, json={"error": f"Can't set {', '.join(sorted(unknown))}"})
+        if body.get("priority", "none") not in ("none", "low", "medium", "high", "urgent"):
+            return httpx.Response(400, json={"priority": ["Not a valid choice."]})
+        if request.method == "PATCH":
+            item = self._one(path)
+            if item is None:
+                return httpx.Response(404, json={"detail": "Not found."})
+            item.update(body, updated_at=self.now())
+            if "state" in body:
+                item["state_group"] = self._group(item["project"], body["state"])
+            return httpx.Response(200, json=item)
+        rows = self.data.get(path)
+        if not isinstance(rows, dict) or not path.endswith("/work-items/"):
+            return httpx.Response(404, json={"detail": "Not found."})
+        if not (body.get("name") or "").strip():
+            return httpx.Response(400, json={"name": ["This field is required."]})
+        project = path.split("/projects/")[1].split("/")[0]
+        states = self.data[f"/api/v1/workspaces/{WS}/projects/{project}/states/"]["results"]
+        stamp = self.now()
+        item = {**(copy.deepcopy(rows["results"][0]) if rows["results"] else {}), "id": str(uuid.uuid4()),
+                "project": project, "sequence_id": max((i["sequence_id"] for i in rows["results"]), default=0) + 1,
+                "name": "", "description_html": "<p></p>", "priority": "none", "start_date": None, "target_date": None,
+                "assignees": [], "labels": [], "parent": None, "cycle_id": None, "archived_at": None,
+                "completed_at": None, "is_draft": False, "created_by": FIXTURE["/api/v1/users/me/"]["id"],
+                "created_at": stamp, "updated_at": stamp,
+                "state": next(s["id"] for s in states if s.get("default")) if any(s.get("default") for s in states)
+                else states[0]["id"]}
+        item.update(body)
+        item["state_group"] = self._group(project, item["state"])
+        rows["results"].append(item)
+        if self.lose_next_answer:
+            self.lose_next_answer = False
+            raise httpx.ReadTimeout("The answer was lost", request=request)
+        return httpx.Response(201, json=item)
+
+    def _group(self, project: str, state_id: str) -> str | None:
+        states = self.data[f"/api/v1/workspaces/{WS}/projects/{project}/states/"]["results"]
+        return next((s["group"] for s in states if s["id"] == state_id), None)
 
     def _page(self, body: dict, request: httpx.Request) -> dict:
         """Plane's cursor paging: "<per_page>:<page>:<is_prev>"."""
