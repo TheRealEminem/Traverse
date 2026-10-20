@@ -1,12 +1,14 @@
 """Plane: the connection to the team's Plane workspace. Traverse's own module (D5), never shared with other apps.
 
-In this chunk it only reads (PLAN.md §3.4): a recurring pull mirrors the chosen projects' items, states, labels and
-cycles and the workspace's members into plane_* tables; the Team view shows who's on what; and the members join the
-host's people directory, with you as core:me. Nothing is ever written to Plane from here.
+It only reads Plane (PLAN.md §3.4): a recurring pull mirrors the chosen projects' items, states, labels and cycles and
+the workspace's members into plane_* tables; the Team view shows who's on what; and the members join the host's people
+directory, with you as core:me. Linking (chunk 6, linking.py) ties Plane projects to Traverse projects and brings items
+in as linked tasks that follow Plane, through the shared work.* contracts. Nothing is ever written to Plane from here.
 """
+from core.server import contracts
 from core.server.module import Module
 
-from . import people, pull, routes, store
+from . import linking, people, pull, routes, store
 
 SETTING_KEYS = {"plane.personal_api_key", "plane.workspace_slug", "plane.base_url", "plane.projects"}
 
@@ -36,7 +38,7 @@ MODULE = Module(
     jobs={"pull": pull.pull},
     lanes={"pull": "cloud"},
     recurring={"pull": pull.every},
-    subscribe={"core.settings.changed": _settings_changed},
+    subscribe={"core.settings.changed": _settings_changed, contracts.ITEM_DELETED: linking.local_deleted},
     search=store.search,
     describe=store.describe,
     export=store.export,

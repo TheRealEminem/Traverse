@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { LinkedList } from "@core/components/blocks";
-import { BackIcon, PencilIcon, PlusIcon, TrashIcon } from "@core/components/icons";
+import { BackIcon, NetworkIcon, PencilIcon, PlusIcon, TrashIcon } from "@core/components/icons";
 import { ControlRow, Segmented, Select, Skeleton, StatusChip, useConfirm } from "@core/components/ui";
 import { formatDate, relativeTime } from "@core/format";
 import { useLive } from "@core/live";
@@ -450,6 +450,7 @@ export default function ProjectPage({ params, board = false }: RouteProps & { bo
               {dueWords(due.text, due.tone)}
             </span>
           )}
+          <SyncedWith project={project} />
         </p>
       </header>
 
@@ -478,6 +479,21 @@ export default function ProjectPage({ params, board = false }: RouteProps & { bo
         <Skeleton className="h-32 w-full rounded-xl" />
       )}
       {dialog}
+    </>
+  );
+}
+
+/** "Linked to Plane: Software", for a project kept in step with one elsewhere (named by that module). */
+function SyncedWith({ project }: { project: ProjectDetail }) {
+  const { app } = useShell();
+  return (
+    <>
+      {project.synced_with.map((s) => (
+        <a key={s.ref} href={s.href} className="inline-flex items-center gap-1 hover:text-forest">
+          <NetworkIcon size={14} className="text-forest" />
+          Linked to {app.modules.find((m) => m.id === s.module)?.name ?? s.module}: {s.title}
+        </a>
+      ))}
     </>
   );
 }

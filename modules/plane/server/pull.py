@@ -1,14 +1,15 @@
 """plane/pull: read the team's Plane workspace into the mirror (store.py). Read-only toward Plane.
 
 Every few minutes (Settings → Plane), and on "Pull now". It reads everything first and writes it in one
-transaction, so a pull cut off half way writes nothing, and a pull of an unchanged workspace changes nothing.
+transaction, so a pull cut off half way writes nothing, and a pull of an unchanged workspace changes nothing. When
+something changed, linked tasks are told what their items look like now (linking.publish_linked).
 """
 import logging
 
 from core.server import db, events, jobs, settings
 from core.server.jobs import Job
 
-from . import store
+from . import linking, store
 from .client import PlaneClient, PlaneError
 
 log = logging.getLogger("plane.pull")
@@ -93,6 +94,8 @@ def pull(job: Job) -> None:
     store.set_meta("last_pull", {"at": db.now(), "changed": total, "requests": requests,
                                  "projects": len(snapshot["pulled"])})
     log.info("Plane pull: %s rows changed in %s requests", total, requests)
-    events.publish("plane.pulled", {"changed": total})
     if total:
         events.publish("plane.mirror.changed", {"tables": {k: v for k, v in changed.items() if v}})
+        job.stage("Updating linked tasks")
+        linking.publish_linked()
+    events.publish("plane.pulled", {"changed": total})

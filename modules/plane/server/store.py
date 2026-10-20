@@ -4,6 +4,9 @@ Rows keep Plane's own ids (random UUIDs, so they merge as safely as db.new_id() 
 ref "plane:<item id>" and a member's "plane:<member id>". A pull writes a whole snapshot in one transaction and only
 touches rows whose values changed, so running it twice changes nothing. Something that disappears from Plane isn't
 deleted here: it gets `removed_at`, and comes back if Plane shows it again.
+
+plane_links isn't part of the mirror: it's yours, which Traverse project each Plane project goes to and what its
+states mean there (linking.py).
 """
 import json
 
@@ -86,6 +89,15 @@ MIGRATIONS = [
     CREATE TABLE plane_meta (
         key   TEXT PRIMARY KEY,                -- "me" (the key's own member), "workspace", "last_pull"
         value TEXT NOT NULL                    -- JSON
+    );
+    """,
+    """
+    CREATE TABLE plane_links (
+        project_id  TEXT PRIMARY KEY,          -- the Plane project
+        local_ref   TEXT NOT NULL UNIQUE,      -- the Traverse project it goes to ("tasks:<id>")
+        state_map   TEXT NOT NULL DEFAULT '{}',-- JSON: Traverse status -> the Plane state it means in this project
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
     );
     """,
 ]
@@ -271,7 +283,7 @@ def count_in(conn) -> dict[str, int]:
 
 
 def describe(thing_id: str) -> dict | None:
-    """How other modules show a link to a Plane item or member (refs "plane:<id>")."""
+    """How other modules show a link to a Plane item, member or project (refs "plane:<id>")."""
     item = db.one("SELECT i.name, i.sequence_id, p.identifier FROM plane_items i "
                   "LEFT JOIN plane_projects p ON p.id = i.project_id WHERE i.id = ?", (thing_id,))
     if item:
@@ -280,6 +292,9 @@ def describe(thing_id: str) -> dict | None:
     m = db.one("SELECT * FROM plane_members WHERE id = ?", (thing_id,))
     if m:
         return {"title": member_name(m), "href": f"#/plane/team?person={thing_id}"}
+    p = db.one("SELECT name FROM plane_projects WHERE id = ?", (thing_id,))
+    if p:
+        return {"title": p["name"], "href": f"#/plane/links?project={thing_id}"}
     return None
 
 
@@ -300,4 +315,4 @@ def search(q: str, limit: int) -> list[dict]:
 
 
 def export() -> dict:
-    return {name.removeprefix("plane_"): db.query(f"SELECT * FROM {name}") for name in MIRROR_TABLES}
+    return {name.removeprefix("plane_"): db.query(f"SELECT * FROM {name}") for name in (*MIRROR_TABLES, "plane_links")}
