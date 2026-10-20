@@ -173,3 +173,12 @@ def test_items_open_in_plane_cloud_or_your_own_server():
     assert web_url("https://api.plane.so") == "https://app.plane.so"
     assert web_url("") == "https://app.plane.so"
     assert web_url("https://plane.example.org/") == "https://plane.example.org"
+
+
+def test_plane_clouds_web_address_means_its_api():
+    from modules.plane.server.client import api_url, web_url
+    assert api_url("https://app.plane.so") == "https://api.plane.so"
+    assert api_url("https://app.plane.so/") == "https://api.plane.so"
+    assert api_url("") == "https://api.plane.so"
+    assert api_url("https://plane.example.com/") == "https://plane.example.com"
+    assert web_url("https://app.plane.so") == "https://app.plane.so"
