@@ -36,7 +36,7 @@ PRIORITIES = {
 }
 
 UPDATE_KINDS = ("comment", "status", "summary")
-ITEM_SOURCES = ("manual", "action-item", "ai", "import")
+ITEM_SOURCES = ("manual", "action-item", "ai", "import", "linked")   # linked: a copy of work kept elsewhere (synced.py)
 PROJECT_SOURCES = ("manual", "ai", "import", "template")
 
 

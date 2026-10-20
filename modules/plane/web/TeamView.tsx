@@ -1,10 +1,12 @@
 // #/plane/team: who's on what in Plane, from the read-only mirror. Open items by person, state and project, what's
 // past due and what nobody has, and every open item in a table you can search and filter (filters live in the hash).
+// Any item, or every item a filter shows, can be brought into Traverse as a linked task (Traverse only; Plane is
+// never written to).
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Empty, JobStatus } from "@core/components/blocks";
-import { ClockIcon, ExternalIcon, FlagIcon, RefreshIcon, SearchIcon, UsersIcon, icon } from "@core/components/icons";
-import { PageHeader, Segmented, Select, Skeleton, StatusChip } from "@core/components/ui";
+import { CheckIcon, ClockIcon, ExternalIcon, FlagIcon, PlusIcon, RefreshIcon, SearchIcon, UsersIcon, icon } from "@core/components/icons";
+import { PageHeader, Segmented, Select, Skeleton, StatusChip, useConfirm } from "@core/components/ui";
 import { useLive } from "@core/live";
 import { useQueryParams } from "@core/router";
 import { useShell } from "@core/shell";
@@ -19,8 +21,45 @@ const NobodyIcon = icon(CircleDashed);
 
 type Show = "all" | "late" | "unassigned";
 
+/** Bringing items into Traverse from the table: says first which Traverse projects it will make, then does it. */
+function useBring(team: Team | null, reload: () => void) {
+  const { toast } = useShell();
+  const [confirm, dialog] = useConfirm();
+  const [busy, setBusy] = useState(false);
+  const run = async (items: TeamItem[]) => {
+    const waiting = items.filter((i) => !i.task);
+    if (!waiting.length) return;
+    const unlinked = (team?.projects ?? []).filter((p) => !p.linked && waiting.some((i) => i.project_id === p.id));
+    if (unlinked.length || waiting.length > 1) {
+      const made = unlinked.length
+        ? `${unlinked.map((p) => p.name).join(", ")} ${unlinked.length === 1 ? "isn't" : "aren't"} linked to a Traverse project yet, so Traverse will make ${unlinked.length === 1 ? "one" : "one for each"}, named the same (Plane → Linking to choose another). `
+        : "";
+      const ok = await confirm({
+        title: `Bring ${waiting.length === 1 ? waiting[0].key : plural(waiting.length, "item")} into Traverse?`,
+        body: `${waiting.length > 1 ? "Each becomes a task in Traverse that follows its Plane item. " : ""}${made}Nothing changes in Plane.`,
+        confirmLabel: "Bring in",
+        tone: "primary",
+      });
+      if (!ok) return;
+    }
+    setBusy(true);
+    try {
+      const r = await planeApi.bring({ items: waiting.map((i) => i.id) });
+      const brought = r.brought ? `Brought ${plural(r.brought, "item")} into Traverse.` : "Nothing new to bring in.";
+      toast(r.new_projects.length ? `${brought} Made ${r.new_projects.join(", ")}.` : brought, "success");
+      reload();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { run, busy, dialog };
+}
+
 export default function TeamView() {
-  const { data: team, error } = useLive(planeApi.team);
+  const { data: team, error, reload } = useLive(planeApi.team);
+  const bring = useBring(team ?? null, () => void reload());
   const [params, setParams] = useQueryParams();
   const filters = {
     person: params.get("person") ?? "",
@@ -72,8 +111,9 @@ export default function TeamView() {
         <ByProject team={team} selected={filters.project} onPick={(project) => pick({ project: project === filters.project ? null : project })} />
       </div>
       <div ref={itemsRef} className="scroll-mt-20">
-        <Items team={team} filters={filters} setParams={setParams} />
+        <Items team={team} filters={filters} setParams={setParams} onBring={(items) => void bring.run(items)} busy={bring.busy} />
       </div>
+      {bring.dialog}
     </>
   );
 }
@@ -353,10 +393,14 @@ function Items({
   team,
   filters,
   setParams,
+  onBring,
+  busy,
 }: {
   team: Team;
   filters: { person: string; project: string; show: Show; q: string };
   setParams: (changes: Record<string, string | null>) => void;
+  onBring: (items: TeamItem[]) => void;
+  busy: boolean;
 }) {
   const [q, setQ] = useState(filters.q);
   // The search lives in the hash too, so a link or Back can change it under the field.
@@ -378,6 +422,9 @@ function Items({
   const nobody = base.filter((i) => !i.assignees.length).length;
   const shown = filters.show === "late" ? base.filter((i) => i.past_due) : filters.show === "unassigned" ? base.filter((i) => !i.assignees.length) : base;
   const filtered = !!(filters.person || filters.project || words || filters.show !== "all");
+  const notIn = shown.filter((i) => !i.task);
+  const me = team.people.find((p) => p.is_me);
+  const onlyMine = !!me && filters.person === me.id && !filters.project && !words && filters.show === "all";
 
   const people = [
     { value: "", label: "Everyone" },
@@ -388,7 +435,23 @@ function Items({
 
   return (
     <section className="animate-enter" style={{ animationDelay: "240ms" } as CSSProperties}>
-      <SectionHead icon={<FlagIcon size={16} />} title="Open items" blurb="Past due first. Each one opens in Plane." />
+      <SectionHead
+        icon={<FlagIcon size={16} />}
+        title="Open items"
+        blurb="Past due first. Each one opens in Plane; bring one into Traverse to work on it there."
+        aside={
+          notIn.length > 0 && (
+            <button className="btn btn-sm btn-soft" disabled={busy} onClick={() => onBring(notIn)}>
+              <PlusIcon size={16} />
+              {onlyMine
+                ? `Bring in everything assigned to you (${notIn.length})`
+                : filtered
+                  ? `Bring these ${notIn.length} into Traverse`
+                  : `Bring all ${notIn.length} into Traverse`}
+            </button>
+          )
+        }
+      />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="relative min-w-0 flex-1 basis-full sm:basis-56">
           <SearchIcon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
@@ -440,17 +503,20 @@ function Items({
         </div>
       ) : (
         <div className="panel overflow-hidden">
-          <div className="hidden grid-cols-[6.5rem_minmax(0,1fr)_8rem_10rem_7.5rem_1rem] gap-3 border-b border-line px-5 py-2.5 text-meta font-medium text-ink-soft md:grid">
-            <span>Key</span>
-            <span>Item</span>
-            <span>State</span>
-            <span>Who</span>
-            <span>Due</span>
-            <span />
+          <div className="hidden items-center border-b border-line pr-5 text-meta font-medium text-ink-soft md:flex">
+            <div className="grid flex-1 grid-cols-[6.5rem_minmax(0,1fr)_8rem_10rem_7.5rem_1rem] gap-3 px-5 py-2.5">
+              <span>Key</span>
+              <span>Item</span>
+              <span>State</span>
+              <span>Who</span>
+              <span>Due</span>
+              <span />
+            </div>
+            <span className="w-[6.75rem] shrink-0">In Traverse</span>
           </div>
           <ul className="divide-y divide-line">
             {shown.map((i) => (
-              <ItemRow key={i.id} item={i} />
+              <ItemRow key={i.id} item={i} onBring={() => onBring([i])} busy={busy} />
             ))}
           </ul>
         </div>
@@ -463,17 +529,17 @@ function Count({ n }: { n: number }) {
   return <span className="ml-0.5 tabular-nums text-ink-soft">{n}</span>;
 }
 
-function ItemRow({ item: i }: { item: TeamItem }) {
+function ItemRow({ item: i, onBring, busy }: { item: TeamItem; onBring: () => void; busy: boolean }) {
   const priority = PRIORITY[i.priority];
   const meta = [i.project, i.cycle, ...i.labels.map((l) => `#${l}`)].filter(Boolean).join(" · ");
   return (
-    <li>
+    <li className="flex flex-col transition-colors hover:bg-forest/[.05] md:flex-row md:items-center md:pr-5">
       <a
         href={i.url}
         target="_blank"
         rel="noreferrer"
         aria-label={`${i.key} ${i.name}, opens in Plane`}
-        className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-5 py-3 transition-colors hover:bg-forest/[.05] md:grid-cols-[6.5rem_minmax(0,1fr)_8rem_10rem_7.5rem_1rem]"
+        className="group grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-5 py-3 md:grid-cols-[6.5rem_minmax(0,1fr)_8rem_10rem_7.5rem_1rem]"
       >
         <span className="font-mono text-meta text-ink-soft md:order-none">{i.key}</span>
         <span className="justify-self-end md:hidden">
@@ -515,6 +581,17 @@ function ItemRow({ item: i }: { item: TeamItem }) {
         </span>
         <ExternalIcon size={14} className="hidden text-ink-faint transition-colors group-hover:text-ink-soft md:block" />
       </a>
+      <span className="-mt-1.5 flex w-full shrink-0 px-5 pb-3 md:mt-0 md:w-[6.75rem] md:px-0 md:pb-0">
+        {i.task ? (
+          <a href={i.task.href} className="btn btn-sm btn-ghost -ml-2.5 text-forest-deep" data-tip={`Open "${i.task.title}" in Traverse`}>
+            <CheckIcon size={15} /> In Traverse
+          </a>
+        ) : (
+          <button className="btn btn-sm btn-soft" disabled={busy} onClick={onBring} aria-label={`Bring ${i.key} into Traverse`}>
+            <PlusIcon size={15} /> Bring in
+          </button>
+        )}
+      </span>
     </li>
   );
 }

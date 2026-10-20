@@ -8,7 +8,7 @@ person, and once in the totals.
 import json
 from datetime import date, timedelta
 
-from core.server import db, settings
+from core.server import db, links, module, settings
 
 from . import store
 from .client import web_url
@@ -57,10 +57,18 @@ def rollup(today: date | None = None) -> dict:
     web = web_url(cfg.get("base_url") or "")
     slug = cfg.get("workspace_slug") or ""
     labels = {r["id"]: r["name"] for r in db.query("SELECT id, name FROM plane_labels WHERE removed_at IS NULL")}
+    # What's in Traverse already: linked copies of items, and the Traverse project each Plane project goes to.
+    copies = links.pairs("synced", "plane")
+    linked_to = {r["project_id"]: r["local_ref"] for r in db.query("SELECT project_id, local_ref FROM plane_links")}
+
+    def in_traverse(local_ref: str | None) -> dict | None:
+        found = module.describe(local_ref) if local_ref else None
+        return {"ref": local_ref, "title": found["title"], "href": found["href"]} if found else None
 
     people: dict[str | None, dict] = {}
     projects = {p["id"]: {"id": p["id"], "identifier": p["identifier"], "name": p["name"], "open": 0,
-                          "by_group": _blank_split(), "past_due": 0, "unassigned": 0, "people": {}} for p in mirrored}
+                          "by_group": _blank_split(), "past_due": 0, "unassigned": 0, "people": {},
+                          "linked": in_traverse(linked_to.get(p["id"]))} for p in mirrored}
     totals = {"open": 0, "past_due": 0, "unassigned": 0, "due_soon": 0, "in_progress": 0}
     by_group = _blank_split()
     items = []
@@ -119,6 +127,7 @@ def rollup(today: date | None = None) -> dict:
             "labels": [labels[lb] for lb in json.loads(row["labels"] or "[]") if lb in labels],
             "cycle": row["cycle_name"], "updated_at": row["updated_at"],
             "url": f"{web}/{slug}/browse/{key}/" if slug else web,
+            "task": in_traverse(copies.get(f"plane:{row['id']}")),
         })
 
     # Past due first (oldest first), then by due date, then priority, then the newest.

@@ -19,7 +19,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 3 | My tasks, quick add, the task page | M | ☑ 2026-10-19 (family 1584a3a) on `chunk-3/my-tasks` |
 | 4 | Projects list and project page, milestones, progress | M | ☑ 2026-10-19 on `chunk-4/projects` |
 | 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☑ 2026-10-20: live check against Cold Connect's Plane passed |
-| 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ☐ |
+| 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ◐ 2026-10-20 (family ca89799) on `chunk-6/linking`: Mark's 23 items are linked tasks; following a Plane edit is tested against the fake Plane, not yet with a real edit |
 | 7 | **Push to Plane**: previews, changed fields only, conflict stops, log and undo | L | ☐ |
 | 8 | Board view and drag | M | ◐ 2026-10-19 (family bf6d30a) on `chunk-8/board`; the Plane part waits for chunk 7 |
 | 9 | Inbox: capture anything, AI proposes work items, you review | L | ☑ 2026-10-19 on `claude/chunk-9-inbox-362a27` |
@@ -114,6 +114,7 @@ Mac sharing data, keys and basic preferences.
 | `status` | `state` | Mapped by state group: to do → unstarted, doing → started, waiting → started, done → completed, dropped → cancelled. Each linked project picks which of its states to use for each, preset to the group's default |
 | `priority` | `priority` | Same five values (D7) |
 | `due_on` | `target_date` | |
+| `start_on` | `start_date` | (added in chunk 6: the same thing on both sides) |
 | `assignee_ref` | `assignees` | Through the people directory: `plane:<member id>`, and `core:me` ↔ Mark's Plane member |
 | project | `project` | Only Traverse projects linked to a Plane project can push |
 | milestone | (later) | Plane modules or milestones; see §8 |
@@ -161,10 +162,16 @@ items, states, members, labels and cycles into `plane_*` tables. The mirror is o
 - "Send to Plane" on a task publishes a contract **`work.share_requested`** `{ref, fields, base}` with the task's
   shareable fields. `plane` receives it and queues the push job. `tasks` doesn't know Plane exists; any future
   sharing module (Linear, GitHub Issues) could listen to the same contract.
-- After a pull, `plane` publishes **`work.updated_elsewhere`** `{ref, fields, source}` for linked items. `tasks`
-  applies untouched fields and flags the rest.
-- "Bring into Traverse" publishes `actions.found` with `details` (assignee, due date, project), as any source does,
-  plus the link.
+- After a pull, `plane` publishes **`work.updated_elsewhere`** `{ref, fields, source, url}` for linked items, and
+  **`work.removed_elsewhere`** `{ref, source}` for ones gone from Plane. `tasks` applies untouched fields and flags
+  the rest.
+- "Bring into Traverse" publishes **`work.arrived`** `{ref, fields, project_ref, source, url}` (chunk 6 made this its
+  own contract rather than `actions.found`, whose items replace each other and aren't linked), after
+  **`work.project_arrived`** `{ref, name, summary, source}` for a Plane project with no Traverse project yet. The
+  fields are already named as tasks' own (`contracts.WORK_FIELDS`), so `tasks` never learns Plane's shapes.
+- `tasks` keeps each linked task's base and flags in `tasks_synced` (migration step 3); `plane` keeps each project's
+  link and state map in `plane_links`. The Linking screen lists Traverse projects through `GET /api/tasks/projects`
+  (a page reading another module's public API; the servers still never talk).
 
 Contracts are written down in `core/server/contracts.py` (in `TrailmixFamily`, since they're shared).
 
@@ -412,6 +419,37 @@ one. Assigning a task offers Elijah and Mickey from Plane.
 
 **Done when:** Mark's 23 Plane items are in Traverse as linked tasks, and editing one in Plane updates its local
 copy within a pull.
+
+**Result (2026-10-20, branch `chunk-6/linking`).**
+- **Contracts** (`core/server/contracts.py`, shared): `work.project_arrived`, `work.arrived`, `work.updated_elsewhere`,
+  `work.removed_elsewhere`, and `WORK_FIELDS` (text, notes, status, priority, start_on, due_on, assignee_ref,
+  assignee_name). `core/server/links.py` gains `targets()` and `pairs()`.
+- **`tasks`** (shared): migration step 3, `tasks_synced` (base, conflicts, removed_at); `synced.py` handles the
+  contracts. Per field group: unchanged there → nothing; changed only there → the task takes it; same change both
+  sides → agreed; different changes → kept yours, flagged with theirs. "Use Plane's" sets yours to theirs; "Keep
+  mine" makes theirs the base, so yours is a change of your own (chunk 7 sends it). Removed there → marked, never
+  deleted. Unlink keeps the task. The API adds `synced` to items and `synced_with` to projects; `POST/DELETE
+  /api/tasks/{id}/synced`. New item source `linked`. Screens: a "Linked to Plane" panel on the task page with the
+  "Changed in Plane" and "Removed in Plane" states, chips on task rows, "Linked to Plane: …" on the project page.
+- **`plane`**: migration step 2, `plane_links`; `linking.py` (state map preset per §3.2: To do → the project's default
+  state if it's unstarted, else the first unstarted; Doing → first started; Waiting → a started state named like
+  wait/block/hold/review, else Doing's; Done, Dropped → first completed, cancelled. A state reads as the status mapped
+  to it, else its group's). `html.py` turns description_html into Markdown. After a pull that changed anything, every
+  linked item is published again (tasks ignores what didn't change). API: `GET /api/plane/links`, `POST/PATCH/DELETE
+  /api/plane/links/{project}`, `POST /api/plane/bring` (`{items}` or `{mine: true}`). Screens: **Linking**
+  (`#/plane/links`): bring in everything assigned to you, and per project link (new or existing), unlink, the state
+  map, bring in yours or all; the Team view's items get "Bring in" / "In Traverse" and "Bring these N into Traverse"
+  for whatever the filters show. Bringing in from an unlinked project makes its Traverse project first (said in the
+  confirm).
+- **Verified:** 218 tests (19 new: contracts in isolation, and the whole path against the fake Plane, including a
+  Plane edit followed after a pull, a conflict, a removal and its return, the state map, and only GETs reaching Plane).
+  Live on 2026-10-20 (backup first): "Bring in your 23" made Business Development 9, Infrastructure 4, Hardware 3,
+  Operations 3, Marketing 2, Customer Relationships 1, Software 1, all `core:me`, 12 Doing and 11 To do, matching the
+  Team view; a live pull afterwards: 31 GETs, nothing changed, no flags. The "Changed in Plane" panel, Keep mine and
+  Unlink were tried on a test link to an example task, then removed. **Not yet tried:** an actual edit in Plane
+  followed by a pull (Traverse doesn't write to Plane, so that edit is Mark's).
+- Later: following a Plane item moved to another linked project; Plane's other assignees beyond the one shown
+  (chunk 7 merges lists); comments.
 
 ### Chunk 7 · Push to Plane (L)
 
