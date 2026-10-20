@@ -118,7 +118,7 @@ export default function TaskPage({ params }: RouteProps) {
         </p>
       </header>
 
-      <SyncedPanel task={task} meta={meta ?? null} onChanged={() => void reload()} />
+      <SyncedPanel task={task} meta={meta ?? null} project={project ?? null} onChanged={() => void reload()} />
 
       <section className="panel mt-8 animate-enter divide-y divide-line px-5">
         <ControlRow label="Status">

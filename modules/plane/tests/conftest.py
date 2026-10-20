@@ -23,14 +23,14 @@ def fake_plane(monkeypatch):
     yield fake
     jobs.drain()
     settings.update({"plane.personal_api_key": "", "plane.workspace_slug": "", "plane.projects": [], "plane.me": "",
-                     "plane.base_url": "https://api.plane.so", "plane.pull_minutes": 5})
+                     "plane.base_url": "https://api.plane.so", "plane.pull_minutes": 5, "plane.dry_run": True})
     jobs.drain()
     _clear()
 
 
 def _clear():
     with db.connect() as conn:
-        for t in (*store.MIRROR_TABLES, "plane_meta", "plane_links"):
+        for t in (*store.MIRROR_TABLES, "plane_meta", "plane_links", "plane_pushes", "plane_sent"):
             conn.execute(f"DELETE FROM {t}")
         conn.execute("DELETE FROM core_jobs WHERE module = 'plane'")
 

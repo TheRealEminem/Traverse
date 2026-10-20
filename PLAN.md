@@ -20,8 +20,8 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 4 | Projects list and project page, milestones, progress | M | ☑ 2026-10-19 on `chunk-4/projects` |
 | 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☑ 2026-10-20: live check against Cold Connect's Plane passed |
 | 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ◐ 2026-10-20 (family ca89799) on `chunk-6/linking`: Mark's 23 items are linked tasks; following a Plane edit is tested against the fake Plane, not yet with a real edit |
-| 7 | **Push to Plane**: previews, changed fields only, conflict stops, log and undo | L | ☐ |
-| 8 | Board view and drag | M | ◐ 2026-10-19 (family bf6d30a) on `chunk-8/board`; the Plane part waits for chunk 7 |
+| 7 | **Push to Plane**: previews, changed fields only, conflict stops, log and undo | L | ◐ 2026-10-20 on `chunk-7/push`: every §3.3 rule tested against the fake Plane; live, a dry run only (dry run is on until Mark turns it off) |
+| 8 | Board view and drag | M | ◐ 2026-10-19 (family bf6d30a) on `chunk-8/board`; cards say "1 change to send" since chunk 7 |
 | 9 | Inbox: capture anything, AI proposes work items, you review | L | ☑ 2026-10-19 on `claude/chunk-9-inbox-362a27` |
 | 10 | Meetings from Trailmix | S–M | ☑ 2026-10-19 on `claude/chunk-9-inbox-362a27` |
 | 11 | MCP server in the host: Claude Desktop and Claude Code can use Traverse | M | ☐ |
@@ -159,10 +159,14 @@ items, states, members, labels and cycles into `plane_*` tables. The mirror is o
 `tasks` and `plane` never import each other or read each other's tables:
 
 - A linked task is a link `tasks:<id>` ↔ `plane:<item id>` (kind `synced`) in `core_links`.
-- "Send to Plane" on a task publishes a contract **`work.share_requested`** `{ref, fields, base}` with the task's
-  shareable fields. `plane` receives it and queues the push job. `tasks` doesn't know Plane exists; any future
+- "Send to Plane" on a task publishes a contract **`work.share_requested`** `{ref, local_ref, fields, base,
+  project_ref}` with only the fields changed since the base, and their base values. `plane` receives it, parks the
+  push for approval and links the task to it (kind `share`) while it waits, so the task can say where. A task not
+  linked yet, in a linked project, asks to be made there (`ref` is then the task itself, `base` empty), and comes back
+  as `work.arrived` with `local_ref`, which makes it the linked copy. `tasks` doesn't know Plane exists; any future
   sharing module (Linear, GitHub Issues) could listen to the same contract.
-- After a pull, `plane` publishes **`work.updated_elsewhere`** `{ref, fields, source, url}` for linked items, and
+- After a pull or a push, `plane` publishes **`work.updated_elsewhere`** `{ref, fields, source, url, take?}` for linked
+  items (`take`: fields you chose Plane's value for in the outbox, which follow even though you'd changed them), and
   **`work.removed_elsewhere`** `{ref, source}` for ones gone from Plane. `tasks` applies untouched fields and flags
   the rest.
 - "Bring into Traverse" publishes **`work.arrived`** `{ref, fields, project_ref, source, url}` (chunk 6 made this its
@@ -467,6 +471,57 @@ The heart of D3, built test-first against a fake Plane:
 **Done when:** an item created and edited in Traverse appears in Plane after Mark approves it, and in a sandbox
 Plane project (the "Cold Connect" demo project, if Mark agrees) a change made in Plane between pull and push is
 never overwritten.
+
+**Result (2026-10-20, branch `chunk-7/push` from `chunk-6/linking`; the shared files are changed here, not sent to the
+family yet).**
+- **Contracts** (shared): `work.share_requested` as in §3.5; `work.arrived` gains `local_ref`, `work.updated_elsewhere`
+  gains `take`; `links.targets_of()` for list pages. **`tasks`** (shared): `synced.share()` and `POST /api/tasks/{id}/share`,
+  and items carry `sharing` (where their changes wait). The task page's Linked panel has "Send it (these N) to Plane",
+  then "Waiting for you to send it… Review and send"; a task in a linked project that isn't in Plane yet says "Only in
+  Traverse so far" with "Send to Plane". Task rows and board cards show "N changes to send" or "Waiting to send".
+- **`plane`**, migration step 3: `plane_pushes` (the outbox and the log: each field's Traverse and Plane values before
+  and after, when you approved it, when it was sent) and `plane_sent` (what a Plane value means in Traverse after a
+  push, for as long as Plane keeps it: a state sent as Waiting reads back as Waiting, not Doing; a merged assignee list
+  as Mickey; notes through HTML. Forgotten once Plane changes it). `push.py`: a request becomes a push with one entry
+  per field (status through the project's state map; notes as HTML by `html.to_html`, the inverse of chunk 6's
+  `to_markdown`, left out until you include them, per §7; assignees as an addition and a removal; someone not in Plane
+  or a status with no state shows why and can't be sent). Its job is parked as Needs you. Send reads the item again;
+  any field Plane changed since stops it with both values: **Keep Plane's** (the task takes it), **Send mine instead**,
+  or edit the task. Otherwise one PATCH of only those fields, assignees as Plane's list now plus yours minus the one
+  you replaced; then it reads the item back, logs it, updates the mirror and the task's base. A new item is a POST into
+  the linked project, and the task becomes its linked copy; a POST whose answer was lost is found again, not made twice.
+  **Undo** is a new push of the "before" values with the same preview and check; a new item can't be undone (that would
+  be a delete). **Dry run** (`plane.dry_run`) is **on by default**, and anything but an explicit off counts as on: Send
+  reads and checks, says what it would write, writes nothing, and the push stays waiting. An item's mirror row only
+  moves forward in Plane's time, so a pull read before a push can't put the old values back. Pushes run one at a time.
+- **Client**: `work_item` (GET one), `update_work_item` (PATCH, only the fields in `WRITABLE`), `create_work_item`
+  (POST). Writes go through `_send`, which refuses anything but PATCH or POST; a PATCH is retried after Plane's own
+  errors and timeouts, a POST never is. `test_the_client_has_no_way_to_delete` checks the source: no DELETE or PUT, no
+  method named like deleting, `.post`/`.patch` only inside `_send`, reached only from the two writing methods.
+- **Screens**: the **Outbox** (`#/plane/outbox`, in the sidebar with a count): Waiting and Sent, a Dry run banner, and
+  per push the task, the Plane item (or the project a new one goes into) and each field with a switch, "In Plane now"
+  and "Will be", plus why notes are left out, "Plane has this already" and "Plane has changed this since you asked".
+  A stopped push shows what you last saw, Plane now and yours. Sent shows before → after, "sent over a change in Plane,
+  as you chose", when you approved it, and Undo. Settings → Plane has the Dry run switch, and no longer says Traverse
+  only reads.
+- **Verified**: `scripts/check` passes: 252 tests, among them 23 push tests covering every rule in §3.3 end to end
+  against the fake Plane (which now takes PATCH and POST, records every write and refuses DELETE and PUT), 7 new client
+  tests and 5 contract tests in tasks; types; build; style. (In a shell where `ANTHROPIC_API_KEY` is set, one inbox
+  test fails because the AI label then includes a model; it passes without it, and isn't touched here.)
+  On dev data in a browser (a backup first, `traverse-20261020-181450-manual.db`, and a copy from before the
+  migration): a priority change on OPERATIONS-10, "Send it to Plane", the Outbox, Check (dry run). Traverse read the
+  item from Cold Connect's Plane (one GET, so the live single-item read works) and found Plane had High already (the
+  copy was from the morning): "Send would write nothing". Discarded. Only GETs reached Plane.
+  In a sandbox (a throwaway data folder and the fake Plane over HTTP): a teammate's new due date stopped a push, then
+  Send mine instead sent it; Elijah, added in Plane meanwhile, stayed when the assignee went from Mark to Mickey; Undo
+  put both fields back; a new task in Software was added (one POST) and became its linked copy; Day and Dusk, 375px
+  and wide. Found and fixed (with a test): Undo of a push sent over a teammate's change put the task back to its old
+  base instead of Plane's value.
+- **Not done**: the live half of done-when needs Mark: turn dry run off and approve one push (say, a new item in the
+  "Cold Connect" demo project, §8). Descriptions haven't been written to the real Plane (it may keep its editor's own
+  copy of a description; they're left out of a push until included). Posting Traverse updates as comments, sending a
+  selection or a project's "Send N changes", and milestones in Plane (§8) aren't built. The shared files go to the
+  family with `scripts/sync-family --push` when Mark says.
 
 ### Chunk 8 · Board view and drag (M)
 

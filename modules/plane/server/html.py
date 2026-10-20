@@ -1,6 +1,9 @@
-"""Plane keeps descriptions as HTML (its editor's); Traverse keeps notes as Markdown. This turns the one into the
-other, for the linked copy. It's deterministic, so the same description always reads the same and a pull that
-changes nothing changes no notes. (Markdown back to HTML is chunk 7's, for pushing.)"""
+"""Plane keeps descriptions as HTML (its editor's); Traverse keeps notes as Markdown. to_markdown turns the one into
+the other, for the linked copy, and to_html turns your notes back into HTML Plane's editor reads, for sending them
+(chunk 7). Both are deterministic, and they're each other's inverse for the Markdown to_markdown writes: notes that
+went out come back the same, so sending them doesn't make them look changed."""
+import re
+from html import escape
 from html.parser import HTMLParser
 
 HEADINGS = {f"h{n}": n for n in range(1, 7)}
@@ -149,3 +152,110 @@ def to_markdown(html: str | None) -> str:
     parser.feed(html)
     parser.close()
     return parser.result()
+
+
+# ── Markdown to HTML, for sending notes ───────────────────────────────
+
+_LIST = re.compile(r"^( *)([-*+]|\d+[.)]) (\[[ xX]\] )?(.*)$")
+_HEADING = re.compile(r"^(#{1,6}) +(.*?)#*\s*$")
+_RULE = re.compile(r"^ {0,3}([-*_])( *\1){2,} *$")
+_FENCE = re.compile(r"^ {0,3}```")
+_INLINE = [
+    (re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)"), lambda m: f'<img src="{m[2]}" alt="{m[1]}">'),
+    (re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)"), lambda m: f'<a href="{m[2]}">{m[1]}</a>'),
+    (re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*|__(?=\S)(.+?)(?<=\S)__"), lambda m: f"<strong>{m[1] or m[2]}</strong>"),
+    (re.compile(r"(?<![*\w])\*(?=\S)(.+?)(?<=\S)\*(?![*\w])|(?<![_\w])_(?=\S)(.+?)(?<=\S)_(?![_\w])"),
+     lambda m: f"<em>{m[1] or m[2]}</em>"),
+    (re.compile(r"~~(?=\S)(.+?)(?<=\S)~~"), lambda m: f"<s>{m[1]}</s>"),
+]
+
+
+def _inline(text: str) -> str:
+    """One line's inline Markdown as HTML: code spans first (their insides stay as written), then the rest."""
+    out = []
+    for n, part in enumerate(re.split(r"(`[^`]+`)", text)):
+        if n % 2:
+            out.append(f"<code>{escape(part[1:-1], quote=False)}</code>")
+            continue
+        part = escape(part, quote=False).replace('"', "&quot;")
+        for pattern, swap in _INLINE:
+            part = pattern.sub(swap, part)
+        out.append(part)
+    return "".join(out)
+
+
+def _list(lines: list[str]) -> str:
+    """Consecutive list lines (with deeper ones nested under the item before them) as <ul>/<ol>."""
+    html: list[str] = []
+    stack: list[tuple[int, str]] = []          # (indent, closing tag) for each open list
+    for line in lines:
+        m = _LIST.match(line)
+        if not m:                              # a continuation line: it joins the item before it
+            if html and html[-1].endswith("</p>"):
+                html[-1] = html[-1][:-4] + "<br>" + _inline(line.strip()) + "</p>"
+            continue
+        indent, marker, box, text = len(m[1]), m[2], m[3], m[4]
+        ordered = marker[0].isdigit()
+        tag = "ol" if ordered else "ul"
+        while stack and indent < stack[-1][0]:
+            html.append(f"</li></{stack.pop()[1]}>")
+        if not stack or indent > stack[-1][0]:
+            attrs = ' data-type="taskList"' if box else ""
+            html.append(f"<{tag}{attrs}>")
+            stack.append((indent, tag))
+        else:
+            html.append("</li>")
+        item = f' data-type="taskItem" data-checked="{"true" if box.strip("[ ]") else "false"}"' if box else ""
+        html.append(f"<li{item}><p>{_inline(text)}</p>")
+    while stack:
+        html.append(f"</li></{stack.pop()[1]}>")
+    return "".join(html)
+
+
+def _blocks(lines: list[str]) -> list[str]:
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if not line.strip():
+            i += 1
+        elif _FENCE.match(line):
+            end = next((j for j in range(i + 1, len(lines)) if _FENCE.match(lines[j])), len(lines))
+            out.append(f"<pre><code>{escape(chr(10).join(lines[i + 1:end]), quote=False)}</code></pre>")
+            i = end + 1
+        elif _HEADING.match(line):
+            m = _HEADING.match(line)
+            out.append(f"<h{len(m[1])}>{_inline(m[2])}</h{len(m[1])}>")
+            i += 1
+        elif _RULE.match(line):
+            out.append("<hr>")
+            i += 1
+        elif line.lstrip().startswith(">"):
+            j = i
+            while j < len(lines) and lines[j].lstrip().startswith(">"):
+                j += 1
+            inner = [re.sub(r"^\s*> ?", "", q) for q in lines[i:j]]
+            out.append(f"<blockquote>{''.join(_blocks(inner))}</blockquote>")
+            i = j
+        elif _LIST.match(line):
+            j = i + 1
+            while j < len(lines) and lines[j].strip() and (_LIST.match(lines[j]) or lines[j].startswith(" ")):
+                j += 1
+            out.append(_list(lines[i:j]))
+            i = j
+        else:
+            j = i + 1
+            while j < len(lines) and lines[j].strip() and not (_FENCE.match(lines[j]) or _HEADING.match(lines[j])
+                                                               or _RULE.match(lines[j]) or _LIST.match(lines[j])
+                                                               or lines[j].lstrip().startswith(">")):
+                j += 1
+            out.append("<p>" + "<br>".join(_inline(t.strip()) for t in lines[i:j]) + "</p>")
+            i = j
+    return out
+
+
+def to_html(markdown: str | None) -> str:
+    """Your notes as HTML for Plane's description ("<p></p>", Plane's own empty one, for no notes)."""
+    if not markdown or not markdown.strip():
+        return "<p></p>"
+    return "".join(_blocks(markdown.replace("\r\n", "\n").split("\n")))

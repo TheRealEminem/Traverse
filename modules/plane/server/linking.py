@@ -1,6 +1,10 @@
 """Linking Plane to Traverse (PLAN.md chunk 6): which Traverse project each Plane project goes to and what its states
-mean there, bringing Plane items in as linked tasks, and telling Traverse when they change in Plane. Still read-only
-toward Plane: everything here works from the mirror.
+mean there, bringing Plane items in as linked tasks, and telling Traverse when they change in Plane. Nothing here
+talks to Plane: everything works from the mirror (sending is push.py's).
+
+A Plane value doesn't always say one Traverse value: a state can mean Doing or Waiting, an item can have several
+assignees, and notes go through HTML. So when a push sends one, plane_sent remembers what it meant ("this state is
+Waiting") for as long as Plane keeps that value; the item then reads back as what you sent, rather than as a change.
 
 This module never reads or writes tasks' tables (D5, ARCHITECTURE rule 1). It publishes the shared work.* contracts
 (core/server/contracts.py) with Plane's values already turned into Traverse's (§3.2), and finds what's linked through
@@ -27,6 +31,32 @@ GROUP_STATUS = {"triage": "todo", "backlog": "todo", "unstarted": "todo", "start
 STATUS_GROUP = {"todo": "unstarted", "doing": "started", "waiting": "started", "done": "completed", "dropped": "cancelled"}
 WAITING_WORDS = ("wait", "block", "hold", "review")
 PRIORITY = {"none": 0, "low": 1, "medium": 2, "high": 3, "urgent": 4}
+PRIORITY_NAME = {n: name for name, n in PRIORITY.items()}
+
+# Traverse's fields (grouped as the tasks module groups them: an assignee is a ref and a name), each with its
+# columns in contracts.WORK_FIELDS, the Plane field it goes to (§3.2) and its label.
+FIELDS = {
+    "text": (("text",), "name", "Title"),
+    "notes": (("notes",), "description_html", "Notes"),
+    "status": (("status",), "state", "Status"),
+    "priority": (("priority",), "priority", "Priority"),
+    "start_on": (("start_on",), "start_date", "Start"),
+    "due_on": (("due_on",), "target_date", "Due"),
+    "assignee": (("assignee_ref", "assignee_name"), "assignees", "Assignee"),
+}
+_MIRROR_COLUMN = {"name": "name", "description_html": "description_html", "state": "state_id", "priority": "priority",
+                  "start_date": "start_date", "target_date": "target_date", "assignees": "assignees"}
+
+
+def raw(item: dict, field: str):
+    """A mirror row's Plane value for one of Traverse's fields: the name, the HTML, the state id, the sorted list of
+    assignee ids…"""
+    value = item[_MIRROR_COLUMN[FIELDS[field][1]]]
+    if field == "assignee":
+        return sorted(json.loads(value or "[]"))
+    if field in ("start_on", "due_on"):
+        return _day(value)
+    return value
 
 
 def ref(plane_id: str) -> str:
@@ -93,25 +123,63 @@ def _day(value) -> str | None:
     return str(value)[:10] if value else None
 
 
-class _Context:
-    """What turning many items into fields needs, read once: you, the members, each project's map, the web address."""
+def _remembered() -> dict[tuple[str, str], tuple]:
+    """{(item id, field): (Plane's value right after a push, what it means in Traverse)} from plane_sent."""
+    return {(r["item_id"], r["field"]): (json.loads(r["plane_value"]), json.loads(r["value"]))
+            for r in db.query("SELECT item_id, field, plane_value, value FROM plane_sent")}
+
+
+def remember(item_id: str, field: str, plane_value, value: dict, push_id: str) -> None:
+    """After a push: while Plane keeps plane_value for this field, it means `value` ({"status": "waiting"})."""
+    db.execute("INSERT INTO plane_sent (id, item_id, field, plane_value, value, push_id) VALUES (?, ?, ?, ?, ?, ?) "
+               "ON CONFLICT(item_id, field) DO UPDATE SET plane_value = excluded.plane_value, value = excluded.value, "
+               "push_id = excluded.push_id",
+               (db.new_id(), item_id, field, json.dumps(plane_value), json.dumps(value), push_id))
+
+
+def forget_changed(item_ids: list[str] | None = None) -> int:
+    """Drops what was remembered about values Plane no longer holds (someone changed them since): those read as Plane
+    says again. Returns how many it dropped."""
+    rows = db.query("SELECT s.id AS sent_id, s.field AS sent_field, s.plane_value AS sent_value, i.* "
+                    "FROM plane_sent s JOIN plane_items i ON i.id = s.item_id")
+    stale = [r["sent_id"] for r in rows if (item_ids is None or r["id"] in item_ids)
+             and json.loads(r["sent_value"]) != raw(r, r["sent_field"])]
+    for sent_id in stale:
+        db.execute("DELETE FROM plane_sent WHERE id = ?", (sent_id,))
+    return len(stale)
+
+
+class Where:
+    """An item's key ("SOFTWARE-5") and the address it opens at in Plane, for many items (read once)."""
     def __init__(self):
         cfg = settings.section("plane")
-        self.me = team.me_id()
-        self.members = {m["id"]: m for m in store.members(include_bots=True)}
         self.web = web_url(cfg.get("base_url") or "")
         self.slug = cfg.get("workspace_slug") or ""
-        self.maps: dict[str, dict] = {}
         self.identifiers = {p["id"]: p["identifier"] for p in store.projects()}
+
+    def key(self, item: dict) -> str:
+        ident = self.identifiers.get(item["project_id"])
+        return f"{ident}-{item['sequence_id']}" if ident else ""
+
+    def url(self, item: dict) -> str | None:
+        key = self.key(item)
+        return f"{self.web}/{self.slug}/browse/{key}/" if key and self.slug else None
+
+
+class _Context(Where):
+    """What turning many items into fields needs, read once: you, the members, each project's map, the web address,
+    and what pushes left Plane's values meaning."""
+    def __init__(self):
+        super().__init__()
+        self.me = team.me_id()
+        self.members = {m["id"]: m for m in store.members(include_bots=True)}
+        self.maps: dict[str, dict] = {}
+        self.sent = _remembered()
 
     def mapping(self, project_id: str) -> dict:
         if project_id not in self.maps:
             self.maps[project_id] = state_map(project_id)
         return self.maps[project_id]
-
-    def url(self, item: dict) -> str | None:
-        ident = self.identifiers.get(item["project_id"])
-        return f"{self.web}/{self.slug}/browse/{ident}-{item['sequence_id']}/" if ident and self.slug else None
 
     def fields(self, item: dict) -> dict:
         assignees = json.loads(item["assignees"] or "[]")
@@ -128,6 +196,10 @@ class _Context:
         status = status_for(item["state_id"], self.mapping(item["project_id"]))
         if status:
             out["status"] = status
+        for field in FIELDS:
+            known = self.sent.get((item["id"], field))
+            if known and known[0] == raw(item, field):
+                out.update(known[1])          # what you sent, while Plane still has it
         return out
 
 
@@ -213,7 +285,7 @@ def local_deleted(payload: dict) -> None:
 
 # ── Bringing items in, and telling Traverse when they change ──────────
 
-def _linked_items() -> dict[str, str]:
+def linked_items() -> dict[str, str]:
     """{plane item id: local ref} for every Plane item with a linked copy."""
     return {there.split(":", 1)[1]: here for there, here in links.pairs("synced", "plane").items()}
 
@@ -227,7 +299,7 @@ def bring(item_ids: list[str]) -> dict:
         return {"brought": 0, "already": 0, "new_projects": [], "missing": 0}
     marks = ",".join("?" * len(item_ids))
     rows = db.query(f"SELECT * FROM plane_items WHERE id IN ({marks}) AND removed_at IS NULL", item_ids)
-    linked = _linked_items()
+    linked = linked_items()
     waiting = [r for r in rows if r["id"] not in linked]
     new_projects = []
     for project_id in dict.fromkeys(r["project_id"] for r in waiting):
@@ -238,7 +310,7 @@ def bring(item_ids: list[str]) -> dict:
         events.publish(contracts.WORK_ARRIVED, {"ref": ref(item["id"]), "fields": ctx.fields(item),
                                                 "project_ref": ref(item["project_id"]), "source": SOURCE,
                                                 "url": ctx.url(item)})
-    now_linked = _linked_items()
+    now_linked = linked_items()
     brought = sum(1 for r in waiting if r["id"] in now_linked)
     if waiting and not brought:
         raise ValueError("Nothing in Traverse took the items. Is Projects turned on?")
@@ -259,9 +331,10 @@ def publish_linked(project_id: str | None = None) -> int:
     """Tells Traverse what every linked item looks like in Plane now (or every one in one project): updated, or
     removed when the mirror says it's gone. The other side follows what changed and ignores what didn't, so telling
     it twice is harmless. Returns how many it told."""
-    linked = _linked_items()
+    linked = linked_items()
     if not linked:
         return 0
+    forget_changed()
     ids = list(linked)
     rows = []
     for chunk in (ids[i:i + 500] for i in range(0, len(ids), 500)):
@@ -269,13 +342,36 @@ def publish_linked(project_id: str | None = None) -> int:
         rows += db.query(sql + (" AND project_id = ?" if project_id else ""), (*chunk, *([project_id] if project_id else [])))
     ctx = _Context()
     for item in rows:
-        there = ref(item["id"])
-        if item["removed_at"]:
-            events.publish(contracts.WORK_REMOVED_ELSEWHERE, {"ref": there, "source": SOURCE})
-        else:
-            events.publish(contracts.WORK_UPDATED_ELSEWHERE, {"ref": there, "fields": ctx.fields(item),
-                                                              "source": SOURCE, "url": ctx.url(item)})
+        _publish(item, ctx)
     return len(rows)
+
+
+def publish_made(item_id: str, local_ref: str) -> None:
+    """A task sent from Traverse was made in Plane: it becomes the item's linked copy (contracts.WORK_ARRIVED with
+    local_ref), agreeing with what Plane holds now."""
+    item = db.one("SELECT * FROM plane_items WHERE id = ?", (item_id,))
+    ctx = _Context()
+    events.publish(contracts.WORK_ARRIVED, {"ref": ref(item_id), "fields": ctx.fields(item), "local_ref": local_ref,
+                                            "project_ref": ref(item["project_id"]), "source": SOURCE,
+                                            "url": ctx.url(item)})
+
+
+def publish_item(item_id: str, take: list[str] | None = None) -> None:
+    """Tells Traverse what one linked item looks like in Plane now, as a push just read or wrote it. take: Traverse
+    fields you chose Plane's value for, so they follow even though you'd changed them."""
+    forget_changed([item_id])
+    item = db.one("SELECT * FROM plane_items WHERE id = ?", (item_id,))
+    if item is not None and item_id in linked_items():
+        _publish(item, _Context(), [c for f in take or [] for c in FIELDS[f][0]])
+
+
+def _publish(item: dict, ctx: _Context, take: list[str] | None = None) -> None:
+    there = ref(item["id"])
+    if item["removed_at"]:
+        events.publish(contracts.WORK_REMOVED_ELSEWHERE, {"ref": there, "source": SOURCE})
+    else:
+        events.publish(contracts.WORK_UPDATED_ELSEWHERE, {"ref": there, "fields": ctx.fields(item), "source": SOURCE,
+                                                          "url": ctx.url(item), **({"take": take} if take else {})})
 
 
 # ── What the Linking page shows ───────────────────────────────────────
@@ -285,7 +381,7 @@ def view(project_id: str) -> dict:
     row = _link_row(project_id)
     local = module.describe(row["local_ref"]) if row else None
     me = team.me_id()
-    linked = _linked_items()
+    linked = linked_items()
     open_rows = team.open_items([project_id])
     mine_rows = [r for r in open_rows if me and me in json.loads(r["assignees"] or "[]")]
     return {

@@ -6,7 +6,10 @@ touches rows whose values changed, so running it twice changes nothing. Somethin
 deleted here: it gets `removed_at`, and comes back if Plane shows it again.
 
 plane_links isn't part of the mirror: it's yours, which Traverse project each Plane project goes to and what its
-states mean there (linking.py).
+states mean there (linking.py). Nor are plane_pushes (your changes waiting to be sent, and the log of what was) and
+plane_sent (what Plane's values mean in Traverse after a push), which are push.py's. A push also writes the mirror
+row of the item it just read or wrote, since that is what Plane said; an item's row only ever moves forward in
+Plane's time (updated_at), so a pull that read it before the push can't put the old values back.
 """
 import json
 
@@ -100,6 +103,37 @@ MIGRATIONS = [
         updated_at  TEXT NOT NULL
     );
     """,
+    """
+    CREATE TABLE plane_pushes (
+        id           TEXT PRIMARY KEY,
+        kind         TEXT NOT NULL,             -- update (your changes to a linked item), create (a new item), undo
+        local_ref    TEXT NOT NULL,             -- the Traverse task ("tasks:<id>")
+        project_id   TEXT NOT NULL,             -- the Plane project
+        item_id      TEXT,                      -- the Plane item (a create's once it's made)
+        changes      TEXT NOT NULL DEFAULT '[]',-- JSON: one entry per field, before and after (push.py)
+        status       TEXT NOT NULL,             -- waiting, sending, stopped, failed, sent, discarded
+        note         TEXT,                      -- why it stopped or failed, or what a dry run found
+        checked_at   TEXT,                      -- when it was last checked against Plane
+        attempted_at TEXT,                      -- a create: when it was last sent, to find it after a restart
+        undo_of      TEXT,                      -- the push this one undoes
+        undone_by    TEXT,                      -- the push that undoes this one
+        approved_at  TEXT,                      -- when you pressed Send
+        sent_at      TEXT,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+    );
+    CREATE INDEX plane_pushes_local ON plane_pushes(local_ref);
+    CREATE INDEX plane_pushes_status ON plane_pushes(status, updated_at);
+    CREATE TABLE plane_sent (
+        id          TEXT PRIMARY KEY,
+        item_id     TEXT NOT NULL,              -- the Plane item
+        field       TEXT NOT NULL,              -- Traverse's field: text, notes, status, priority, start_on, due_on, assignee
+        plane_value TEXT NOT NULL,              -- JSON: what Plane held right after Traverse sent it
+        value       TEXT NOT NULL,              -- JSON: what Traverse sent, in its own words ({"status": "waiting"})
+        push_id     TEXT NOT NULL,
+        UNIQUE (item_id, field)
+    );
+    """,
 ]
 
 MIRROR_TABLES = ("plane_projects", "plane_members", "plane_states", "plane_labels", "plane_cycles", "plane_items")
@@ -185,11 +219,14 @@ def item_row(i: dict, project_id: str) -> dict:
 # ── Writing a snapshot ─────────────────────────────────────────────────
 
 def _upsert(conn, table: str, rows: list[dict]) -> int:
-    """Inserts new rows and updates changed ones; a row that's the same as before isn't touched. Returns how many
-    rows changed."""
+    """Inserts new rows and updates changed ones; a row that's the same as before isn't touched, and an item isn't
+    taken back to an older version of itself. Returns how many rows changed."""
     cols = COLUMNS[table]
     every = ("id", *cols, "removed_at")
     changed_if = " OR ".join(f"{table}.{c} IS NOT excluded.{c}" for c in (*cols, "removed_at"))
+    if "updated_at" in cols:
+        changed_if = (f"({changed_if}) AND ({table}.updated_at IS NULL OR excluded.updated_at IS NULL "
+                      f"OR excluded.updated_at >= {table}.updated_at)")
     sql = (f"INSERT INTO {table} ({', '.join(every)}) VALUES ({', '.join('?' * len(every))}) "
            f"ON CONFLICT(id) DO UPDATE SET {', '.join(f'{c} = excluded.{c}' for c in (*cols, 'removed_at'))} "
            f"WHERE {changed_if}")
@@ -224,6 +261,12 @@ def apply(snapshot: dict) -> dict[str, int]:
                 out[table] += _mark_removed(conn, table, [r["id"] for r in parts[name]], stamp, "project_id = ?",
                                             (project_id,))
     return out
+
+
+def put_item(row: dict) -> int:
+    """One item as Plane just said it is (read or written by a push), into the mirror. Returns 1 if it changed."""
+    with db.connect() as conn:
+        return _upsert(conn, "plane_items", [row])
 
 
 # ── Small facts the pull keeps ─────────────────────────────────────────
@@ -282,8 +325,14 @@ def count_in(conn) -> dict[str, int]:
     return {"Plane items": found["items"]} if found["items"] else {}
 
 
+PUSH_TITLES = {"waiting": "Waiting for you to send it to Plane", "sending": "Sending to Plane…",
+               "stopped": "Stopped: changed in Plane meanwhile", "failed": "Didn't reach Plane",
+               "sent": "Sent to Plane", "discarded": "Not sent to Plane"}
+
+
 def describe(thing_id: str) -> dict | None:
-    """How other modules show a link to a Plane item, member or project (refs "plane:<id>")."""
+    """How other modules show a link to a Plane item, member or project, or a push waiting in the outbox (refs
+    "plane:<id>")."""
     item = db.one("SELECT i.name, i.sequence_id, p.identifier FROM plane_items i "
                   "LEFT JOIN plane_projects p ON p.id = i.project_id WHERE i.id = ?", (thing_id,))
     if item:
@@ -295,6 +344,9 @@ def describe(thing_id: str) -> dict | None:
     p = db.one("SELECT name FROM plane_projects WHERE id = ?", (thing_id,))
     if p:
         return {"title": p["name"], "href": f"#/plane/links?project={thing_id}"}
+    push = db.one("SELECT status FROM plane_pushes WHERE id = ?", (thing_id,))
+    if push:
+        return {"title": PUSH_TITLES.get(push["status"], "Plane"), "href": f"#/plane/outbox?push={thing_id}"}
     return None
 
 
@@ -315,4 +367,5 @@ def search(q: str, limit: int) -> list[dict]:
 
 
 def export() -> dict:
-    return {name.removeprefix("plane_"): db.query(f"SELECT * FROM {name}") for name in (*MIRROR_TABLES, "plane_links")}
+    tables = (*MIRROR_TABLES, "plane_links", "plane_pushes", "plane_sent")
+    return {name.removeprefix("plane_"): db.query(f"SELECT * FROM {name}") for name in tables}

@@ -9,6 +9,10 @@ This module never knows where "elsewhere" is. The module that talks to it publis
   Plane") with their value, until you choose: take theirs, or keep yours (which then differs from theirs on purpose,
   for a later push to send).
 - When it's gone from there, the task stays, marked ("Removed in Plane"). Nothing here deletes a task.
+- "Send to Plane" asks the other side to send what you've changed since you last agreed, and nothing else
+  (contracts.WORK_SHARE_REQUESTED, with the base, so it can check nobody changed those fields there meanwhile). It
+  only asks: the other side waits for your approval, and the result comes back as an update like any other. A task
+  that isn't linked, in a project that is, asks to be made there, and becomes the linked copy once it is.
 
 A linked task is also a link "tasks:<id>" → ref (kind "synced") in core_links, so the other module can tell which of
 its things have a copy here without reading this module's tables; a project is linked the same way.
@@ -16,7 +20,7 @@ its things have a copy here without reading this module's tables; a project is l
 import json
 import logging
 
-from core.server import contracts, db, links
+from core.server import contracts, db, events, links, module
 
 from . import items, projects, store, vocab
 
@@ -88,10 +92,14 @@ def project_arrived(payload: dict) -> None:
 
 
 def arrived(payload: dict) -> None:
-    """contracts.WORK_ARRIVED: a linked copy of something elsewhere. Already here: it's an update instead."""
+    """contracts.WORK_ARRIVED: a linked copy of something elsewhere. Already here: it's an update instead. Made there
+    from a task here (local_ref): that task becomes the linked copy."""
     ref = payload["ref"]
     if _row(ref):
         updated(payload)
+        return
+    if payload.get("local_ref"):
+        _adopt(payload)
         return
     fields = _clean(payload.get("fields") or {})
     if "text" not in fields:
@@ -113,13 +121,34 @@ def arrived(payload: dict) -> None:
     store.changed(project_id, item_id=item_id)
 
 
+def _adopt(payload: dict) -> None:
+    """A task sent from here was made there: it becomes the linked copy, agreeing with what arrived."""
+    local = payload["local_ref"]
+    item_id = local.split(":", 1)[1] if local.startswith("tasks:") else ""
+    item = db.one("SELECT * FROM tasks_items WHERE id = ?", (item_id,))
+    if item is None or db.one("SELECT 1 FROM tasks_synced WHERE item_id = ?", (item_id,)):
+        log.warning("Not linking %s to %s: it's gone, or linked already", local, payload["ref"])
+        return
+    theirs = _clean(payload.get("fields") or {})
+    base = {key: theirs.get(key, item[key]) for key in contracts.WORK_FIELDS}
+    now = db.now()
+    db.execute("INSERT INTO tasks_synced (item_id, ref, source, url, base, conflicts, synced_at, created_at) "
+               "VALUES (?, ?, ?, ?, ?, '{}', ?, ?)",
+               (item_id, payload["ref"], payload.get("source") or payload["ref"].split(":", 1)[0], payload.get("url"),
+                json.dumps(base), now, now))
+    links.add(local, payload["ref"], "synced")
+    store.changed(item["project_id"], item_id=item_id)
+
+
 def updated(payload: dict) -> None:
-    """contracts.WORK_UPDATED_ELSEWHERE: follow what changed there, field by field (see the module's docstring)."""
+    """contracts.WORK_UPDATED_ELSEWHERE: follow what changed there, field by field (see the module's docstring).
+    Fields in `take` follow even if you'd changed them: you chose theirs over there."""
     row = _row(payload["ref"])
     if row is None:
         return
     item = db.one("SELECT * FROM tasks_items WHERE id = ?", (row["item_id"],))
     theirs = _clean(payload.get("fields") or {})
+    chosen = set(payload.get("take") or [])
     base = json.loads(row["base"])
     conflicts = json.loads(row["conflicts"])
     take: dict = {}
@@ -129,7 +158,11 @@ def updated(payload: dict) -> None:
         there = tuple(theirs[c] for c in cols)
         agreed = tuple(base.get(c) for c in cols)
         here = tuple(item[c] for c in cols)
-        if there == agreed:
+        if chosen & set(cols):
+            take.update((c, v) for c, v, h in zip(cols, there, here) if v != h)
+            base.update(zip(cols, there))
+            conflicts.pop(group, None)
+        elif there == agreed:
             conflicts.pop(group, None)       # unchanged there (or changed back): any edit here is just yours
         elif here == agreed:
             take.update(zip(cols, there))    # changed only there: follow
@@ -181,6 +214,55 @@ def resolve(item_id: str, field: str, keep: str) -> dict:
     item = items.get(item_id)
     store.changed(item["project_id"], item_id=item_id)
     return item
+
+
+def share(item_id: str) -> dict:
+    """"Send to Plane": asks the other side to send the fields you've changed since you last agreed, with their base
+    (contracts.WORK_SHARE_REQUESTED). A task that isn't linked, in a project that is, asks to be made there. Nothing is
+    sent from here: whoever takes it waits for your approval. Returns {"fields": [the groups asked for], "new": bool}."""
+    item = db.one("SELECT * FROM tasks_items WHERE id = ?", (item_id,))
+    if item is None:
+        raise KeyError(item_id)
+    local = links.ref("tasks", item_id)
+    project_ref = links.ref("tasks", item["project_id"]) if item["project_id"] else None
+    row = db.one("SELECT * FROM tasks_synced WHERE item_id = ?", (item_id,))
+    if row:
+        if row["removed_at"]:
+            raise ValueError(f"It's no longer in {row['source']}, so there's nothing there to send it to")
+        found = about([item_id])[item_id]
+        groups = found["edited"]
+        if not groups:
+            raise ValueError(f"Choose between yours and {row['source']}'s first" if found["conflicts"]
+                             else f"Nothing to send: it's the same here as in {row['source']}")
+        base = json.loads(row["base"])
+        cols = [c for g in groups for c in GROUPS[g]]
+        payload = {"ref": row["ref"], "local_ref": local, "fields": {c: item[c] for c in cols},
+                   "base": {c: base.get(c) for c in cols}, "project_ref": project_ref}
+    else:
+        if item["parent_id"]:
+            raise ValueError("A subtask can't be sent on its own yet. Send its main task.")
+        if not project_ref or not links.targets(project_ref, "synced"):
+            raise ValueError("Its project isn't linked anywhere, so there's nowhere to send it")
+        groups = [g for g, cols in GROUPS.items() if any(item[c] not in (None, "", 0) for c in cols)]
+        payload = {"ref": local, "local_ref": local, "fields": {c: item[c] for c in contracts.WORK_FIELDS},
+                   "base": {}, "project_ref": project_ref}
+    events.publish(contracts.WORK_SHARE_REQUESTED, payload)
+    if not links.targets(local, "share"):
+        raise ValueError("Nothing took it. The part of Traverse that sends it there may be turned off.")
+    store.changed(item["project_id"], item_id=item_id)
+    return {"fields": groups, "new": row is None}
+
+
+def sharing(item_ids: list[str]) -> dict[str, list[dict]]:
+    """Where each task's changes wait to be sent: {item_id: [{title, href}]}, from the links the other side keeps
+    (kind "share") while a request waits for your approval."""
+    found = links.targets_of([links.ref("tasks", i) for i in item_ids], "share")
+    out = {}
+    for local, there in found.items():
+        shown = [d for d in (module.describe(r) for r in there) if d]
+        if shown:
+            out[local.split(":", 1)[1]] = [{"title": d["title"], "href": d["href"]} for d in shown]
+    return out
 
 
 def unlink(item_id: str) -> bool:

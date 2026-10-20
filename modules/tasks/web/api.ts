@@ -28,6 +28,8 @@ export interface Task {
   came_from: Described | null;
   /** When it's also kept somewhere else (a Plane work item): what it's linked to and what waits for a choice. */
   synced: Synced | null;
+  /** Where its changes wait for you to send them (named by the module sending them), while they wait. */
+  sharing: { title: string; href: string }[];
   blocked: boolean;
   subtask_count?: number;
   subtasks_done?: number;
@@ -172,6 +174,9 @@ export const tasksApi = {
   resolve: (id: string, field: SyncedField, keep: "theirs" | "mine") => request<TaskDetail>(`/tasks/${id}/synced`, json("POST", { field, keep })),
   /** Stop following the other side; the task stays, as yours. */
   unlink: (id: string) => request<TaskDetail>(`/tasks/${id}/synced`, { method: "DELETE" }),
+  /** Asks for your changes to be sent where it's linked (a new task in a linked project: made there). Nothing is sent
+   *  yet: it waits for your approval where it's going (task.sharing says where). */
+  share: (id: string) => request<TaskDetail & { asked: { fields: SyncedField[]; new: boolean } }>(`/tasks/${id}/share`, json("POST")),
   comment: (id: string, body: string) => request<Update>(`/tasks/${id}/updates`, json("POST", { body })),
   projects: (status?: string, archived = false) =>
     request<ProjectSummary[]>(`/tasks/projects${query({ ...(status ? { status } : {}), ...(archived ? { archived: "true" } : {}) })}`),

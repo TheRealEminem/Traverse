@@ -134,6 +134,50 @@ export interface Brought {
   missing: number;
 }
 
+/** Traverse's fields, as a push names them. */
+export type PushField = "text" | "notes" | "status" | "priority" | "start_on" | "due_on" | "assignee";
+
+export interface PushFieldView {
+  field: PushField;
+  label: string;
+  include: boolean; // sent only when on (notes start off)
+  skip: string | null; // why it can't be sent at all
+  before: string; // waiting: Plane now (as of the last read); sent: Plane just before writing ("" for nothing)
+  after: string; // what Plane will have (or had once sent)
+  changed: boolean; // a read of Plane saw it change since you asked: Send will stop and ask
+  already: boolean; // Plane has this value already (as of the last read): nothing to write for it
+  theirs: string | null; // stopped: Plane's value now…
+  yours: string | null; // …and yours (before is then what you last saw)
+  over: boolean; // you chose to send yours over a change made in Plane
+}
+
+export type PushStatus = "waiting" | "sending" | "stopped" | "failed" | "sent" | "discarded";
+
+export interface Push {
+  id: string;
+  kind: "update" | "create" | "undo";
+  status: PushStatus;
+  note: string | null;
+  created_at: string;
+  approved_at: string | null;
+  sent_at: string | null;
+  checked_at: string | null;
+  undo_of: string | null;
+  undone: { id: string; status: PushStatus; sent_at: string | null } | null;
+  task: { title: string; href: string } | null;
+  item: { id: string; key: string; name: string; url: string | null; removed: boolean } | null;
+  project: { id: string; name: string } | null;
+  fields: PushFieldView[];
+  job: Job | null;
+}
+
+export interface Outbox {
+  dry_run: boolean;
+  configured: boolean;
+  waiting: Push[];
+  sent: Push[];
+}
+
 export const planeApi = {
   team: () => request<Team>("/plane/team"),
   status: () => request<PlaneStatus>("/plane/status"),
@@ -149,6 +193,16 @@ export const planeApi = {
   unlink: (projectId: string) => request<void>(`/plane/links/${projectId}`, { method: "DELETE" }),
   /** Brings items into Traverse as linked tasks (or every open item assigned to you). Changes nothing in Plane. */
   bring: (body: { items: string[] } | { mine: true }) => request<Brought>("/plane/bring", json("POST", body)),
+  outbox: () => request<Outbox>("/plane/outbox"),
+  outboxCount: () => request<{ waiting: number }>("/plane/outbox/count"),
+  /** Approves a push: Traverse reads the item from Plane again and writes only if nothing it sends changed there. */
+  send: (id: string) => request<Push>(`/plane/pushes/${id}/send`, json("POST")),
+  discard: (id: string) => request<Push>(`/plane/pushes/${id}/discard`, json("POST")),
+  include: (id: string, include: Partial<Record<PushField, boolean>>) => request<Push>(`/plane/pushes/${id}`, json("PATCH", { include })),
+  /** A field changed in Plane since you last saw it: keep Plane's (the task takes it) or send yours over it. */
+  choose: (id: string, field: PushField, keep: "plane" | "mine") => request<Push>(`/plane/pushes/${id}/choose`, json("POST", { field, keep })),
+  /** Undo is a new push of the values from before, waiting for you like any other. */
+  undo: (id: string) => request<Push>(`/plane/pushes/${id}/undo`, json("POST")),
   /** Traverse's own projects, to link one (read through the Projects module's API; the servers never talk). */
   traverseProjects: () => request<{ id: string; name: string; archived: boolean }[]>("/tasks/projects"),
 };
