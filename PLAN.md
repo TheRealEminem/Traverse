@@ -18,7 +18,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 2 | Tasks v2 data: projects, milestones, items, updates (migration step 2) | M | ☑ 2026-10-19 (family 842c525) on `chunk-2/tasks-v2` |
 | 3 | My tasks, quick add, the task page | M | ☑ 2026-10-19 (family 1584a3a) on `chunk-3/my-tasks` |
 | 4 | Projects list and project page, milestones, progress | M | ☑ 2026-10-19 on `chunk-4/projects` |
-| 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ◐ 2026-10-19 on `claude/chunk-5-plane-mirror-ebcfba`; the live check waits for Mark's Plane key |
+| 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☑ 2026-10-20: live check against Cold Connect's Plane passed |
 | 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ☐ |
 | 7 | **Push to Plane**: previews, changed fields only, conflict stops, log and undo | L | ☐ |
 | 8 | Board view and drag | M | ◐ 2026-10-19 (family bf6d30a) on `chunk-8/board`; the Plane part waits for chunk 7 |
@@ -40,7 +40,12 @@ sessions. `app.json` now runs `tasks`, `plane` and `inbox`; the shared parts (th
 release flow) are in the family at 44da03f, and sync-family shares the three new release files. One conflict (the
 progress table in this file) and one test that still read a task's origin as `source` rather than `came_from`. All 198
 tests pass, the Mac app builds, the update checks pass, and Home, Team, Inbox and Settings → Plane load in a browser.
-Still open: Plane's live check needs Mark's key (chunk 5); the Mac menu's Inbox item opens The Lodge's People inbox,
+**Live check, 2026-10-20:** with Mark's key, Traverse connected to `cold-connect` ("8 projects to choose from"), read
+the 7 real projects (49 items, 31 requests; the demo project left off), and the Team view matched Plane exactly: 34
+open, Mark 23, Mickey 5, Elijah 2, 4 with no one (6 past due now). Item links use Plane's own keys (SOFTWARE-5 is
+"Share Github repo's with Mark"). Found by it: the Plane server field had `https://app.plane.so`, Plane's website,
+whose answer isn't JSON; the module now reads Plane Cloud's web address as its API address (`api.plane.so`).
+Still open: the Mac menu's Inbox item opens The Lodge's People inbox,
 which Traverse doesn't have; the release workflows haven't run on GitHub yet; and updates stay off until `updateRepo`
 names a repository the installed app can read.
 

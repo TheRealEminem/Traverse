@@ -34,9 +34,16 @@ class PlaneError(Exception):
         self.status = status
 
 
+def api_url(base_url: str) -> str:
+    """Where Plane's API answers. Plane Cloud's web address (app.plane.so, what people see in their browser) means its
+    API (api.plane.so); a self-hosted Plane answers on its own address."""
+    base = (base_url or CLOUD_API).strip().rstrip("/")
+    return CLOUD_API if urlparse(base).netloc in (urlparse(CLOUD_WEB).netloc, urlparse(CLOUD_API).netloc) else base
+
+
 def web_url(base_url: str) -> str:
     """Where people open Plane in a browser: Plane Cloud's app for its API, the same server for a self-hosted one."""
-    base = (base_url or CLOUD_API).rstrip("/")
+    base = api_url(base_url)
     return CLOUD_WEB if urlparse(base).netloc == urlparse(CLOUD_API).netloc else base
 
 
@@ -47,7 +54,7 @@ class PlaneClient:
             raise PlaneError("Add your Plane API key in Settings → Plane first.")
         if not (workspace or "").strip():
             raise PlaneError("Add your Plane workspace in Settings → Plane first.")
-        self.base_url = (base_url or CLOUD_API).rstrip("/")
+        self.base_url = api_url(base_url)
         self.workspace = workspace.strip().strip("/")
         self._sleep = sleep
         self._http = httpx.Client(base_url=self.base_url, transport=transport, timeout=timeout,
