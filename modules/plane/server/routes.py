@@ -1,10 +1,13 @@
-"""The plane API, mounted at /api/plane. Everything here reads; the only thing that reaches Plane is a GET."""
-from fastapi import APIRouter, HTTPException
+"""The plane API, mounted at /api/plane. Nothing here writes to Plane: the only thing that reaches Plane is a GET.
+Linking and bringing in change only Traverse."""
+from contextlib import contextmanager
+
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from core.server import jobs
 
-from . import pull, store, team
+from . import linking, pull, store, team
 from .client import PlaneError, web_url
 
 router = APIRouter()
@@ -72,3 +75,51 @@ def members():
 @router.get("/team")
 def team_view():
     return {**team.rollup(), "job": _job()}
+
+
+# ── Linking (chunk 6) ─────────────────────────────────────────────────
+
+@contextmanager
+def answers(missing: str = "That Plane project isn't in Traverse's copy of Plane"):
+    try:
+        yield
+    except KeyError as e:
+        raise HTTPException(404, missing) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.get("/links")
+def links_overview():
+    return linking.overview()
+
+
+@router.post("/links/{project_id}")
+def link_project(project_id: str, body: dict = Body(default={})):
+    """{"local_ref": "tasks:<id>"} links to that Traverse project; no local_ref makes a new one named after it."""
+    with answers():
+        return linking.link(project_id, body.get("local_ref") or None)
+
+
+@router.patch("/links/{project_id}")
+def map_states(project_id: str, body: dict = Body(...)):
+    """{"state_map": {"waiting": "<state id>"}}: which Plane state each Traverse status means in this project."""
+    with answers():
+        return linking.set_map(project_id, body.get("state_map") or {})
+
+
+@router.delete("/links/{project_id}", status_code=204)
+def unlink_project(project_id: str):
+    if not linking.unlink(project_id):
+        raise HTTPException(404, "That Plane project isn't linked")
+
+
+@router.post("/bring")
+def bring_in(body: dict = Body(...)):
+    """Bring Plane items into Traverse as linked tasks: {"items": [ids]}, or {"mine": true} for every open item
+    assigned to you."""
+    ids = linking.mine() if body.get("mine") else list(body.get("items") or [])
+    if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+        raise HTTPException(400, "items is a list of Plane item ids")
+    with answers():
+        return linking.bring(ids)

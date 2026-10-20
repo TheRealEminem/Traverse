@@ -30,7 +30,7 @@ def fake_plane(monkeypatch):
 
 def _clear():
     with db.connect() as conn:
-        for t in (*store.MIRROR_TABLES, "plane_meta"):
+        for t in (*store.MIRROR_TABLES, "plane_meta", "plane_links"):
             conn.execute(f"DELETE FROM {t}")
         conn.execute("DELETE FROM core_jobs WHERE module = 'plane'")
 

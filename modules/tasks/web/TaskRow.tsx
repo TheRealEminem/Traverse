@@ -75,6 +75,7 @@ export function TaskRow({
   const detail = [
     projectName,
     task.came_from ? `From ${task.came_from.title}` : null,
+    task.synced ? `In ${task.synced.source}` : null,
     task.subtask_count ? `${task.subtasks_done ?? 0} of ${task.subtask_count} subtasks` : null,
   ].filter(Boolean);
   const someone = !isMine(task) ? task.assignee_name || "Someone" : null;
@@ -82,6 +83,8 @@ export function TaskRow({
     <>
       {status && <StatusChip tone={status.tone} label={status.label} />}
       {task.blocked && !done && <StatusChip tone="trail" label="Blocked" />}
+      {task.synced?.conflicts.length ? <StatusChip tone="sun" label={`Changed in ${task.synced.source}`} /> : null}
+      {task.synced?.removed_at && <StatusChip tone="neutral" label={`Removed in ${task.synced.source}`} />}
       {task.priority === 4 && !done && <StatusChip tone="sun" label="Urgent" />}
       {task.priority === 3 && !done && (
         <span className="inline-flex items-center gap-1 text-meta text-ink">

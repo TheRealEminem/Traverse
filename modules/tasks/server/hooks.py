@@ -1,5 +1,7 @@
 """What the host and other modules reach the tasks module through: the shared contracts it listens to, how its
 things are named and found elsewhere, and what it holds (export, backup labels)."""
+import json
+
 from core.server import db
 
 from . import items, store, vocab
@@ -97,6 +99,8 @@ def export() -> dict:
         "items": rows("SELECT * FROM tasks_items ORDER BY project_id, sort, created_at"),
         "updates": rows("SELECT * FROM tasks_updates ORDER BY created_at"),
         "blockers": rows("SELECT * FROM tasks_blockers ORDER BY created_at"),
+        "synced": [{**r, "base": json.loads(r["base"]), "conflicts": json.loads(r["conflicts"])}
+                   for r in db.query("SELECT * FROM tasks_synced ORDER BY created_at")],
     }
 
 

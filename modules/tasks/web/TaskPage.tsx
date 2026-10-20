@@ -14,6 +14,7 @@ import { tasksApi } from "./api";
 import type { Status, Task, TaskDetail } from "./api";
 import { formatMinutes, parseMinutes } from "./dates";
 import { Field } from "./Field";
+import { SyncedPanel } from "./Synced";
 import { Check, TaskList } from "./TaskRow";
 
 function Block({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
@@ -116,6 +117,8 @@ export default function TaskPage({ params }: RouteProps) {
           {task.completed_at && <span>Done {relativeTime(task.completed_at)}</span>}
         </p>
       </header>
+
+      <SyncedPanel task={task} meta={meta ?? null} onChanged={() => void reload()} />
 
       <section className="panel mt-8 animate-enter divide-y divide-line px-5">
         <ControlRow label="Status">

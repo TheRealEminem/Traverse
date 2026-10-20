@@ -26,9 +26,27 @@ export interface Task {
   completed_at: string | null;
   /** Where it came from, described by that module (null if it's gone or its module is off). */
   came_from: Described | null;
+  /** When it's also kept somewhere else (a Plane work item): what it's linked to and what waits for a choice. */
+  synced: Synced | null;
   blocked: boolean;
   subtask_count?: number;
   subtasks_done?: number;
+}
+
+/** The fields a linked task follows, in the groups that change together. */
+export type SyncedField = "text" | "notes" | "status" | "priority" | "start_on" | "due_on" | "assignee";
+
+export interface Synced {
+  ref: string; // "plane:<work item id>"
+  source: string; // where it's kept: "Plane"
+  url: string | null; // where it opens there
+  title: string | null; // as that module names it ("SOFTWARE-5 Share the repos")
+  removed_at: string | null; // gone from there; the task stays
+  synced_at: string;
+  /** Fields changed both here and there: their value, until you choose. */
+  conflicts: { field: SyncedField; label: string; theirs: Partial<Task> }[];
+  /** Fields you've changed here since you both agreed (not sent anywhere yet). */
+  edited: SyncedField[];
 }
 
 /** Something in another module, as that module describes it. */
@@ -84,6 +102,8 @@ export type Health = "on_track" | "at_risk" | "off_track";
 
 export interface ProjectSummary {
   id: string;
+  /** What it's kept in step with elsewhere (a Plane project), described by that module. */
+  synced_with: (Described & { ref: string })[];
   name: string;
   summary: string | null;
   brief: string;
@@ -148,6 +168,10 @@ export const tasksApi = {
     request<unknown>(`/tasks/${id}/move`, json("POST", body)),
   block: (id: string, blockedBy: string) => request<unknown>(`/tasks/${id}/blockers`, json("POST", { blocked_by: blockedBy })),
   unblock: (id: string, blockedBy: string) => request<unknown>(`/tasks/${id}/blockers/${blockedBy}`, { method: "DELETE" }),
+  /** A field changed here and there: take theirs, or keep yours. */
+  resolve: (id: string, field: SyncedField, keep: "theirs" | "mine") => request<TaskDetail>(`/tasks/${id}/synced`, json("POST", { field, keep })),
+  /** Stop following the other side; the task stays, as yours. */
+  unlink: (id: string) => request<TaskDetail>(`/tasks/${id}/synced`, { method: "DELETE" }),
   comment: (id: string, body: string) => request<Update>(`/tasks/${id}/updates`, json("POST", { body })),
   projects: (status?: string, archived = false) =>
     request<ProjectSummary[]>(`/tasks/projects${query({ ...(status ? { status } : {}), ...(archived ? { archived: "true" } : {}) })}`),

@@ -7,9 +7,9 @@ from contextlib import contextmanager
 
 from fastapi import APIRouter, Body, HTTPException
 
-from core.server import module
+from core.server import links, module
 
-from . import items, projects, vocab
+from . import items, projects, synced, vocab
 
 router = APIRouter()
 
@@ -36,10 +36,24 @@ def _only(body: dict, allowed: set[str]) -> dict:
     return body
 
 
-def _with_source(item: dict) -> dict:
+def _with_source(item: dict, linked: dict | None = None) -> dict:
     """An item, with where it came from (came_from) described by that module: None if it's gone or its module is
-    off. ("source" stays the item's kind of source: manual, action-item, ai, import.)"""
-    return {**item, "came_from": module.describe(item["source_ref"]) if item.get("source_ref") else None}
+    off. ("source" stays the item's kind of source: manual, action-item, ai, import, linked.) A linked item also
+    says what it's linked to and what's waiting for a choice (synced), from `linked` when the caller looked it up
+    for a whole list."""
+    if linked is None:
+        linked = synced.about([item["id"]])
+    about = linked.get(item["id"])
+    if about:
+        there = module.describe(about["ref"])
+        about = {**about, "title": there["title"] if there else None}
+    return {**item, "came_from": module.describe(item["source_ref"]) if item.get("source_ref") else None,
+            "synced": about}
+
+
+def _with_sources(found: list[dict]) -> list[dict]:
+    linked = synced.about([i["id"] for i in found])
+    return [_with_source(i, linked) for i in found]
 
 
 # ── Fixed paths ───────────────────────────────────────────────────────
@@ -48,8 +62,8 @@ def _with_source(item: dict) -> dict:
 def list_items(project: str | None = None, assignee: str | None = None, status: str | None = None,
                when: str | None = None, q: str | None = None, parent: str | None = "top"):
     with answers():
-        return [_with_source(i) for i in items.query(project=project, assignee=assignee, status=status, when=when,
-                                                       q=q, parent=parent)]
+        return _with_sources(items.query(project=project, assignee=assignee, status=status, when=when, q=q,
+                                         parent=parent))
 
 
 @router.get("/count")
@@ -72,7 +86,7 @@ def create_item(body: dict = Body(...)):
 @router.get("/projects")
 def list_projects(status: str | None = None, archived: bool = False):
     with answers():
-        return projects.query(status, archived)
+        return [{**p, "synced_with": _synced_with(links.ref("tasks", p["id"]))} for p in projects.query(status, archived)]
 
 
 @router.post("/projects", status_code=201)
@@ -87,7 +101,12 @@ def get_project(project_id: str):
     project = projects.get(project_id)
     if project is None:
         raise HTTPException(404, "Project not found")
-    return project
+    return {**project, "synced_with": _synced_with(links.ref("tasks", project_id))}
+
+
+def _synced_with(ref: str) -> list[dict]:
+    """What a project is kept in step with elsewhere (a Plane project), each described by its own module."""
+    return [d for d in (module.describe(r) for r in links.targets(ref, "synced")) if d]
 
 
 @router.patch("/projects/{project_id}")
@@ -170,6 +189,22 @@ def move_item(task_id: str, body: dict = Body(...)):
         return _with_source(items.move(task_id, project_id=body.get("project_id"), milestone_id=body.get("milestone_id"),
                                        after_id=body.get("after_id"), within=body.get("within", "milestone"),
                                        status=body.get("status")))
+
+
+@router.post("/{task_id}/synced")
+def resolve_synced(task_id: str, body: dict = Body(...)):
+    """A field changed both here and there: {"field": "due_on", "keep": "theirs" | "mine"}."""
+    _only(body, {"field", "keep"})
+    with answers("That task isn't linked"):
+        return _with_source(synced.resolve(task_id, body.get("field", ""), body.get("keep", "")))
+
+
+@router.delete("/{task_id}/synced")
+def unlink_synced(task_id: str):
+    """Stops following the other side; the task stays, as your own."""
+    if not synced.unlink(task_id):
+        raise HTTPException(404, "That task isn't linked")
+    return _with_source(items.get(task_id))
 
 
 @router.post("/{task_id}/blockers")

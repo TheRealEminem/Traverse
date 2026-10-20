@@ -220,7 +220,7 @@ another module's.
 | Slow work | `jobs.enqueue(id, kind, target, approve=…)` | One worker by default (a "cloud" lane runs four side by side), resumable. `approve=True` parks it as "Needs you". A handler can `raise jobs.Wait("reason")` to park itself (low memory…), and the user can force past that. `job.stage("…")` shows progress. |
 | AI | `ai.complete(prompt, system)` → `(text, provider)` | Uses the app-wide provider and fallback from Settings → AI. Raises `ai.AIError` with readable reasons. `ai.local_first()` tells you whether it would run on this Mac. |
 | Tell others | `events.publish("<id>.thing.happened", {...})` | Handlers run immediately and must be quick. Every publish also refreshes open screens. |
-| A shared meaning | `contracts.py` (`ACTIONS_FOUND`, `ITEM_DELETED`) | Add a contract when a second module cares about the same kind of thing. |
+| A shared meaning | `contracts.py` (`ACTIONS_FOUND`, `ITEM_DELETED`, the `WORK_*` ones for work kept elsewhere too) | Add a contract when a second module cares about the same kind of thing. |
 | Point at something elsewhere | `links.add(from_ref, to_ref, kind)`, `links.linked(ref)` | The host stores the pair; each side's module describes its own things. |
 | Be searchable | `Module.search` | Results are merged into the sidebar search. |
 | Fresh screens | `useLive(load, deps)` | Refetches whenever anything changes on the server: every 2s while visible, and at once after the app's own changes. |

@@ -5,8 +5,9 @@ Since step 2 the module holds the whole of "work" (Traverse PLAN.md chunk 2, the
 milestones, work items (the to-dos that came before, grown up) with subtasks and blockers, and updates. The functions
 live in items.py and projects.py; hooks.py is what the host calls (contracts, describe, search, export).
 
-Step 2 is the Lodge guide's schema/tasks-v2-projects.sql, with priorities on Plane's five-level scale (D7). Once it has
-shipped, never edit it: later changes are step 3, 4… and are made only in TrailmixFamily (the one-lineage rule).
+Step 2 is the Lodge guide's schema/tasks-v2-projects.sql, with priorities on Plane's five-level scale (D7). Step 3 adds
+tasks_synced: items that are also kept somewhere else (synced.py). Once a step has shipped, never edit it: later changes
+are step 4, 5… and are made only in TrailmixFamily (the one-lineage rule).
 """
 import json
 import re
@@ -115,6 +116,19 @@ MIGRATIONS = [
 
     CREATE VIRTUAL TABLE tasks_fts USING fts5(id UNINDEXED, kind UNINDEXED, title, body, tokenize='porter unicode61');
     INSERT INTO tasks_fts (id, kind, title, body) SELECT id, 'item', text, notes FROM tasks_items;
+    """,
+    """
+    CREATE TABLE tasks_synced (
+        item_id     TEXT PRIMARY KEY REFERENCES tasks_items(id) ON DELETE CASCADE,
+        ref         TEXT NOT NULL UNIQUE,              -- the same work elsewhere ("plane:<work item id>")
+        source      TEXT NOT NULL,                     -- where that is, for the screen ("Plane")
+        url         TEXT,                              -- where it opens there
+        base        TEXT NOT NULL DEFAULT '{}',        -- JSON: each field as both sides last agreed (contracts.WORK_FIELDS)
+        conflicts   TEXT NOT NULL DEFAULT '{}',        -- JSON: field -> its value there, where both sides changed it
+        removed_at  TEXT,                              -- gone from there; the task stays
+        synced_at   TEXT NOT NULL,                     -- when it last heard from there
+        created_at  TEXT NOT NULL
+    );
     """,
 ]
 
