@@ -108,6 +108,7 @@ core/
     contracts.py          ★ shared events any module can publish or listen to
     links.py              links between things in different modules
     search.py             one search across every module
+    briefing.py           the day's briefing: every module's today, waiting, moved and ahead, gathered like search
     auth.py               optional token sign-in for server installs
     mcp.py                the MCP server at /mcp: Claude Code and Claude Desktop use the modules' tools, with a token
     mcp_bridge.py         the command Claude Desktop runs: passes its messages on to /mcp (standard library only)
@@ -198,6 +199,7 @@ the 8780–8799 range, and keep a list here:
 | `offers` | `{"people.search": handler(args)}`: questions other family apps on this Mac may ask it (§8, the family link). A handler gets a dict and returns plain data. |
 | `people` | `(q, limit) -> [{id, name, email?, detail?, is_self?}]`: its part of the people directory (`core/server/people.py`, `GET /api/people`, `PersonPicker`). Refs come back as `<id>:<person id>`; `is_self` comes back as `core:me`. |
 | `tools` | `[mcp.Tool(name, title, description, handler, params, required, writes)]`: what Claude may do here, through the host's MCP server (§8). Claude sees `<id>_<name>`. A handler gets the arguments as a dict and returns plain data, or raises `ValueError` with a sentence. |
+| `brief` | `(since, today) -> {"today"\|"waiting"\|"moved"\|"ahead": [entries]}`: its part of the day's briefing (`core/server/briefing.py`, `GET /api/briefing`). An entry is `{id, what, title?, href?, who?, when?, project?, kind?, tone?, minutes?, url?}`; the host makes its ref and fills a missing title and href from `describe`. "moved" is what happened since `since` (a moment); a module that fails is left out. A page that starts the day (Traverse's Muster) reads every module through it. |
 
 ### Web half: `modules/<id>/web/index.tsx` default-exports a `ModuleWeb`
 
@@ -209,6 +211,7 @@ the 8780–8799 range, and keep a list here:
 | `primary` | The sidebar's big button `{label, icon, run}`. The first enabled module with one gets it. |
 | `home` | A card on Home. In the unified app, Home is where every module shows what's new. |
 | `settings` | A section on the Settings page (use `Section` and `useSettings()`). |
+| `start` | `() => Promise<path \| null>`: the first page of the day. Asked when the app opens at Home (and when its window comes back on a new day); the first module with a path wins. Traverse's Muster answers until you've looked at it today. |
 
 Modules import the host's web code as `@core/...` (`@core/components/ui`, `@core/live`, `@core/shell`…), never
 another module's.
@@ -228,6 +231,7 @@ another module's.
 | Be searchable | `Module.search` | Results are merged into the sidebar search. |
 | Fresh screens | `useLive(load, deps)` | Refetches whenever anything changes on the server: every 2s while visible, and at once after the app's own changes. |
 | Feedback | `useShell().toast / confirm`, `JobStatus`, `JobChip`, `LinkedList`, `Section` | See `DESIGN.md` for the visual rules. |
+| Be in the day's briefing | `Module.brief` (`core/server/briefing.py`) | What's on today, what waits on you, what moved since a moment, what's ahead. Read only; quick (it runs when the page loads). |
 | Let Claude use it | `Module.tools` (`core/server/mcp.py`) | Tools add and propose; they never approve. While one runs, `jobs.go` and `jobs.retry` refuse, and `mcp.calling()` lets your own code refuse too. |
 | Ask another family app | `family.call("people.search", q="ana")` | Its own modules first, then a running family app that offers it. Raises `family.Unavailable` with a sentence for the screen ("Open The Lodge to see this here"). Only from server code, and never as a substitute for events between modules in one app. |
 

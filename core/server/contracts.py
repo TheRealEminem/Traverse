@@ -91,6 +91,17 @@ class WorkShareRequested(TypedDict):
     project_ref: str | None  # the local project ("tasks:<project id>"): where a new one goes, through its link
 
 
+# Someone ticked (or unticked) a piece of work outside the module it belongs to: a pick in the day's plan. The module
+# whose ref it is marks it done or open again; anything else ignores it. Work kept somewhere else too changes only
+# here: it reaches the other side, like any change, only when you send it.
+WORK_MARKED_DONE = "work.marked_done"
+
+
+class WorkMarkedDone(TypedDict):
+    ref: str                 # "<module>:<id>" of the work
+    done: bool
+
+
 # A linked item is gone from there (deleted, or out of what's read). The local copy stays, marked.
 WORK_REMOVED_ELSEWHERE = "work.removed_elsewhere"
 
