@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ai, auth, backup, config, db, events, family, jobs, links, module, people, schedule, search, settings
+from . import ai, auth, backup, config, db, events, family, jobs, links, mcp, module, people, schedule, search, settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("core")
@@ -48,6 +48,7 @@ def setup() -> list[module.Module]:
     db.init()
     settings.declare("core", CORE_SETTINGS, CORE_CHOICES)
     ai.declare()
+    mcp.declare()
     jobs.register("core", "backup", backup.handle_daily, lane="cloud")
     schedule.register("core", "backup", 24 * 3600)
     loaded = module.load(config.enabled_modules())
@@ -91,6 +92,8 @@ def create_app() -> FastAPI:
 
     app.include_router(core_router, prefix="/api")
     app.include_router(backup.router, prefix="/api")
+    app.include_router(mcp.api_router, prefix="/api")
+    app.include_router(mcp.router)              # /mcp: Claude, with its own token (mcp.py), outside the sign-in
     for m in loaded:
         if m.router:
             app.include_router(m.router, prefix=f"/api/{m.id}", tags=[m.name])

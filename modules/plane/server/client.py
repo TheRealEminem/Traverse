@@ -19,6 +19,8 @@ from urllib.parse import urlparse
 
 import httpx
 
+from core.server import mcp
+
 log = logging.getLogger("plane.client")
 
 CLOUD_API = "https://api.plane.so"
@@ -158,7 +160,10 @@ class PlaneClient:
     def _send(self, method: str, path: str, body: dict):
         """Every write. Only PATCH (change some fields) or POST (add a work item): nothing that deletes or replaces.
         A PATCH that timed out or met Plane's own error is sent again (the same values twice change nothing); a POST
-        isn't, since the first may have made the item."""
+        isn't, since the first may have made the item. Never while one of Claude's tools runs (core/server/mcp.py):
+        Plane is written only by a push you send."""
+        if mcp.calling():
+            raise PermissionError("Claude can't write to Plane. Only a push you send from the outbox can.")
         if method == "PATCH":
             return self._ask(lambda: self._http.patch(path, json=body), path, again=True)
         if method == "POST":

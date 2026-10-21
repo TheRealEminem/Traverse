@@ -1,4 +1,5 @@
-// Settings: the host's own sections (appearance, you, AI, the app), then one section per module.
+// Settings: the host's own sections (appearance, you, AI, Claude, family apps), then one section per module, then
+// your data and the app.
 import { useEffect, useState } from "react";
 import { api, inApp, quitApp } from "../api";
 import type { FamilyStatus, ProviderId, ProviderInfo } from "../api";
@@ -9,6 +10,7 @@ import { useLive } from "../live";
 import { modulesFor } from "../registry";
 import { useSettings, useShell } from "../shell";
 import type { ThemePref } from "../theme";
+import ClaudeAccess from "./ClaudeAccess";
 import YourData from "./YourData";
 
 function ModelPicker({ provider, value, onSave }: { provider: ProviderId; value: string; onSave: (v: string) => void }) {
@@ -194,6 +196,8 @@ export default function Settings() {
         </ControlRow>
         <ProviderFields key={setupId} id={setupId} values={values} hints={hints} save={save} />
       </Section>
+
+      <ClaudeAccess />
 
       <FamilyApps data={family ?? null} onSharing={(on) => void save({ "core.share_with_family": on })} />
 

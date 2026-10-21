@@ -5,12 +5,13 @@ workspace's members into plane_* tables; the Team view shows who's on what; and 
 directory, with you as core:me. Linking (chunk 6, linking.py) ties Plane projects to Traverse projects and brings items
 in as linked tasks that follow Plane, through the shared work.* contracts. And it sends to Plane only what you
 approve (chunk 7, push.py): your changes to linked tasks, field by field, after checking nobody changed them there
-meanwhile, and new tasks in linked projects. It never deletes anything in Plane (§3.3).
+meanwhile, and new tasks in linked projects. It never deletes anything in Plane (§3.3). Claude can read the team's
+workload and the outbox through the host's MCP server (tools.py), and never send.
 """
 from core.server import contracts
 from core.server.module import Module
 
-from . import linking, people, pull, push, routes, store
+from . import linking, people, pull, push, routes, store, tools
 
 SETTING_KEYS = {"plane.personal_api_key", "plane.workspace_slug", "plane.base_url", "plane.projects"}
 
@@ -56,4 +57,5 @@ MODULE = Module(
     export=store.export,
     count=store.count_in,
     people=people.find,
+    tools=tools.TOOLS,
 )

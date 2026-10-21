@@ -123,6 +123,18 @@ export interface PersonChoice {
   name: string;
 }
 
+/** Claude's access through the MCP server (core/server/mcp.py). The token itself comes back only inside `setup`, once. */
+export interface McpStatus {
+  on: boolean;
+  hint: string | null;
+  url: string;
+  tools: { name: string; title: string; module: string; writes: boolean }[];
+}
+export interface McpSetup {
+  claude_code: string;
+  claude_desktop: string;
+}
+
 export interface BackupItem {
   name: string;
   kind: "auto" | "manual" | "before-restore" | "before-update";
@@ -147,6 +159,9 @@ export const api = {
   settings: () => request<SettingsState>("/settings"),
   putSettings: (changes: Record<string, SettingValue>) => request<SettingsState>("/settings", json("PUT", changes)),
   family: () => request<FamilyStatus>("/family"),
+  mcp: () => request<McpStatus>("/mcp"),
+  mcpToken: () => request<McpStatus & { setup: McpSetup }>("/mcp/token", json("POST")),
+  mcpOff: () => request<void>("/mcp/token", { method: "DELETE" }),
   providers: () => request<ProviderInfo[]>("/ai/providers"),
   providerModels: (id: ProviderId) => request<{ models: string[] }>(`/ai/providers/${id}/models`),
   providerTest: (id: ProviderId) => request<{ message: string }>(`/ai/providers/${id}/test`, json("POST")),
