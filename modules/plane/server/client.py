@@ -1,10 +1,11 @@
 """A small client for Plane's REST API (https://developers.plane.so).
 
-It reads, and it can do exactly two things to Plane: change some fields of one work item (PATCH, only the fields
-given) and add a work item to a project (POST). Reads go through `_get`, which sends GET and nothing else; the two
-writes go through `_send`, which sends PATCH or POST and refuses anything else. There is no method that deletes,
-archives or replaces anything, and no way to send DELETE or PUT: Traverse never deletes in Plane (PLAN.md §3.3, rule
-1). tests/test_client.py fails if one ever appears here. Whether a write should happen at all (your approval, the
+It reads, and it can do exactly three things to Plane: change some fields of one work item (PATCH, only the fields
+given), add a work item to a project (POST), and add a comment to a work item (POST). Reads go through `_get`, which
+sends GET and nothing else; the three writes go through `_send`, which sends PATCH or POST and refuses anything else.
+There is no method that deletes, archives or replaces anything, none that edits a comment, and no way to send DELETE
+or PUT: Traverse never deletes in Plane, and only ever adds comments (PLAN.md §3.1, §3.3 rule 1). tests/test_client.py
+fails if one ever appears here. Whether a write should happen at all (your approval, the
 check against the base) is push.py's business; this only carries it.
 
 Plane signs requests in with a personal API key in the X-API-Key header. Lists come back a page at a time (cursor
@@ -32,6 +33,9 @@ MAX_WAIT = 65.0                 # seconds; Plane's window is a minute
 # The work item fields Traverse may write (PLAN.md §3.2). A list sent (assignees) replaces Plane's list, so the caller
 # sends Plane's current list merged with your additions and removals (rule 5), never a list of its own.
 WRITABLE = ("name", "description_html", "state", "priority", "start_date", "target_date", "assignees")
+# What a new comment carries: its text, and Traverse's own id for it (so a comment whose answer was lost is found again
+# rather than added twice).
+COMMENT_FIELDS = ("comment_html", "external_source", "external_id")
 
 
 class PlaneError(Exception):
@@ -110,6 +114,10 @@ class PlaneClient:
         """One work item as Plane has it right now (read again just before anything is written to it)."""
         return self._get(self._ws(f"projects/{project_id}/work-items/{item_id}/"))
 
+    def comments(self, project_id: str, item_id: str) -> list[dict]:
+        """A work item's comments, oldest first as Plane lists them."""
+        return list(self._pages(self._ws(f"projects/{project_id}/work-items/{item_id}/comments/")))
+
     # ── What Traverse may write, once you've approved it ────────────────
 
     def update_work_item(self, project_id: str, item_id: str, changes: dict) -> dict:
@@ -126,6 +134,16 @@ class PlaneClient:
         if not str(fields.get("name") or "").strip():
             raise PlaneError("A work item needs a name.")
         return self._send("POST", self._ws(f"projects/{project_id}/work-items/"), fields)
+
+    def create_comment(self, project_id: str, item_id: str, fields: dict) -> dict:
+        """Adds a new comment to a work item (POST). Append only: there is no way here to change or remove a comment,
+        yours or anyone's. Returns the comment as Plane answers, with its id."""
+        unknown = set(fields) - set(COMMENT_FIELDS)
+        if unknown:
+            raise PlaneError(f"Traverse doesn't write {', '.join(sorted(unknown))} on a comment.")
+        if not str(fields.get("comment_html") or "").strip():
+            raise PlaneError("A comment needs some text.")
+        return self._send("POST", self._ws(f"projects/{project_id}/work-items/{item_id}/comments/"), fields)
 
     # ── Paging, rate limits and errors ──────────────────────────────────
 
@@ -158,7 +176,8 @@ class PlaneClient:
         return self._ask(lambda: self._http.get(path, params=params), path, again=True)
 
     def _send(self, method: str, path: str, body: dict):
-        """Every write. Only PATCH (change some fields) or POST (add a work item): nothing that deletes or replaces.
+        """Every write. Only PATCH (change some fields) or POST (add a work item or a comment): nothing that deletes or
+        replaces.
         A PATCH that timed out or met Plane's own error is sent again (the same values twice change nothing); a POST
         isn't, since the first may have made the item. Never while one of Claude's tools runs (core/server/mcp.py):
         Plane is written only by a push you send."""
@@ -168,7 +187,8 @@ class PlaneClient:
             return self._ask(lambda: self._http.patch(path, json=body), path, again=True)
         if method == "POST":
             return self._ask(lambda: self._http.post(path, json=body), path, again=False)
-        raise PlaneError("Traverse only changes or adds work items in Plane. It never deletes anything there.")
+        raise PlaneError("Traverse only changes or adds work items, and adds comments, in Plane. It never deletes "
+                         "anything there.")
 
     def _ask(self, request: Callable[[], httpx.Response], path: str, again: bool):
         """Sends one request, waiting out rate limits (which Plane answers before doing anything, so any request can

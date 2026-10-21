@@ -9,7 +9,7 @@ from fastapi import APIRouter, Body, HTTPException
 
 from core.server import links, module
 
-from . import items, projects, synced, vocab
+from . import drafts, items, projects, synced, vocab
 
 router = APIRouter()
 
@@ -49,8 +49,11 @@ def _with_source(item: dict, linked: dict | None = None, shared: dict | None = N
     if about:
         there = module.describe(about["ref"])
         about = {**about, "title": there["title"] if there else None}
-    return {**item, "came_from": module.describe(item["source_ref"]) if item.get("source_ref") else None,
-            "synced": about, "sharing": shared.get(item["id"], [])}
+    out = {**item, "came_from": module.describe(item["source_ref"]) if item.get("source_ref") else None,
+           "synced": about, "sharing": shared.get(item["id"], [])}
+    if "updates" in out:
+        out["updates"] = synced.update_sharing(out["updates"])
+    return out
 
 
 def _with_sources(found: list[dict]) -> list[dict]:
@@ -104,6 +107,8 @@ def get_project(project_id: str):
     project = projects.get(project_id)
     if project is None:
         raise HTTPException(404, "Project not found")
+    if project["latest_status"]:
+        project["latest_status"] = synced.update_sharing([project["latest_status"]])[0]
     return {**project, "synced_with": _synced_with(links.ref("tasks", project_id))}
 
 
@@ -140,7 +145,7 @@ def add_milestone(project_id: str, body: dict = Body(...)):
 def project_updates(project_id: str):
     if projects.get(project_id) is None:
         raise HTTPException(404, "Project not found")
-    return projects.updates(project_id)
+    return synced.update_sharing(projects.updates(project_id))
 
 
 @router.post("/projects/{project_id}/updates", status_code=201)
@@ -149,6 +154,71 @@ def add_project_update(project_id: str, body: dict = Body(...)):
     with answers("Project not found"):
         return projects.add_update(project_id=project_id, kind=body.get("kind", "comment"), body=body.get("body", ""),
                                    health=body.get("health"))
+
+
+# ── What the AI drafts (drafts.py) ────────────────────────────────────
+
+@router.get("/projects/{project_id}/draft")
+def project_draft(project_id: str):
+    """The project's status draft, or null."""
+    if projects.get(project_id) is None:
+        raise HTTPException(404, "Project not found")
+    return drafts.for_project(project_id)
+
+
+@router.post("/projects/{project_id}/draft", status_code=201)
+def draft_status(project_id: str):
+    """"Draft a status": the AI drafts the project's status update, in a job. Replaces any draft it had."""
+    with answers("Project not found"):
+        return drafts.start_status(project_id)
+
+
+@router.patch("/drafts/{draft_id}")
+def edit_draft(draft_id: str, body: dict = Body(...)):
+    with answers("That draft isn't here any more"):
+        return drafts.edit(draft_id, body)
+
+
+@router.delete("/drafts/{draft_id}", status_code=204)
+def discard_draft(draft_id: str):
+    if not drafts.discard(draft_id):
+        raise HTTPException(404, "That draft isn't here any more")
+
+
+@router.post("/drafts/{draft_id}/post", status_code=201)
+def post_draft(draft_id: str, body: dict = Body(default={})):
+    """Posts a status draft as the project's status update. {"share_on": a linked task's id} also offers it there as a
+    comment, which waits for your approval where it's going."""
+    _only(body, {"share_on"})
+    with answers("That draft isn't here any more"):
+        return drafts.post(draft_id, body.get("share_on") or None)
+
+
+@router.patch("/drafts/{draft_id}/proposals/{proposal_id}")
+def edit_proposal(draft_id: str, proposal_id: str, body: dict = Body(...)):
+    """One proposed subtask: {"text"?, "estimate_min"?, "state"?: "proposed" | "dropped"}."""
+    with answers("That proposal isn't here any more"):
+        return drafts.edit_proposal(draft_id, proposal_id, body)
+
+
+@router.post("/drafts/{draft_id}/accept")
+def accept_proposals(draft_id: str, body: dict = Body(default={})):
+    """Proposed subtasks become subtasks: {"ids": [...]}, or all still proposed."""
+    _only(body, {"ids"})
+    ids = body.get("ids")
+    if ids is not None and not (isinstance(ids, list) and all(isinstance(i, str) for i in ids)):
+        raise HTTPException(400, "ids is a list of proposals")
+    with answers("That draft isn't here any more"):
+        return drafts.accept(draft_id, ids)
+
+
+@router.post("/updates/{update_id}/share")
+def share_update(update_id: str, body: dict = Body(default={})):
+    """"Post it there too": an update of yours goes, as a new comment, to where a linked task also lives, once you
+    approve it there. {"item_id"}: which of the project's linked tasks a project's update goes on."""
+    _only(body, {"item_id"})
+    with answers("That update isn't here any more"):
+        return synced.comment(update_id, body.get("item_id") or None)
 
 
 @router.patch("/milestones/{milestone_id}")
@@ -217,6 +287,21 @@ def unlink_synced(task_id: str):
     if not synced.unlink(task_id):
         raise HTTPException(404, "That task isn't linked")
     return _with_source(items.get(task_id))
+
+
+@router.get("/{task_id}/breakdown")
+def task_breakdown(task_id: str):
+    """The task's proposed subtasks, or null."""
+    if items.get(task_id) is None:
+        raise HTTPException(404, "Task not found")
+    return drafts.for_item(task_id)
+
+
+@router.post("/{task_id}/breakdown", status_code=201)
+def break_down(task_id: str):
+    """"Break it down": the AI proposes subtasks with estimates, in a job. Ones you've decided on stay decided."""
+    with answers():
+        return drafts.start_breakdown(task_id)
 
 
 @router.post("/{task_id}/blockers")

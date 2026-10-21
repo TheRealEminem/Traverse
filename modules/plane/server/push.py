@@ -18,6 +18,12 @@ How a push goes:
    have written. The push stays waiting.
 The client has no way to delete anything (rule 1), and nothing here would ask it to.
 
+A comment (§3.1, chunk 12) is a push too, of kind "comment": "Post it there too" on a Traverse update (a linked task's
+comment, or a project's status update put on one of its linked tasks) publishes contracts.WORK_COMMENT_REQUESTED, and
+`comment_requested` parks it in the outbox with the comment as Plane will show it, linked from the update (kind
+"share"). Send checks the item is still in Plane and adds the comment (one POST); once there, the update links to the
+push as "posted". Append only: a comment is never edited or removed, so it has no Undo. Dry run applies the same way.
+
 A field's entry in `changes`:
   field, label, key  Traverse's field (linking.FIELDS), its label, and Plane's field
   mine, base         the Traverse values to send, and as both sides last agreed ({"due_on": "2026-10-31"}; {} for new)
@@ -201,6 +207,46 @@ def requested(payload: dict) -> None:
     events.publish("plane.pushes.changed", {"push": push_id})
 
 
+def _comment_entry(body: str, written_by: str | None) -> dict:
+    """A comment's one entry: the words (Markdown, as written in Traverse) and the HTML Plane will show, which says
+    which AI drafted it when one did."""
+    text = body.strip() + (f"\n\n*Drafted by {written_by}*" if written_by else "")
+    return {"field": "comment", "label": "Comment", "key": "comment_html", "mine": {"body": body, "written_by": written_by},
+            "base": {}, "was": None, "will": html.to_html(text), "text": text, "include": True}
+
+
+def comment_requested(payload: dict) -> None:
+    """contracts.WORK_COMMENT_REQUESTED: an update of yours, to be added to a linked Plane item as a new comment, becomes
+    a push waiting for you. Asking again while it waits replaces its words (and the item it goes on)."""
+    ref, local, update_ref = payload.get("ref") or "", payload.get("local_ref") or "", payload.get("update_ref") or ""
+    body = (payload.get("body") or "").strip()
+    if not (ref.startswith("plane:") and local and update_ref and body):
+        return
+    item = db.one("SELECT * FROM plane_items WHERE id = ?", (ref.split(":", 1)[1],))
+    if item is None or item["removed_at"]:
+        log.warning("Not posting %s on %s: it isn't in the copy of Plane", update_ref, ref)
+        return
+    if db.one("SELECT 1 FROM plane_pushes WHERE update_ref = ? AND kind = 'comment' AND status IN ('sending', 'sent')",
+              (update_ref,)):
+        log.info("Not posting %s again: it's in Plane already, or on its way", update_ref)
+        return
+    changes = [_comment_entry(body, payload.get("written_by"))]
+    old = db.one(f"SELECT id FROM plane_pushes WHERE update_ref = ? AND kind = 'comment' AND status IN {NEEDS_YOU} "
+                 f"ORDER BY created_at DESC LIMIT 1", (update_ref,))
+    if old:
+        push_id = old["id"]
+        _set(push_id, changes=changes, status="waiting", note=None, local_ref=local, project_id=item["project_id"],
+             item_id=item["id"])
+    else:
+        push_id, stamp = db.new_id(), db.now()
+        db.execute("INSERT INTO plane_pushes (id, kind, local_ref, update_ref, project_id, item_id, changes, status, "
+                   "created_at, updated_at) VALUES (?, 'comment', ?, ?, ?, ?, ?, 'waiting', ?, ?)",
+                   (push_id, local, update_ref, item["project_id"], item["id"], json.dumps(changes), stamp, stamp))
+    links.add(update_ref, _ref(push_id), "share")
+    jobs.enqueue("plane", KIND, push_id, approve=True, reason="Waiting for you to send it")
+    events.publish("plane.pushes.changed", {"push": push_id})
+
+
 def local_deleted(payload: dict) -> None:
     """contracts.ITEM_DELETED: a task with changes waiting to be sent is gone, so they won't be."""
     for row in db.query(f"SELECT id FROM plane_pushes WHERE local_ref = ? AND status IN {NEEDS_YOU}", (payload["ref"],)):
@@ -240,7 +286,7 @@ def _forget(push_id: str) -> None:
     push = _get(push_id)
     _set(push_id, status="discarded")
     jobs.cancel_for("plane", push_id)
-    links.remove(push["local_ref"], _ref(push_id), "share")
+    links.remove(push["update_ref"] or push["local_ref"], _ref(push_id), "share")
     if push["undo_of"]:
         db.execute("UPDATE plane_pushes SET undone_by = NULL WHERE id = ? AND undone_by = ?", (push["undo_of"], push_id))
 
@@ -250,6 +296,8 @@ def include(push_id: str, choices: dict) -> None:
     push = _get(push_id)
     if push["status"] not in NEEDS_YOU:
         raise ValueError("It isn't waiting to be sent")
+    if push["kind"] == "comment":
+        raise ValueError("A comment goes whole. Discard it if you don't want it in Plane.")
     changes = json.loads(push["changes"])
     for field, on in choices.items():
         entry = next((e for e in changes if e["field"] == field), None)
@@ -296,6 +344,9 @@ def undo(push_id: str) -> str:
     if push["kind"] == "create":
         raise ValueError("Traverse never deletes anything in Plane, so a new item can't be undone from here. "
                          "Delete it in Plane if you need to.")
+    if push["kind"] == "comment":
+        raise ValueError("Traverse never edits or deletes comments in Plane, so a comment can't be undone from here. "
+                         "Change it in Plane if you need to.")
     if push["undone_by"]:
         raise ValueError("It's being undone already" if (_row(push["undone_by"]) or {}).get("status") in OPEN
                          else "It was undone already")
@@ -338,7 +389,8 @@ def send(job: Job) -> None:
         cfg = pull.config()
         try:
             with pull.client(cfg) as c:
-                (_create if push["kind"] == "create" else _update)(c, push, dry_run(cfg), job)
+                write = {"create": _create, "comment": _comment}.get(push["kind"], _update)
+                write(c, push, dry_run(cfg), job)
         except PlaneError as e:
             _set(push["id"], status="failed", note=str(e), checked_at=db.now())
             raise jobs.Wait(str(e)) from e
@@ -422,6 +474,49 @@ def _create(c: PlaneClient, push: dict, dry: bool, job: Job) -> None:
     linking.publish_made(item_id, push["local_ref"])
 
 
+def _comment(c: PlaneClient, push: dict, dry: bool, job: Job) -> None:
+    """Adds the comment to the item, after checking it's still there. Nothing else about the item is written."""
+    push_id, project_id, item_id = push["id"], push["project_id"], push["item_id"]
+    changes = json.loads(push["changes"])
+    entry = changes[0]
+    job.stage("Reading it from Plane")
+    fresh = store.item_row(c.work_item(project_id, item_id), project_id)
+    if store.put_item(fresh):
+        linking.publish_item(item_id)
+    key = linking.Where().key(fresh) or "the item"
+    if dry:
+        _set(push_id, status="waiting", checked_at=db.now(),
+             note=f"Dry run: checked against Plane. Send would add this comment to {key}. Nothing was sent.")
+        raise jobs.Wait("Dry run: nothing was sent")
+    found = _commented_before(c, push, entry["will"]) if push["attempted_at"] else None
+    if not found:
+        job.stage("Adding the comment in Plane")
+        _set(push_id, attempted_at=db.now())
+        found = c.create_comment(project_id, item_id, {"comment_html": entry["will"], "external_source": "traverse",
+                                                       "external_id": push_id})
+    entry["comment_id"] = found.get("id")
+    entry["sent"] = found.get("comment_html") or entry["will"]
+    stamp = db.now()
+    _set(push_id, status="sent", changes=changes, sent_at=stamp, checked_at=stamp, note=None)
+    links.remove(push["update_ref"], _ref(push_id), "share")
+    links.add(push["update_ref"], _ref(push_id), "posted")
+
+
+def _commented_before(c: PlaneClient, push: dict, comment_html: str) -> dict | None:
+    """A comment that was cut off after sending (Traverse stopped): the one it added, if Plane has it, so it isn't
+    added twice. Traverse's own id for it, or else the same words, by you, since the attempt (give or take the clocks)."""
+    me, since = team.me_id(), datetime.fromisoformat(push["attempted_at"]) - timedelta(minutes=10)
+    for found in c.comments(push["project_id"], push["item_id"]):
+        if found.get("external_source") == "traverse" and found.get("external_id") == push["id"]:
+            return found
+        who = found.get("actor") or found.get("created_by")
+        who = who.get("id") if isinstance(who, dict) else who
+        made = found.get("created_at")
+        if found.get("comment_html") == comment_html and who == me and made and datetime.fromisoformat(made) >= since:
+            return found
+    return None
+
+
 def _made_before(c: PlaneClient, push: dict, body: dict) -> str | None:
     """A create that was cut off after sending (Traverse stopped): the item it made, if Plane has it, so it isn't made
     twice. Yours, with this name, made since the attempt (give or take the clocks), and not linked to anything."""
@@ -468,6 +563,11 @@ def _view(push: dict, ctx: dict) -> dict:
     is_open = push["status"] in OPEN or push["status"] == "discarded"
     fields = []
     for e in changes:
+        if e["field"] == "comment":             # one entry: the words as Plane will show them
+            fields.append({"field": "comment", "label": e["label"], "include": True, "skip": None, "over": False,
+                           "changed": False, "already": False, "theirs": None, "yours": None, "before": "",
+                           "after": e["text"]})
+            continue
         f = e["field"]
         row = {"field": f, "label": e["label"], "include": e["include"], "skip": e.get("skip"),
                "over": bool(e.get("over")), "changed": False, "already": False, "theirs": None, "yours": None}

@@ -5,9 +5,10 @@ workspace's members into plane_* tables; the Team view shows who's on what; and 
 directory, with you as core:me. Linking (chunk 6, linking.py) ties Plane projects to Traverse projects and brings items
 in as linked tasks that follow Plane, through the shared work.* contracts. And it sends to Plane only what you
 approve (chunk 7, push.py): your changes to linked tasks, field by field, after checking nobody changed them there
-meanwhile, and new tasks in linked projects. It never deletes anything in Plane (§3.3). Claude can read the team's
-workload and the outbox through the host's MCP server (tools.py), and never send. Every pull keeps a log of what
-changed (plane_changes), which feeds its part of the day's briefing, Muster's "what moved" (briefing.py).
+meanwhile, new tasks in linked projects, and your updates as new comments on linked items (chunk 12). It never deletes
+anything in Plane, and never edits a comment (§3.1, §3.3). Claude can read the team's workload and the outbox through
+the host's MCP server (tools.py), and never send. Every pull keeps a log of what changed (plane_changes), which feeds its
+part of the day's briefing, Muster's "what moved" (briefing.py).
 """
 from core.server import contracts
 from core.server.module import Module
@@ -52,7 +53,7 @@ MODULE = Module(
     lanes={"pull": "cloud", push.KIND: "interactive"},    # a push is something you're waiting for
     recurring={"pull": pull.every},
     subscribe={"core.settings.changed": _settings_changed, contracts.ITEM_DELETED: _deleted,
-               contracts.WORK_SHARE_REQUESTED: push.requested},
+               contracts.WORK_SHARE_REQUESTED: push.requested, contracts.WORK_COMMENT_REQUESTED: push.comment_requested},
     search=store.search,
     describe=store.describe,
     export=store.export,

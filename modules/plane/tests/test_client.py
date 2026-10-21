@@ -1,5 +1,5 @@
-"""The Plane client: it reads (with paging, rate limits and readable errors), changes or adds work items when asked,
-and cannot delete anything."""
+"""The Plane client: it reads (with paging, rate limits and readable errors), changes or adds work items and adds
+comments when asked, and cannot delete anything or edit a comment."""
 import ast
 import inspect
 import json
@@ -25,7 +25,7 @@ DELETING_NAMES = ("delete", "remove", "archive", "unarchive", "destroy", "trash"
 
 def test_the_client_has_no_way_to_delete():
     """Checked in the source: no DELETE or PUT anywhere, no method named like deleting, and the only writes are a PATCH
-    and a POST inside _send, reached only from the two writing methods."""
+    and a POST inside _send, reached only from the three writing methods. Comments can only be added (§3.1)."""
     source = Path(client_module.__file__).read_text()
     tree = ast.parse(source)
     writers = set()
@@ -45,8 +45,9 @@ def test_the_client_has_no_way_to_delete():
     methods = [name for name, _ in inspect.getmembers(PlaneClient, inspect.isfunction) if not name.startswith("__")]
     for name in methods:
         assert not name.lstrip("_").lower().startswith(DELETING_NAMES), f"PlaneClient.{name} sounds like it deletes"
-    assert writers == {"update_work_item", "create_work_item"}
-    assert {"me", "projects", "members", "states", "labels", "cycles", "work_items", "work_item"} <= set(methods)
+    assert writers == {"update_work_item", "create_work_item", "create_comment"}
+    assert {"me", "projects", "members", "states", "labels", "cycles", "work_items", "work_item", "comments"} <= set(methods)
+    assert {m for m in methods if "comment" in m} == {"comments", "create_comment"}     # add one, or read them: no edit
 
 
 def test_only_a_patch_or_a_post_can_be_sent():
@@ -64,6 +65,7 @@ def test_every_read_is_a_get():
     pid = PROJECTS["SOFTWARE"]
     c.me(), c.projects(), c.members(), c.states(pid), c.labels(pid), c.cycles(pid), c.work_items(pid)
     c.work_item(pid, fake.item("SOFTWARE-5")["id"])
+    c.comments(pid, fake.item("SOFTWARE-5")["id"])
     assert fake.requests and {r.method for r in fake.requests} == {"GET"}
     assert all(r.headers["X-API-Key"] == "plane_api_test" for r in fake.requests)
 
@@ -88,6 +90,18 @@ def test_a_new_item_is_added_to_its_project():
     assert [w[0] for w in fake.writes] == ["POST"]
 
 
+def test_a_comment_is_added_and_nothing_else_is_written():
+    fake = FakePlane()
+    item = fake.item("DALEETING-6")
+    made = fake.client().create_comment(item["project"], item["id"], {"comment_html": "<p>On track.</p>",
+                                                                      "external_source": "traverse", "external_id": "x1"})
+    assert made["id"] and made["comment_html"] == "<p>On track.</p>"
+    [(method, path, body)] = fake.writes
+    assert method == "POST" and path.endswith(f"/work-items/{item['id']}/comments/") and body["external_id"] == "x1"
+    assert [c["id"] for c in fake.client().comments(item["project"], item["id"])] == [made["id"]]
+    assert fake.item("DALEETING-6") == item                                      # the item itself is untouched
+
+
 def test_writes_refuse_fields_traverse_never_sends():
     fake = FakePlane()
     c = fake.client()
@@ -95,6 +109,10 @@ def test_writes_refuse_fields_traverse_never_sends():
         c.update_work_item(PROJECTS["SOFTWARE"], "x", {"labels": []})
     with pytest.raises(PlaneError, match="needs a name"):
         c.create_work_item(PROJECTS["SOFTWARE"], {"name": "  "})
+    with pytest.raises(PlaneError, match="doesn't write parent on a comment"):
+        c.create_comment(PROJECTS["SOFTWARE"], "x", {"comment_html": "<p>Hi</p>", "parent": "y"})
+    with pytest.raises(PlaneError, match="needs some text"):
+        c.create_comment(PROJECTS["SOFTWARE"], "x", {"comment_html": " "})
     assert fake.requests == []
 
 
