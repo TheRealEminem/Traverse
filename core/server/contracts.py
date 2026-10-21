@@ -91,6 +91,22 @@ class WorkShareRequested(TypedDict):
     project_ref: str | None  # the local project ("tasks:<project id>"): where a new one goes, through its link
 
 
+# You asked for words of yours (a comment, a status update) to be added where a linked item also lives, as a new
+# comment on it. Append only: the other side adds a comment, and never edits or deletes one, its own or anyone's.
+# Whoever keeps that side parks the request for your approval with a preview (nothing is sent without it) and, while
+# it waits, links update_ref → its waiting request (kind "share"); once it's there, update_ref → the sent request
+# (kind "posted"). The local side shows each by describing that ref. Asking again while one waits replaces its words.
+WORK_COMMENT_REQUESTED = "work.comment_requested"
+
+
+class WorkCommentRequested(TypedDict):
+    ref: str                 # the item elsewhere ("plane:<work item id>")
+    local_ref: str           # its local copy ("tasks:<id>")
+    update_ref: str          # the words being added ("tasks:<update id>")
+    body: str                # markdown
+    written_by: str | None   # the AI that drafted it, if one did: said with the comment there too
+
+
 # A linked item is gone from there (deleted, or out of what's read). The local copy stays, marked.
 WORK_REMOVED_ELSEWHERE = "work.removed_elsewhere"
 

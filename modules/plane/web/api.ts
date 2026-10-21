@@ -135,7 +135,7 @@ export interface Brought {
 }
 
 /** Traverse's fields, as a push names them. */
-export type PushField = "text" | "notes" | "status" | "priority" | "start_on" | "due_on" | "assignee";
+export type PushField = "text" | "notes" | "status" | "priority" | "start_on" | "due_on" | "assignee" | "comment";
 
 export interface PushFieldView {
   field: PushField;
@@ -155,7 +155,7 @@ export type PushStatus = "waiting" | "sending" | "stopped" | "failed" | "sent" |
 
 export interface Push {
   id: string;
-  kind: "update" | "create" | "undo";
+  kind: "update" | "create" | "undo" | "comment"; // comment: a Traverse update, added as a new comment (fields: one, "comment")
   status: PushStatus;
   note: string | null;
   created_at: string;
