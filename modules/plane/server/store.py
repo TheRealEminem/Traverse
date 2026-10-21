@@ -6,8 +6,8 @@ touches rows whose values changed, so running it twice changes nothing. Somethin
 deleted here: it gets `removed_at`, and comes back if Plane shows it again.
 
 plane_links isn't part of the mirror: it's yours, which Traverse project each Plane project goes to and what its
-states mean there (linking.py). Nor are plane_pushes (your changes waiting to be sent, and the log of what was) and
-plane_sent (what Plane's values mean in Traverse after a push), which are push.py's. A push also writes the mirror
+states mean there (linking.py). Nor are plane_pushes (your changes and comments waiting to be sent, and the log of
+what was) and plane_sent (what Plane's values mean in Traverse after a push), which are push.py's. A push also writes the mirror
 row of the item it just read or wrote, since that is what Plane said; an item's row only ever moves forward in
 Plane's time (updated_at), so a pull that read it before the push can't put the old values back.
 """
@@ -133,6 +133,10 @@ MIGRATIONS = [
         push_id     TEXT NOT NULL,
         UNIQUE (item_id, field)
     );
+    """,
+    """
+    ALTER TABLE plane_pushes ADD COLUMN update_ref TEXT;   -- kind comment: the Traverse update it posts ("tasks:<id>")
+    CREATE INDEX plane_pushes_update ON plane_pushes(update_ref) WHERE update_ref IS NOT NULL;
     """,
 ]
 
@@ -344,9 +348,11 @@ def describe(thing_id: str) -> dict | None:
     p = db.one("SELECT name FROM plane_projects WHERE id = ?", (thing_id,))
     if p:
         return {"title": p["name"], "href": f"#/plane/links?project={thing_id}"}
-    push = db.one("SELECT status FROM plane_pushes WHERE id = ?", (thing_id,))
+    push = db.one("SELECT status, kind FROM plane_pushes WHERE id = ?", (thing_id,))
     if push:
-        return {"title": PUSH_TITLES.get(push["status"], "Plane"), "href": f"#/plane/outbox?push={thing_id}"}
+        title = "Posted in Plane" if push["kind"] == "comment" and push["status"] == "sent" else \
+            PUSH_TITLES.get(push["status"], "Plane")
+        return {"title": title, "href": f"#/plane/outbox?push={thing_id}"}
     return None
 
 

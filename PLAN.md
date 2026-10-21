@@ -25,7 +25,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 9 | Inbox: capture anything, AI proposes work items, you review | L | ☑ 2026-10-19 on `claude/chunk-9-inbox-362a27` |
 | 10 | Meetings from Trailmix | S–M | ☑ 2026-10-19 on `claude/chunk-9-inbox-362a27` |
 | 11 | MCP server in the host: Claude Desktop and Claude Code can use Traverse | M | ☑ 2026-10-20 on `chunk-11/mcp`: Claude Code answered from the dev server, left 4 proposals in the inbox and a push waiting in the Outbox; Claude Desktop's config tried over stdin, not in the app |
-| 12 | AI in the app: status drafts, break a task down | M | ☐ |
+| 12 | AI in the app: status drafts, break a task down | M | ☑ 2026-10-21 on `claude/chunk-12-ai-c80a35` (from `chunk-11/mcp`): drafts and breakdowns tried live on Ollama; a status update waits in the Outbox as a comment, never sent (dry run) |
 | 13 | Home card, search, export, Settings, the auto-sync switch | M | ☐ |
 | 14 | Mac: mark, menu, build and install beside The Lodge | M | ☐ |
 
@@ -173,6 +173,11 @@ items, states, members, labels and cycles into `plane_*` tables. The mirror is o
   own contract rather than `actions.found`, whose items replace each other and aren't linked), after
   **`work.project_arrived`** `{ref, name, summary, source}` for a Plane project with no Traverse project yet. The
   fields are already named as tasks' own (`contracts.WORK_FIELDS`), so `tasks` never learns Plane's shapes.
+- "Post it in Plane too" on an update publishes **`work.comment_requested`** `{ref, local_ref, update_ref, body,
+  written_by}` (chunk 12): a linked task's comment, or a project's status update put on one of the project's linked
+  tasks, since Plane's API has no project updates. `plane` parks it in the outbox as a comment (append only: Plane's
+  comments are never edited or deleted) and links `update_ref` → it, kind `share` while it waits and `posted` once it's
+  there, so the update can say which.
 - `tasks` keeps each linked task's base and flags in `tasks_synced` (migration step 3); `plane` keeps each project's
   link and state map in `plane_links`. The Linking screen lists Traverse projects through `GET /api/tasks/projects`
   (a page reading another module's public API; the servers still never talk).
@@ -702,6 +707,66 @@ family yet).**
 Blueprint chunk 8: status drafts per project (and, on approval, posted to Plane as a comment), break a task down.
 
 **Done when:** a draft appears, says who wrote it, and can be edited, discarded or sent.
+
+**Result (2026-10-21, branch `claude/chunk-12-ai-c80a35` from `chunk-11/mcp`; the shared files are changed here, not
+sent to the family yet).**
+- **Plane first:** its API (v1 and v2, developers.plane.so) has no project-level updates or status. What it has is
+  comments on work items: `POST …/work-items/{id}/comments/` with `comment_html`, and `external_source`/`external_id`
+  for an id of the caller's own. So a project's status goes to Plane as a comment on one of its linked tasks, which you
+  choose.
+- **Contracts** (shared): `work.comment_requested` (§3.5). It says nothing about Plane.
+- **`tasks`** (shared), migration step 4: `tasks_drafts` (one per project for its status, one per task for its
+  breakdown: body, suggested health and why, proposed subtasks as JSON, `written_by`, `edited`) and
+  `tasks_updates.edited`. `drafts.py`: the `tasks/draft` job (lane "interactive", or "default" when the AI runs on this
+  Mac) calls `ai.structured`. A status draft reads the project as plain facts: progress, each milestone (missed or
+  not), what got done and added since the last status update (or the last two weeks), late, in progress, due in two
+  weeks, flags (blocked by what, waiting on whom, removed or changed elsewhere) and the last three updates. It asks for
+  the body first, then why, then the health (`StatusDraft`); a health it can't read is left empty. `tidy_body` drops a
+  label with only "Nothing" under it and a "Health:" line (both seen from qwen2.5:7b). A breakdown asks for 2 to 8
+  steps with minutes (`Breakdown`), drops ones the task already has, and rounds estimates (5 under an hour, 15 under a
+  day). Drafting again replaces a draft; a breakdown keeps what you accepted or dropped. Posting makes it the project's
+  status update (`author_ref` core:me, `written_by` the AI, `edited`), and its health the project's. Accepted steps are
+  subtasks with source `ai` and `attributes.written_by`. `synced.comment()` publishes the contract, for a task's own
+  comment or a project update on one of its linked tasks (checked before anything is posted), and refuses one that's
+  there already; updates carry `shared` (waiting or posted, named by the other module). API: `GET/POST
+  /api/tasks/projects/{id}/draft`, `GET/POST /api/tasks/{id}/breakdown`, `PATCH/DELETE /api/tasks/drafts/{id}`,
+  `POST /api/tasks/drafts/{id}/post` (`share_on`), `PATCH /api/tasks/drafts/{id}/proposals/{pid}`, `POST
+  /api/tasks/drafts/{id}/accept`, `POST /api/tasks/updates/{id}/share` (`item_id`).
+- **`plane`**, migration step 4: `plane_pushes.update_ref`. A comment is a push of kind `comment`, parked as Needs you,
+  its preview the words as Plane will show them, ending "*Drafted by Ollama · qwen2.5:7b*" when an AI drafted it.
+  Asking again while it waits replaces the words. Send reads the item again (gone: it fails and says so), then one
+  POST; dry run says "Send would add this comment to OPERATIONS-10" and writes nothing. A POST whose answer was lost is
+  found again by Traverse's id (or the same words by you since the attempt), not added twice. No Undo, no edit: a
+  comment stays as it is. **Client:** `comments()` (GET) and `create_comment()` (POST through `_send`, only
+  `comment_html`, `external_source`, `external_id`); the no-delete test now also checks the only comment methods are
+  reading and adding. Tools may not name `create_comment`.
+- **Screens.** Project page, How it's going: "Draft a status", then the draft with "Drafted by Ollama · qwen2.5:7b"
+  (", edited by you" once changed), the health it suggests and why, the text to edit, and "Only here" or "In Plane
+  too, on <a linked task>", Discard, "Post update" or "Post, and offer to Plane". Posted updates say "Drafted by …,
+  edited and posted by you", and "Waiting for you to send it to Plane · Review" or "Posted in Plane"; one not offered
+  yet has "Post in Plane too, on…". Task page: "Break it down" by Subtasks, each proposal with its estimate, Accept,
+  Edit, Drop, Accept all, Bring back; a subtask made from one says "Proposed by …". A linked task's comments have
+  "Post in Plane too". Outbox: "Comment on <task> to <key>", the comment rendered, "Add the comment", and no Undo.
+- **Verified:** `scripts/check` passes (309 tests, 19 new; types, build, style; the family-drift warning is expected):
+  11 tasks tests with the fake AI (the prompt's facts, edit, discard, post with health and who wrote it, a failed draft and Try
+  again, the breakdown end to end, the contract with a stand-in taker) and 7 new plane tests against the fake Plane (a
+  comment waits, then one POST and nothing else; a status draft offered on a linked task; dry run; asking again;
+  discard; a lost answer not doubled; an item gone; a deleted task; Claude can't send one), and one for the client. Live on
+  this worktree's own copy of the dev data (dry run on; port 8799, since another session's Trailmix preflight had
+  8797): two AI calls, both to Ollama qwen2.5:7b on this Mac, Settings' provider. "Draft a status" on Operations: At
+  risk, "The late submission of OAIX Week 2 Deliverables…", with an empty Done section and the health repeated in the
+  body (now tidied, tested on that text). Edited it, posted it with "In Plane too, on OAIX Week 2 Deliverables": the
+  project went At risk, and the comment waits in the Outbox, unsent. "Break it down" on that task: six steps, 30 to 60
+  minutes each; edited one (20 min), dropped one, accepted one. Only GETs reached Plane, and Send was never pressed.
+  Checked at 375px and 1280px by measuring the page (this session wasn't on screen, so no screenshots): nothing wider
+  than the screen, and the draft's controls on one row at 1280px.
+- **Not done:** no comment has reached the real Plane; that's Mark's to send with dry run off, and it would be the
+  first live use of the comments endpoint (whether Plane's comment list returns `external_id` is unconfirmed; the
+  lost-answer check falls back to the same words by you). Plane's comments aren't shown on linked tasks yet (§3.1's
+  other direction). A project update deleted with its project leaves a waiting comment in the outbox (its words are in
+  the push). Claude has no tool to draft a status. The shared files (`core/server/contracts.py`, `modules/tasks/`) go
+  to the family with `scripts/sync-family --push` when Mark says; `tasks` migration step 4 must reach the family
+  before The Lodge takes this `tasks`.
 
 ### Chunk 13 · Home, search, export, Settings, auto-sync (M)
 
