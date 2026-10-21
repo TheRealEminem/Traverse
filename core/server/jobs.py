@@ -85,6 +85,7 @@ def enqueue(module: str, kind: str, target: str, approve: bool = False, reason: 
 
 def go(job_id: str, force: bool = False) -> None:
     """Starts a waiting job (you approved it, or chose to go ahead despite its warning)."""
+    _yours_only("start work that waits for you")
     changed = db.execute(
         "UPDATE core_jobs SET status = 'queued', approved = 1, forced = forced OR ?, wait_reason = NULL, updated_at = ? "
         "WHERE id = ? AND status = 'waiting'",
@@ -96,10 +97,18 @@ def go(job_id: str, force: bool = False) -> None:
 
 
 def retry(job_id: str) -> None:
+    _yours_only("try failed work again")
     if db.execute("UPDATE core_jobs SET status = 'queued', error = NULL, updated_at = ? WHERE id = ? AND status = 'error'",
                   (db.now(), job_id)):
         _notify(job_id)
         _submit(job_id)
+
+
+def _yours_only(what: str) -> None:
+    """Approving is yours: Claude's tools (mcp.py) may queue work and park it for you, never start what waits."""
+    from . import mcp   # here rather than at the top: mcp loads the modules, which load this
+    if mcp.calling():
+        raise PermissionError(f"Claude can't {what}. Only you can, in the app.")
 
 
 def cancel_for(module: str, target: str) -> None:

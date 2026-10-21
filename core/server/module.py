@@ -3,7 +3,7 @@ MODULE = Module(...); the host loads the ones listed in app.json and wires each 
 
 Rules (see ARCHITECTURE.md): a module never imports another module and never reads another module's tables.
 It talks to the rest of the app only through the host: events (and the shared contracts), links, search,
-jobs, settings and AI.
+jobs, settings and AI. Claude reaches it the same way, through the tools it lists (mcp.py).
 """
 import importlib
 import logging
@@ -36,6 +36,7 @@ class Module:
     count: Callable[[sqlite3.Connection], dict[str, int]] | None = None  # (a database, e.g. a backup's) -> {"people": 381}: to label backups
     offers: dict[str, Callable[[dict], object]] = field(default_factory=dict)  # "people.search" -> handler(args): what other family apps may ask it (family.py)
     people: Callable[[str, int], list[dict]] | None = None         # (q, limit) -> [{id, name, email?, detail?, is_self?}]: its part of the people directory (people.py)
+    tools: list = field(default_factory=list)                      # [mcp.Tool]: what Claude may do here, through the host's MCP server (mcp.py)
     startup: Callable[[], None] | None = None
 
 

@@ -24,7 +24,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 8 | Board view and drag | M | ◐ 2026-10-19 (family bf6d30a) on `chunk-8/board`; cards say "1 change to send" since chunk 7 |
 | 9 | Inbox: capture anything, AI proposes work items, you review | L | ☑ 2026-10-19 on `claude/chunk-9-inbox-362a27` |
 | 10 | Meetings from Trailmix | S–M | ☑ 2026-10-19 on `claude/chunk-9-inbox-362a27` |
-| 11 | MCP server in the host: Claude Desktop and Claude Code can use Traverse | M | ☐ |
+| 11 | MCP server in the host: Claude Desktop and Claude Code can use Traverse | M | ☑ 2026-10-20 on `chunk-11/mcp`: Claude Code answered from the dev server, left 4 proposals in the inbox and a push waiting in the Outbox; Claude Desktop's config tried over stdin, not in the app |
 | 12 | AI in the app: status drafts, break a task down | M | ☐ |
 | 13 | Home card, search, export, Settings, the auto-sync switch | M | ☐ |
 | 14 | Mac: mark, menu, build and install beside The Lodge | M | ☐ |
@@ -628,6 +628,74 @@ meetings, so this switches off there; see §7.)
 
 **Done when:** Claude Code, asked "what's on my plate this week and file the follow-ups from this thread", answers
 from Traverse and leaves proposals in the inbox, and anything for Plane waits for approval.
+
+**Result (2026-10-20, branch `chunk-11/mcp` from `chunk-7/push`; the shared files are changed here, not sent to the
+family yet).**
+- **The host** (shared): `core/server/mcp.py`, MCP's streamable HTTP at `POST /mcp` in its plainest form: each POST is
+  one JSON-RPC message (or a batch) answered as JSON, with no sessions and no stream from the server (GET and DELETE
+  are 405); protocol versions 2025-11-25 back to 2024-11-05. It answers `initialize` (with instructions: whose app it
+  is, today's date, where an `href` opens), `ping`, `tools/list` and `tools/call`. **`Module.tools`** is a list of
+  `mcp.Tool` (name, title, description, JSON Schema params, handler, `writes`); Claude sees `<module>_<name>`. Arguments
+  are checked against the schema before the handler runs; a handler's `ValueError` comes back as its own sentence
+  (`isError`), anything else as "Something went wrong in X" with the details in the log; each call is logged as
+  "Claude used …". No new dependency (the `mcp` package would bring a dozen).
+- **Who may ask:** off until Settings → Claude makes a token (`core.mcp_token`, 32 random bytes, a write-only secret:
+  the page gets it once, inside the command and the config to copy, then only its last four characters). The Bearer
+  token is compared in constant time, with half a second's wait after a wrong one; a request whose Origin isn't this
+  Mac (a web page) is refused even with the token. `/mcp` is outside the app's sign-in, `/api/mcp` (Settings) behind
+  it. A new token stops the old one; Turn off stops both.
+- **Tools can't approve, so nothing reaches Plane from Claude:** while a tool runs (`mcp.calling()`), `jobs.go` and
+  `jobs.retry` raise `PermissionError` (in the host, for every module's "Needs you"), `push.approve` refuses ("Claude
+  can't send to Plane. Only you can, with Send in the outbox.") and the Plane client won't write. A proposed push
+  parks as Needs you like one from the task page, and dry run stays whatever it was: no tool changes settings.
+- **Claude Desktop** runs servers as commands, so `core/server/mcp_bridge.py` (standard library only) passes its
+  stdin lines to `/mcp` and writes the answers back, and says "The app isn't running" when it isn't. Settings gives the
+  config with this app's own Python (inside the Mac app: the bundled one) and `-B`, so nothing is written in the
+  bundle. No npx or mcp-remote.
+- **Tools.** `tasks` (shared): `tasks_my_plate` (yours or nobody's, open, grouped Late, Today, This week, Later and No
+  date; `when` week, today, late, all or waiting; counts; a linked task says where and which changes aren't sent),
+  `tasks_find` (words, a project by name or ref, or both; projects with progress), `tasks_add` (a project by name, "me"
+  or a person from the people directory, priority by name; source `ai`), `tasks_propose_send` (the task page's "Send
+  to Plane": `synced.share`, so it waits in the outbox). `plane`: `plane_team_workload` (from the mirror only: totals,
+  each person and project, and the items of a person, "me", "no one", a project, or else the past-due ones),
+  `plane_outbox` (what waits, field by field, and whether dry run is on; read only). `inbox`: `inbox_capture` (source
+  "claude"; with Claude's own items they're proposals "Proposed by Claude", checked like an edit on the review screen;
+  without them the app's AI reads it as it does a paste; a project ref files what's accepted).
+- **Decided:** proposing a push is `tasks_propose_send`, not a plane tool. What changed since the base is tasks'
+  knowledge, and plane could only ask tasks for it through a new contract that answers back, which events don't. The
+  plane module's part is the outbox, and refusing to send from a tool. tasks' tool texts say "a team's tracker", not
+  Plane (D5), so The Lodge gets the same tools. Claude reads the thread itself and brings its own proposals, rather
+  than Traverse calling a second AI.
+- **Settings → Claude** (host, after AI): off, "Let Claude use Traverse" and Turn on. Just turned on: the Claude Code
+  command (`claude mcp add --scope user --transport http traverse http://127.0.0.1:<port>/mcp --header
+  "Authorization: Bearer …"`) and the Claude Desktop JSON, each with Copy and "Copy it now: the token in it isn't shown
+  again". Then "On, with the token ending …", Make a new token and Turn off (each asks first), and what Claude can do.
+- **Verified:** `scripts/check` passes: 290 tests, 38 new. 17 for the host: the protocol, versions, batches, argument
+  checks, the token, web pages refused, Settings showing the token once, the bridge (through a stand-in, and as a real
+  process with the app down), and a tool that can't start waiting work. 5 for tasks' tools; 11 for the inbox's. 5 for
+  plane's, among them **no tool can write to Plane**: every tool, called through `/mcp` with dry run *off*, including
+  proposing an edit and a new item, and neither a write nor even a read reached the fake Plane; both pushes wait
+  unapproved, and your Send in the app then writes one PATCH. Inside a tool, Send and the client both refuse, and the
+  tools' own code never names a way to send, approve or change a setting. Types, build and style also pass.
+  On the dev server (8795, `data/traverse.db`, backup `traverse-20261021-003340-manual.db` first; dry run on
+  throughout): the Settings command, run as is against a throwaway Claude config, gave `✔ Connected`. Claude Desktop's
+  config, run with an empty environment over stdin, answered `initialize` and `tools/list`. Claude Code (Opus 5.5, with
+  only Traverse's server) was asked "What's on my plate this week? And file the follow-ups from this thread" with a
+  #hardware Slack thread. It used `tasks_my_plate`, `tasks_find` twice and `inbox_capture`, and answered in 19 s: 4
+  late (OPERATIONS-10 and BD-14 with their Plane links, and two of the dev data's example tasks) and 1 this week
+  (another example; it said the three looked like sample data). It
+  left 4 proposals in the inbox, filed to Hardware: Elijah's drop tests Thursday, your BOM update tomorrow, Mickey's
+  quote Friday, and "Add the drop test plan to Plane" with no one, which it said nobody had agreed to. It didn't
+  propose sending anything, since proposals aren't tasks yet. Asked next to add the drop test plan to Hardware and send
+  it to Plane, it called `tasks_add` and `tasks_propose_send` and said it waits for your Send. It waits in the Outbox as
+  a new item in Hardware, unapproved. Only GETs (the mirror's pulls) reached Plane all session. Settings → Claude was
+  checked in Dusk at 1280px and 375px.
+- **Left in the dev data** for you to look at: that capture (4 proposals) and the waiting push. Discard or accept them
+  as you like. Claude's access is off again in the dev app.
+- **Not done:** Claude Desktop itself wasn't run (its config was run the way Desktop runs it). Your own Claude Code and
+  the installed app aren't set up yet: that's Settings → Claude in the installed app once it's rebuilt with this. A
+  server install's commands still say 127.0.0.1. The shared files (`core/`, `modules/tasks/`, ARCHITECTURE.md) go to
+  the family with `scripts/sync-family --push` when you say.
 
 ### Chunk 12 · AI in the app (M)
 
