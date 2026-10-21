@@ -159,7 +159,7 @@ def test_inside_a_tool_sending_and_the_client_both_refuse(plane, client, monkeyp
 
 FORBIDDEN = {("jobs", "go"), ("jobs", "retry"), ("settings", "update"), ("push", "approve"), ("push", "send"),
              ("push", "undo"), ("push", "choose"), ("push", "include"), ("push", "discard")}
-FORBIDDEN_ANYWHERE = {"update_work_item", "create_work_item", "_send", "client"}
+FORBIDDEN_ANYWHERE = {"update_work_item", "create_work_item", "create_comment", "_send", "client"}
 
 
 def test_no_tools_code_names_a_way_to_send_approve_or_change_settings():
