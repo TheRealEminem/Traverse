@@ -10,6 +10,7 @@ import { useLive } from "../live";
 import { modulesFor } from "../registry";
 import { useSettings, useShell } from "../shell";
 import type { ThemePref } from "../theme";
+import AIUsage from "./AIUsage";
 import ClaudeAccess from "./ClaudeAccess";
 import YourData from "./YourData";
 
@@ -196,6 +197,8 @@ export default function Settings() {
         </ControlRow>
         <ProviderFields key={setupId} id={setupId} values={values} hints={hints} save={save} />
       </Section>
+
+      <AIUsage />
 
       <ClaudeAccess />
 
