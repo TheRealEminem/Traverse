@@ -2,8 +2,9 @@
 httpx's MockTransport, pages lists the way Plane does, records every request, and can be told to fail.
 
 It takes the writes Plane's API takes for work items: PATCH one (only the fields sent change; a list sent replaces
-the list, as Plane does) and POST a new one. Each is recorded in `writes` as (method, path, body). Anything else that
-would change something (DELETE, PUT) is refused with 405 and recorded too, so a test can show it never happens."""
+the list, as Plane does), POST a new one, and POST a comment on one (listed again at the same address). Each is
+recorded in `writes` as (method, path, body). Anything else that would change something (DELETE, PUT) is refused with
+405 and recorded too, so a test can show it never happens."""
 import copy
 import json
 import uuid
@@ -84,6 +85,10 @@ class FakePlane:
         if request.method != "GET":
             self.writes.append((request.method, path, {}))
             return httpx.Response(405, json={"detail": f'Method "{request.method}" not allowed.'})
+        if path.endswith("/comments/") and path not in self.data:
+            if self._one(path.removesuffix("comments/")) is None:
+                return httpx.Response(404, json={"detail": "Not found."})
+            return httpx.Response(200, json=self._page({"results": []}, request))
         if path not in self.data:
             found = self._one(path)
             return httpx.Response(200, json=found) if found else httpx.Response(404, json={"detail": "Not found."})
@@ -102,10 +107,16 @@ class FakePlane:
             return None
         return next((i for i in rows["results"] if i["id"] == item_id), None)
 
+    def comments(self, key: str) -> list[dict]:
+        """The comments on an item, as "Plane" holds them."""
+        return (self.data.get(self.item_path(key) + "comments/") or {"results": []})["results"]
+
     def _write(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
         body = json.loads(request.content or b"{}")
         self.writes.append((request.method, path, body))
+        if request.method == "POST" and path.endswith("/comments/"):
+            return self._comment(path, body, request)
         unknown = set(body) - self.WRITABLE
         if unknown:
             return httpx.Response(400, json={"error": f"Can't set {', '.join(sorted(unknown))}"})
@@ -142,6 +153,29 @@ class FakePlane:
             self.lose_next_answer = False
             raise httpx.ReadTimeout("The answer was lost", request=request)
         return httpx.Response(201, json=item)
+
+    COMMENT_FIELDS = {"comment_html", "comment_json", "access", "external_source", "external_id", "parent"}
+
+    def _comment(self, path: str, body: dict, request: httpx.Request) -> httpx.Response:
+        """POST .../work-items/<id>/comments/: a new comment, by whoever the key belongs to."""
+        if self._one(path.removesuffix("comments/")) is None:
+            return httpx.Response(404, json={"detail": "Not found."})
+        unknown = set(body) - self.COMMENT_FIELDS
+        if unknown:
+            return httpx.Response(400, json={"error": f"Can't set {', '.join(sorted(unknown))}"})
+        if not (body.get("comment_html") or "").strip():
+            return httpx.Response(400, json={"comment_html": ["This field is required."]})
+        stamp = self.now()
+        me = FIXTURE["/api/v1/users/me/"]["id"]
+        comment = {"id": str(uuid.uuid4()), "comment_html": body["comment_html"], "comment_json": {},
+                   "external_source": body.get("external_source"), "external_id": body.get("external_id"),
+                   "access": body.get("access", "INTERNAL"), "actor": me, "created_by": me, "created_at": stamp,
+                   "updated_at": stamp}
+        self.data.setdefault(path, {"results": []})["results"].append(comment)
+        if self.lose_next_answer:
+            self.lose_next_answer = False
+            raise httpx.ReadTimeout("The answer was lost", request=request)
+        return httpx.Response(201, json=comment)
 
     def _group(self, project: str, state_id: str) -> str | None:
         states = self.data[f"/api/v1/workspaces/{WS}/projects/{project}/states/"]["results"]

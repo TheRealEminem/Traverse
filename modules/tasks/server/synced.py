@@ -13,6 +13,9 @@ This module never knows where "elsewhere" is. The module that talks to it publis
   (contracts.WORK_SHARE_REQUESTED, with the base, so it can check nobody changed those fields there meanwhile). It
   only asks: the other side waits for your approval, and the result comes back as an update like any other. A task
   that isn't linked, in a project that is, asks to be made there, and becomes the linked copy once it is.
+- "Post it there too" on an update asks the other side to add it as a new comment on a linked task
+  (contracts.WORK_COMMENT_REQUESTED): a task's own comment, or a project's status update on one of its linked tasks.
+  Again it only asks, and the other side only ever adds a comment.
 
 A linked task is also a link "tasks:<id>" → ref (kind "synced") in core_links, so the other module can tell which of
 its things have a copy here without reading this module's tables; a project is linked the same way.
@@ -251,6 +254,65 @@ def share(item_id: str) -> dict:
         raise ValueError("Nothing took it. The part of Traverse that sends it there may be turned off.")
     store.changed(item["project_id"], item_id=item_id)
     return {"fields": groups, "new": row is None}
+
+
+def can_comment(item_id: str, project_id: str | None = None) -> dict:
+    """The tasks_synced row of a task whose other side can take a comment, or ValueError saying why it can't.
+    project_id: the task must be in that project (a project's update goes on one of its own tasks)."""
+    item = db.one("SELECT project_id FROM tasks_items WHERE id = ?", (item_id,))
+    if item is None:
+        raise KeyError(item_id)
+    if project_id and item["project_id"] != project_id:
+        raise ValueError("That task isn't in this project")
+    row = db.one("SELECT * FROM tasks_synced WHERE item_id = ?", (item_id,))
+    if row is None:
+        raise ValueError("That task isn't linked anywhere, so there's nowhere to post it")
+    if row["removed_at"]:
+        raise ValueError(f"It's no longer in {row['source']}, so there's nothing there to post it on")
+    return row
+
+
+def comment(update_id: str, item_id: str | None = None) -> dict:
+    """"Post it there too": asks the other side of a linked task to add an update of yours as a new comment
+    (contracts.WORK_COMMENT_REQUESTED). A task's own comment goes on that task; a project's update on one of the
+    project's linked tasks (item_id). Nothing is sent from here: whoever takes it waits for your approval, and it can
+    only ever add. Returns {"title", "href"}: where it waits."""
+    update = db.one("SELECT * FROM tasks_updates WHERE id = ?", (update_id,))
+    if update is None:
+        raise KeyError(update_id)
+    if update["item_id"]:
+        if item_id and item_id != update["item_id"]:
+            raise ValueError("A task's comment goes on that task")
+        item_id = update["item_id"]
+    elif not item_id:
+        raise ValueError("Choose which of the project's linked tasks it goes on")
+    row = can_comment(item_id, project_id=update["project_id"])
+    ref = links.ref("tasks", update_id)
+    if links.targets(ref, "posted"):
+        raise ValueError(f"It's in {row['source']} already")
+    events.publish(contracts.WORK_COMMENT_REQUESTED, {
+        "ref": row["ref"], "local_ref": links.ref("tasks", item_id), "update_ref": ref, "body": update["body"],
+        "written_by": update["written_by"]})
+    waiting = [d for d in (module.describe(r) for r in links.targets(ref, "share")) if d]
+    if not waiting:
+        raise ValueError("Nothing took it. The part of Traverse that sends it there may be turned off.")
+    item = db.one("SELECT project_id FROM tasks_items WHERE id = ?", (item_id,))
+    store.changed(update["project_id"] or item["project_id"], update_id=update_id)
+    return {"title": waiting[0]["title"], "href": waiting[0]["href"]}
+
+
+def update_sharing(updates: list[dict]) -> list[dict]:
+    """Updates with where each was offered elsewhere (`shared`: [{title, href, state}], state "waiting" while it waits
+    for your approval there, "posted" once it's there), described by the module that took it."""
+    refs = [links.ref("tasks", u["id"]) for u in updates]
+    waiting, posted = links.targets_of(refs, "share"), links.targets_of(refs, "posted")
+    out = []
+    for u, ref in zip(updates, refs):
+        shared = [{"title": d["title"], "href": d["href"], "state": state}
+                  for state, found in (("posted", posted), ("waiting", waiting))
+                  for d in (module.describe(r) for r in found.get(ref, [])) if d]
+        out.append({**u, "shared": shared})
+    return out
 
 
 def sharing(item_ids: list[str]) -> dict[str, list[dict]]:

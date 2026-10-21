@@ -99,7 +99,7 @@ def outbox(args: dict) -> dict:
         waiting.append({
             "task": p["task"] and p["task"]["title"],
             "plane_item": f"{p['item']['key']} {p['item']['name']}" if p["item"] else None,
-            "what": "Add it to Plane" if p["kind"] == "create" else "Change it in Plane",
+            "what": {"create": "Add it to Plane", "comment": "Add a comment in Plane"}.get(p["kind"], "Change it in Plane"),
             "project": p["project"] and p["project"]["name"], "status": STATUS.get(p["status"], p["status"]),
             **({"note": p["note"]} if p["note"] else {}), "fields": fields})
     out = {"dry_run": box["dry_run"], "waiting": waiting, "sent_lately": len(box["sent"]), "href": "#/plane/outbox",

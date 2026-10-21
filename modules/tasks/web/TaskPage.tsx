@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { LinkedList } from "@core/components/blocks";
-import { BackIcon, ChatIcon, TrashIcon } from "@core/components/icons";
+import { BackIcon, ChatIcon, SparkleIcon, TrashIcon } from "@core/components/icons";
 import { ControlRow, Segmented, Select, Skeleton, StatusChip, useConfirm } from "@core/components/ui";
 import { formatDate, relativeTime } from "@core/format";
 import { useLive } from "@core/live";
@@ -13,6 +13,7 @@ import { useShell } from "@core/shell";
 import { tasksApi } from "./api";
 import type { Status, Task, TaskDetail } from "./api";
 import { formatMinutes, parseMinutes } from "./dates";
+import { BreakDownButton, BreakdownPanel, OfferUpdate, whoWrote } from "./Drafts";
 import { Field } from "./Field";
 import { SyncedPanel } from "./Synced";
 import { Check, TaskList } from "./TaskRow";
@@ -38,6 +39,7 @@ export default function TaskPage({ params }: RouteProps) {
   const { data: projectList } = useLive(tasksApi.projects);
   const { data: project } = useLive(() => (task?.project_id ? tasksApi.project(task.project_id) : Promise.resolve(null)), [task?.project_id]);
   const { data: openTasks } = useLive(() => tasksApi.list({ status: "open", parent: "any" }));
+  const { data: breakdown, reload: reloadBreakdown } = useLive(() => tasksApi.breakdown(id), [id]);
   const [subtask, setSubtask] = useState("");
   const [comment, setComment] = useState("");
   const [notes, setNotes] = useState<string | null>(null);
@@ -61,6 +63,9 @@ export default function TaskPage({ params }: RouteProps) {
   if (!task) return <Skeleton className="h-64 w-full rounded-xl" />;
 
   const status = meta?.statuses.find((s) => s.value === task.status);
+  const proposedBy = typeof task.attributes?.written_by === "string" ? task.attributes.written_by : null;
+  const linked = task.synced && !task.synced.removed_at ? task.synced.source : null;
+  const changed = () => void Promise.all([reload(), reloadBreakdown()]);
   const blockable = (openTasks ?? []).filter((t) => t.id !== task.id && !task.blocked_by.some((b) => b.id === t.id));
   const remove = async () => {
     const ok = await confirm({
@@ -112,6 +117,13 @@ export default function TaskPage({ params }: RouteProps) {
             <a href={task.came_from.href} className="hover:text-forest">
               From {task.came_from.title}
             </a>
+          )}
+          {proposedBy && (
+            <span className="inline-flex items-center gap-1">
+              <SparkleIcon size={13} className="text-ink-faint" />
+              Proposed by {proposedBy}
+              {task.attributes?.edited ? ", edited by you" : ""}
+            </span>
           )}
           <span data-tip={formatDate(task.created_at)}>Added {relativeTime(task.created_at)}</span>
           {task.completed_at && <span>Done {relativeTime(task.completed_at)}</span>}
@@ -208,7 +220,11 @@ export default function TaskPage({ params }: RouteProps) {
         />
       </Block>
 
-      <Block title={`Subtasks${task.subtasks.length ? ` · ${task.subtasks.filter((s) => s.done).length} of ${task.subtasks.length} done` : ""}`}>
+      <Block
+        title={`Subtasks${task.subtasks.length ? ` · ${task.subtasks.filter((s) => s.done).length} of ${task.subtasks.length} done` : ""}`}
+        action={<BreakDownButton taskId={task.id} draft={breakdown} onChanged={changed} />}
+      >
+        <BreakdownPanel draft={breakdown} onChanged={changed} />
         {task.subtasks.length > 0 && (
           <div className="mb-2">
             <TaskList tasks={task.subtasks} meta={meta ?? null} onChanged={() => void reload()} label="Subtasks" />
@@ -274,9 +290,11 @@ export default function TaskPage({ params }: RouteProps) {
             {task.updates.map((u) => (
               <li key={u.id} className="inset-surface px-4 py-3">
                 <p className="whitespace-pre-wrap text-label leading-relaxed">{u.body}</p>
-                <p className="mt-1.5 text-meta text-ink-soft">
-                  {u.written_by ? `Written by ${u.written_by}` : u.author_ref === "core:me" || !u.author_name ? "You" : u.author_name} ·{" "}
-                  {relativeTime(u.created_at)}
+                <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-meta text-ink-soft">
+                  <span>
+                    {whoWrote(u)} · {relativeTime(u.created_at)}
+                  </span>
+                  <OfferUpdate update={u} targets={linked ? [task] : []} where={linked} onTask onChanged={changed} />
                 </p>
               </li>
             ))}
