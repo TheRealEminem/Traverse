@@ -308,7 +308,9 @@ other for data, while each stays its own app:
 
 ## 10. The Mac app (`mac/`)
 
-- `HostApp.swift`: the menu bar item (Open, updates, Open at login, Quit). It starts the server, then opens the window.
+- `HostApp.swift`: the menu bar item (Open, the sidebar's sections, updates, Open at login, Quit). It starts the
+  server, then opens the window. The sections are the enabled modules' nav items: the page sends them through the
+  bridge each time it loads (`menu:`), and the app keeps the last list, so a launch at login has them too.
 - `BundledServer.swift`: runs `python -m uvicorn core.server.app:app` from `Resources/app` with `<PREFIX>_DATA_DIR`,
   `_UI_DIR` and `_PARENT_PID` set, restarts it up to three times in two minutes, then explains the failure in the menu.
 - `MainWindow.swift`: the WebKit window, the `app` bridge, the Edit/View/Window menus, and external links opening in the browser.
