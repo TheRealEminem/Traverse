@@ -254,6 +254,11 @@ async def ai_test(pid: str):
         raise HTTPException(502, str(e)) from e
 
 
+@core_router.get("/ai/usage")
+def ai_usage():
+    return ai.usage()
+
+
 @core_router.get("/search")
 def search_all(q: str = "", limit: int = 8):
     return search.search(q, limit)

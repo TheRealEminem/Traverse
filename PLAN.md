@@ -60,7 +60,7 @@ Mac sharing data, keys and basic preferences.
 | F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ☑ 2026-10-18 (family 3a26cf7); The Lodge has it on its `family/link` branch |
 | F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ☑ 2026-10-19 (family 44da03f); its workflows haven't run on GitHub yet |
 | F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☐ |
-| F6 | AI pricing and usage: what each AI call costs, and a running total | M | before chunk 9 | ☐ |
+| F6 | AI pricing and usage: what each AI call costs, and a running total | M | before chunk 9 | ☑ 2026-10-21 on `claude/f6-ai-costs-f43084`; not yet sent to the family |
 | F7 | Trailmix joins the family link (reads shared keys and preferences, offers its meetings) | S–M | Mark's call | ☐ a change in Trailmix's own repo |
 
 ---
@@ -864,6 +864,43 @@ one choke point), update checks and anything a module adds. From Trailmix's Lock
 
 A host `pricing.py` and a usage table: what each AI call cost, by provider and module, with a running total in
 Settings → AI. Before chunk 9, when the inbox starts spending money on extraction.
+
+**Result (2026-10-21, on `claude/f6-ai-costs-f43084`, not yet sent to the family).**
+- **Prices** (`core/server/pricing.py`): dollars per million tokens for input, output and cache reads. Claude's
+  come from the claude-api skill (cached 2026-10-06). OpenAI's, Gemini's and DeepSeek's come from their pricing pages,
+  read on 2026-10-21 (`CHECKED`). The table also handles prompt-size tiers (Claude Haiku 5.5 over 100K, OpenAI over
+  272K, Gemini Pro over 200K), dated price changes (Gemini 4 Argon from 2026-12-01, Gemini 3.8 and 3.6 Flash from
+  2027-01-01) and DeepSeek's weekday peak hours. A dated snapshot (`gpt-5-mini-2025-08-07`) is priced as its model.
+  A model that isn't listed is **unknown**, not 0, and so is a cache read where no cache price is published. Ollama,
+  and an OpenAI-compatible server on localhost, cost nothing.
+- **The log:** core migration step 2 adds `core_ai_usage`. `ai.attempt()` is the one place calls are counted: each
+  provider's attempt (a fallback is a second row) records when, which module and job asked (from the new
+  `jobs.current()`; the Test button is "core"/"test"), complete or structured, provider, model, input (with
+  cached) and output tokens, cost, and the error if it failed. Every adapter now reports tokens: Claude (including
+  `usage.iterations` after a refusal fallback, each model at its own price), Ollama's eval counts, OpenAI-style
+  `usage` (thinking counted from `total_tokens`, cache hits from `cached_tokens` or DeepSeek's
+  `prompt_cache_hit_tokens`, every request of a repair retry), and Gemini's own `usageMetadata` (thoughts are output).
+  A call is priced by the model the reply names when it's listed, otherwise by the model asked for. A failure that
+  got no answer has no tokens and no cost. One that got an answer and failed on it (a refusal, out of output, the
+  wrong shape) was billed, so its cost counts. Writing the row never fails the call.
+- **Settings → AI usage** (`core/web/views/AIUsage.tsx`, `GET /api/ai/usage`), a section right under AI: this
+  month's total (in the Mac's time zone), the last 30 days by provider and by module, and the 15 latest calls with
+  who asked, provider, model, tokens and cost. Unknown prices show as "Price unknown" or "Unknown" and aren't in
+  the totals. A failure shows as "Failed", with the reason on hover.
+- **Tests' fake AI** (`fake_ai`, `fake_structured` in `conftest.py`) goes through `ai.attempt` too, so module tests
+  log usage. `fake_structured` counts as Claude in Settings' model, using `.tokens`.
+- **Verified:** `scripts/check` passes (322 tests, 32 new; the family-drift note as expected). The new tests cover
+  cost arithmetic, tiers, dated prices, peak hours, unknown models, each adapter's token reporting through the fake
+  transports, a Claude fallback billed per model, a failed call logged without a cost, attribution to the job that
+  asked, and the totals API. Breaking the thinking count, the fallback split, failed calls' empty cost, peak hours or
+  the job context each fails a test. In the browser, with 13 made-up calls in the worktree's dev copy (no real AI
+  calls), the section showed the totals, breakdowns, unknown and failed calls in Day and Dusk, at 375px and desktop.
+- **Found on the way:** DeepSeek retired `deepseek-chat` and `deepseek-reasoner` on 2026-07-24, and they're still
+  `ai.deepseek_model`'s default. Gemini's page doesn't say what `gemini-flash-latest` (our default) points to, so a
+  Gemini call is priced only when the reply names a listed model. Not changed here.
+- **Not yet:** sending it to the family (`scripts/sync-family --push`, Mark's call). Core migration step 2 is new,
+  so any other branch that adds a core step must come after it. F5's Lockdown should stop the same calls `ai.attempt`
+  counts.
 
 ### F7 · Trailmix joins the family link (S–M, Mark's call)
 
