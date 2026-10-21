@@ -10,8 +10,14 @@ states mean there (linking.py). Nor are plane_pushes (your changes waiting to be
 plane_sent (what Plane's values mean in Traverse after a push), which are push.py's. A push also writes the mirror
 row of the item it just read or wrote, since that is what Plane said; an item's row only ever moves forward in
 Plane's time (updated_at), so a pull that read it before the push can't put the old values back.
+
+plane_changes (step 4, chunk 15) is the mirror's history: whenever an item's row is written with a different state,
+assignees, due date, priority or name, or an item appears or disappears, one row per field says what it was and what
+it became. It starts with the first pull that has it (there's no history from before), records nothing on a project's
+first pull (everything would be "new"), and keeps 90 days. Muster's "what moved" reads it (briefing.py).
 """
 import json
+from datetime import datetime, timedelta, timezone
 
 from core.server import db
 
@@ -134,6 +140,20 @@ MIGRATIONS = [
         UNIQUE (item_id, field)
     );
     """,
+    """
+    CREATE TABLE plane_changes (
+        id          TEXT PRIMARY KEY,
+        item_id     TEXT NOT NULL,              -- the Plane item
+        project_id  TEXT NOT NULL,
+        field       TEXT NOT NULL,              -- state, assignees, due, priority, name; or added, removed
+        before      TEXT,                       -- JSON: Plane's value before (a state's id, member ids…); NULL when added
+        after       TEXT,                       -- JSON: …and after; NULL when removed
+        by          TEXT,                       -- the member Plane says changed it last, when it says
+        at          TEXT NOT NULL               -- when Traverse saw it change (a pull, or a push reading the item)
+    );
+    CREATE INDEX plane_changes_at ON plane_changes(at);
+    CREATE INDEX plane_changes_item ON plane_changes(item_id, at);
+    """,
 ]
 
 MIRROR_TABLES = ("plane_projects", "plane_members", "plane_states", "plane_labels", "plane_cycles", "plane_items")
@@ -213,7 +233,8 @@ def item_row(i: dict, project_id: str) -> dict:
             "cycle_id": _id(i.get("cycle_id") or i.get("cycle")), "parent_id": _id(i.get("parent")),
             "is_draft": int(bool(i.get("is_draft"))), "completed_at": i.get("completed_at"),
             "archived_at": i.get("archived_at"), "created_by": _id(i.get("created_by")),
-            "created_at": i.get("created_at"), "updated_at": i.get("updated_at")}
+            "created_at": i.get("created_at"), "updated_at": i.get("updated_at"),
+            "updated_by": _id(i.get("updated_by"))}      # not kept in the mirror: only for the change log
 
 
 # ── Writing a snapshot ─────────────────────────────────────────────────
@@ -255,18 +276,90 @@ def apply(snapshot: dict) -> dict[str, int]:
         out["plane_members"] += _upsert(conn, "plane_members", snapshot["members"])
         out["plane_members"] += _mark_removed(conn, "plane_members", [m["id"] for m in snapshot["members"]], stamp)
         for project_id, parts in snapshot["pulled"].items():
+            _log_changes(conn, project_id, parts["items"], stamp, whole=True)
             for name in ("states", "labels", "cycles", "items"):
                 table = f"plane_{name}"
                 out[table] += _upsert(conn, table, parts[name])
                 out[table] += _mark_removed(conn, table, [r["id"] for r in parts[name]], stamp, "project_id = ?",
                                             (project_id,))
+        _forget_old_changes(conn)
     return out
 
 
 def put_item(row: dict) -> int:
-    """One item as Plane just said it is (read or written by a push), into the mirror. Returns 1 if it changed."""
+    """One item as Plane just said it is (read or written by a push), into the mirror. Returns 1 if it changed.
+    What changed goes in the change log too: a push's read can be the first to see a teammate's edit."""
     with db.connect() as conn:
+        _log_changes(conn, row["project_id"], [row], db.now(), whole=False)
         return _upsert(conn, "plane_items", [row])
+
+
+# ── The change log (plane_changes) ─────────────────────────────────────
+
+# The item columns whose changes are logged, and the name each is logged under.
+LOGGED = {"state_id": "state", "assignees": "assignees", "target_date": "due", "priority": "priority", "name": "name"}
+KEEP_CHANGES_DAYS = 90
+
+
+def _logged_value(column: str, value):
+    return json.loads(value or "[]") if column == "assignees" else value
+
+
+def _log_changes(conn, project_id: str, rows: list[dict], stamp: str, whole: bool) -> int:
+    """Before the mirror takes `rows` (items of one project): one plane_changes row per logged field that differs,
+    plus "added" for an item the mirror hasn't got (or had marked removed). whole: the rows are all of the project's
+    items (a pull), so an item missing from them is "removed". A project with nothing in the mirror yet is being
+    read for the first time, which logs nothing. An older version of an item than the mirror's is skipped, as the
+    mirror itself skips it."""
+    had = {r["id"]: r for r in conn.execute(
+        f"SELECT id, removed_at, updated_at, {', '.join(LOGGED)} FROM plane_items WHERE project_id = ?", (project_id,))}
+    if not had:
+        return 0
+    found: list[tuple] = []
+
+    def log(item_id, field, before, after, by=None):
+        found.append((db.new_id(), item_id, project_id, field, None if before is None else json.dumps(before),
+                      None if after is None else json.dumps(after), by, stamp))
+
+    for row in rows:
+        old = had.get(row["id"])
+        if old is None or old["removed_at"]:
+            log(row["id"], "added", None, row["name"], row.get("updated_by"))
+            continue
+        if old["updated_at"] and row["updated_at"] and row["updated_at"] < old["updated_at"]:
+            continue
+        for column, field in LOGGED.items():
+            before, after = _logged_value(column, old[column]), _logged_value(column, row[column])
+            if before != after:
+                log(row["id"], field, before, after, row.get("updated_by"))
+    if whole:
+        present = {r["id"] for r in rows}
+        for item_id, old in had.items():
+            if item_id not in present and not old["removed_at"]:
+                log(item_id, "removed", old["name"], None)
+    conn.executemany("INSERT INTO plane_changes (id, item_id, project_id, field, before, after, by, at) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", found)
+    return len(found)
+
+
+def _forget_old_changes(conn) -> None:
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=KEEP_CHANGES_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")
+    conn.execute("DELETE FROM plane_changes WHERE at < ?", (cutoff,))
+
+
+def changes(since: str, project_ids: list[str] | None = None) -> list[dict]:
+    """What the log holds since a moment, oldest first, with before and after as values again."""
+    sql, args = "SELECT * FROM plane_changes WHERE at >= ?", [since]
+    if project_ids is not None:
+        if not project_ids:
+            return []
+        sql += f" AND project_id IN ({','.join('?' * len(project_ids))})"
+        args += project_ids
+    rows = db.query(sql + " ORDER BY at, rowid", args)
+    for r in rows:
+        r["before"] = None if r["before"] is None else json.loads(r["before"])
+        r["after"] = None if r["after"] is None else json.loads(r["after"])
+    return rows
 
 
 # ── Small facts the pull keeps ─────────────────────────────────────────
@@ -331,13 +424,15 @@ PUSH_TITLES = {"waiting": "Waiting for you to send it to Plane", "sending": "Sen
 
 
 def describe(thing_id: str) -> dict | None:
-    """How other modules show a link to a Plane item, member or project, or a push waiting in the outbox (refs
-    "plane:<id>")."""
-    item = db.one("SELECT i.name, i.sequence_id, p.identifier FROM plane_items i "
-                  "LEFT JOIN plane_projects p ON p.id = i.project_id WHERE i.id = ?", (thing_id,))
+    """How other modules show a link to a Plane item (done once it's completed or cancelled there), member or project,
+    or a push waiting in the outbox (refs "plane:<id>")."""
+    item = db.one("SELECT i.name, i.sequence_id, p.identifier, s.state_group FROM plane_items i "
+                  "LEFT JOIN plane_projects p ON p.id = i.project_id LEFT JOIN plane_states s ON s.id = i.state_id "
+                  "WHERE i.id = ?", (thing_id,))
     if item:
         key = f"{item['identifier']}-{item['sequence_id']}" if item["identifier"] else ""
-        return {"title": f"{key} {item['name']}".strip(), "href": f"#/plane/team?item={thing_id}"}
+        return {"title": f"{key} {item['name']}".strip(), "href": f"#/plane/team?item={thing_id}",
+                "done": item["state_group"] in ("completed", "cancelled")}
     m = db.one("SELECT * FROM plane_members WHERE id = ?", (thing_id,))
     if m:
         return {"title": member_name(m), "href": f"#/plane/team?person={thing_id}"}
@@ -367,5 +462,5 @@ def search(q: str, limit: int) -> list[dict]:
 
 
 def export() -> dict:
-    tables = (*MIRROR_TABLES, "plane_links", "plane_pushes", "plane_sent")
+    tables = (*MIRROR_TABLES, "plane_links", "plane_pushes", "plane_sent", "plane_changes")
     return {name.removeprefix("plane_"): db.query(f"SELECT * FROM {name}") for name in tables}
