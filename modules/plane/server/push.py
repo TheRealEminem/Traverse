@@ -35,7 +35,7 @@ import logging
 import threading
 from datetime import datetime, timedelta
 
-from core.server import db, events, jobs, links, module
+from core.server import db, events, jobs, links, mcp, module
 from core.server.jobs import Job
 
 from . import html, linking, pull, store, team
@@ -210,7 +210,10 @@ def local_deleted(payload: dict) -> None:
 # ── What you can do in the outbox ─────────────────────────────────────
 
 def approve(push_id: str) -> None:
-    """Send: the push's job goes ahead (it reads Plane again before writing anything)."""
+    """Send: the push's job goes ahead (it reads Plane again before writing anything). Yours only: never from one of
+    Claude's tools (core/server/mcp.py), which may propose a push but not send it."""
+    if mcp.calling():
+        raise PermissionError("Claude can't send to Plane. Only you can, with Send in the outbox.")
     push = _get(push_id)
     if push["status"] == "sending":
         return

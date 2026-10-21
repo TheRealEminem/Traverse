@@ -109,6 +109,8 @@ core/
     links.py              links between things in different modules
     search.py             one search across every module
     auth.py               optional token sign-in for server installs
+    mcp.py                the MCP server at /mcp: Claude Code and Claude Desktop use the modules' tools, with a token
+    mcp_bridge.py         the command Claude Desktop runs: passes its messages on to /mcp (standard library only)
   web/                    the host's web app (React + Tailwind 3, built by Vite)
     registry.ts           ★ the module contract (web half)
     App.tsx, Sidebar.tsx  the shell: sidebar, narrow-window drawer, routing
@@ -195,6 +197,7 @@ the 8780–8799 range, and keep a list here:
 | `count` | `(a database) -> {"people": 381}`: what it holds, read from any copy of the database, to label backups in Settings, Your data. |
 | `offers` | `{"people.search": handler(args)}`: questions other family apps on this Mac may ask it (§8, the family link). A handler gets a dict and returns plain data. |
 | `people` | `(q, limit) -> [{id, name, email?, detail?, is_self?}]`: its part of the people directory (`core/server/people.py`, `GET /api/people`, `PersonPicker`). Refs come back as `<id>:<person id>`; `is_self` comes back as `core:me`. |
+| `tools` | `[mcp.Tool(name, title, description, handler, params, required, writes)]`: what Claude may do here, through the host's MCP server (§8). Claude sees `<id>_<name>`. A handler gets the arguments as a dict and returns plain data, or raises `ValueError` with a sentence. |
 
 ### Web half: `modules/<id>/web/index.tsx` default-exports a `ModuleWeb`
 
@@ -225,6 +228,7 @@ another module's.
 | Be searchable | `Module.search` | Results are merged into the sidebar search. |
 | Fresh screens | `useLive(load, deps)` | Refetches whenever anything changes on the server: every 2s while visible, and at once after the app's own changes. |
 | Feedback | `useShell().toast / confirm`, `JobStatus`, `JobChip`, `LinkedList`, `Section` | See `DESIGN.md` for the visual rules. |
+| Let Claude use it | `Module.tools` (`core/server/mcp.py`) | Tools add and propose; they never approve. While one runs, `jobs.go` and `jobs.retry` refuse, and `mcp.calling()` lets your own code refuse too. |
 | Ask another family app | `family.call("people.search", q="ana")` | Its own modules first, then a running family app that offers it. Raises `family.Unavailable` with a sentence for the screen ("Open The Lodge to see this here"). Only from server code, and never as a substitute for events between modules in one app. |
 
 Backups (`core/server/backup.py`) are the host's: a daily SQLite online backup in `<data folder>/backups/` (kept 14),
@@ -257,6 +261,7 @@ What happens when you summarize a note:
 - **Search/describe:** making your things findable and nameable elsewhere.
 - **Offer:** a question another family *app* on the same Mac may ask (`Module.offers`, answered over localhost
   with the family token). Use it for data that lives in another app, such as The Lodge's people seen from Traverse.
+- **Tool:** something Claude may do (`Module.tools`), through the MCP server (below).
 - **Never:** importing another module, querying its tables, or calling its HTTP API from the server.
 
 **The family link** (`core/server/family.py`). Family apps installed on one Mac share some settings and ask each
@@ -276,6 +281,19 @@ other for data, while each stays its own app:
   `TRAILMIX_FAMILY_DIR` names a folder (`off` turns it off); tests use a throwaway one. A development copy beside
   the installed app sets `<PREFIX>_PORT` so it registers its own port.
 
+**The MCP server** (`core/server/mcp.py`). Claude Code and Claude Desktop use the app through its modules' tools:
+
+- *Transport:* MCP's streamable HTTP at `POST /mcp`, each JSON-RPC message answered as JSON: no sessions and no stream
+  from the server (`GET` is 405). Claude Desktop starts servers as commands, so it runs `mcp_bridge.py` with the app's
+  own Python, which passes each message on.
+- *Who may ask:* off until you make a token in Settings → Claude (`core.mcp_token`, a write-only secret: the page sees
+  it once, inside the command and the config to copy). Every request carries `Authorization: Bearer <token>`; a request
+  from a web page (an `Origin` that isn't this Mac) is refused. `/mcp` is outside the sign-in; `/api/mcp` (Settings) is
+  behind it.
+- *What tools may do:* read, add things in this app, and propose. Never approve: while a tool runs, `jobs.go` and
+  `jobs.retry` raise `PermissionError`, and a module refuses its own approvals the same way (`mcp.calling()`), so
+  whatever waits for "Needs you" keeps waiting for you.
+
 ## 9. Screens and navigation
 
 - **Routes** are the URL hash (`#/notes/<id>`), so a link anywhere (including from the Mac app's menu) can open any page.
@@ -284,7 +302,8 @@ other for data, while each stays its own app:
   than one module), each module's nav items with badges, and Settings at the bottom. Below 1024px it becomes a
   drawer behind a frosted top bar.
 - **Settings:** Appearance (Day/Dusk/System), your name, AI (provider, fallback, key, model picker, a connection
-  test), then one section per module, then Quit.
+  test), Claude (the MCP server's token, with the command for Claude Code and the config for Claude Desktop to copy),
+  your family apps, then one section per module, then Your data and Quit.
 - **Look and copy** follow `DESIGN.md`. `scripts/check` enforces the mechanical rules.
 
 ## 10. The Mac app (`mac/`)
