@@ -65,12 +65,18 @@ PROJECT_HREF = "#/tasks/projects/{id}"
 
 
 def describe(row_id: str) -> dict | None:
-    """Items and projects share the "tasks:" refs (their ids never collide)."""
-    item = db.one("SELECT text FROM tasks_items WHERE id = ?", (row_id,))
+    """Items, projects and milestones share the "tasks:" refs (their ids never collide). "done": finished, or dropped
+    (a day's plan, for one, shows it ticked)."""
+    item = db.one("SELECT text, status FROM tasks_items WHERE id = ?", (row_id,))
     if item:
-        return {"title": item["text"], "href": ITEM_HREF.format(id=row_id)}
-    project = db.one("SELECT name FROM tasks_projects WHERE id = ?", (row_id,))
-    return {"title": project["name"], "href": PROJECT_HREF.format(id=row_id)} if project else None
+        return {"title": item["text"], "href": ITEM_HREF.format(id=row_id), "done": item["status"] in ("done", "dropped")}
+    project = db.one("SELECT name, status FROM tasks_projects WHERE id = ?", (row_id,))
+    if project:
+        return {"title": project["name"], "href": PROJECT_HREF.format(id=row_id),
+                "done": project["status"] in ("done", "dropped")}
+    milestone = db.one("SELECT name, project_id, done_at FROM tasks_milestones WHERE id = ?", (row_id,))
+    return {"title": milestone["name"], "href": PROJECT_HREF.format(id=milestone["project_id"]),
+            "done": bool(milestone["done_at"])} if milestone else None
 
 
 def search(q: str, limit: int) -> list[dict]:

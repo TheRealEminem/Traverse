@@ -28,9 +28,11 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 12 | AI in the app: status drafts, break a task down | M | ☐ |
 | 13 | Home card, search, export, Settings, the auto-sync switch | M | ☐ |
 | 14 | Mac: mark, menu, build and install beside The Lodge | M | ☐ |
+| 15 | **Muster**: the day's kick-off, what moved, plan the day, look ahead, wrap-up (15a), with AI and your Mac's Calendar (15b) | L | ◐ 2026-10-21: 15a on `chunk-15/muster` (the next morning tried on a copy of the dev data); 15b not started |
 
 Milestones: **A** "it runs" = 0–1 · **B** "my work, locally" = 2–4 · **C** "sees the team" = 5–6 ·
-**D** "shares with the team" = 7–8 · **E** "AI does the typing" = 9–12 · **F** "shipped" = 13–14.
+**D** "shares with the team" = 7–8 · **E** "AI does the typing" = 9–12 · **F** "shipped" = 13–14 ·
+**G** "starts my day" = 15.
 
 Sizes are relative effort (S ≈ one sitting, M ≈ a few, L ≈ many), not calendar time.
 
@@ -91,6 +93,7 @@ Mac sharing data, keys and basic preferences.
 | D7 | The priority scale follows Plane's five levels (none, low, medium, high, urgent), not the blueprint's four | Plane is the database; a scale without "medium" would lose information on every round trip. Must be settled before migration step 2 ships |
 | D8 | Plane members become people through the host's people directory (blueprint §6), with `plane` as a provider | Assignees then work the same way with or without The Lodge's People |
 | D9 | MCP lives in the host (`core/server/mcp.py`), and modules contribute tools | A shared host feature: any family app (The Lodge too) can expose its modules' tools the same way |
+| D10 | **Muster** is a section of Traverse (module `muster`), built family-ready: the host gathers each module's briefing (`Module.brief`), so The Lodge can have one too. AI writes a summary and suggests a plan; the first open each day lands on it; your Mac's Calendar is read through the Mac host | Mark's answers, 2026-10-21 |
 
 ## 3. Plane: what syncs, and the rules that protect the team's work
 
@@ -186,6 +189,7 @@ Contracts are written down in `core/server/contracts.py` (in `TrailmixFamily`, s
 | **In the app** | Status drafts for projects, breaking a task into subtasks, and the inbox's extraction. Uses the host's providers (Claude, Ollama, others) from Settings → AI, always in jobs, and shows who wrote what | `tasks`, `inbox`, chunk 9 and 12 |
 | **Inbox capture** | Paste an email, a Slack thread, notes or a file. AI proposes work items with an assignee, due date and project; you accept, edit or drop each one. Accepted items become tasks; sending them to Plane is a separate, explicit step | `inbox`, chunk 9 |
 | **Meetings from Trailmix** | A recurring job reads newly summarized meetings from Trailmix's local API (`127.0.0.1:8765/api/meetings`) and puts their action items in the inbox for review | `inbox`, chunk 10 |
+| **Muster** | The morning summary of what moved (who wrote it shown, as everywhere), and a suggested plan for the day that fits around your meetings, with a reason for each pick. Never applied on its own: you accept, reorder or drop each pick | `muster`, chunk 15b |
 | **MCP server** | `http://127.0.0.1:8793/mcp`, with a local token. Tools: what's on my plate, team workload (from the mirror), find, add a task, capture to inbox, and *propose* a push. Claude can never send to Plane itself: a proposed push waits in Traverse for your approval | host + each module's tools, chunk 11 |
 
 Why an MCP server when Plane already has one: Plane's MCP writes straight to Plane with no guardrails. Traverse's
@@ -717,6 +721,127 @@ conflicting edit still waits.
 
 Mark, `Mark.swift`, icon, build and install. **Done when:** Traverse.app installs beside The Lodge and both run.
 
+### Chunk 15 · Muster (L)
+
+Mark's idea (2026-10-21): a companion section for starting the day. It gives a kick-off, what's coming up, what has
+happened, and how other projects and tickets moved, and it helps plan the day. You can open it any time; the first
+open of each day lands there. (A muster is the roll call before setting out.)
+
+**What it shows** (`#/muster`, wide):
+- **Kick-off:** the date, today's meetings, and what's due, late and in progress. Also anything waiting on you in
+  Traverse: Inbox proposals to review, changes waiting in the Outbox, and tasks marked "Changed in Plane".
+- **Since your last Muster:** what moved, grouped by project and person. Items that changed state, got done, were
+  assigned to you or someone else, were added or removed, or went past due. In Plane and in Traverse.
+- **Plan the day:** today's picks, with yesterday's unfinished ones carried over. Put them in order, add a minute
+  estimate, and see the total against the free time between meetings (working hours are a setting).
+- **Look ahead:** this week's due dates, milestones and Plane cycles that are ending, and projects marked at risk.
+- **Wrap-up** (evening, optional): what got done, what rolls to tomorrow, a line for tomorrow-you.
+
+**How it's built** (the module rules hold: `muster` reads nothing from other modules' tables):
+- **Host, shared (TrailmixFamily):** `core/server/briefing.py` and an optional `Module.brief(since, today)`. It
+  gathers each module's sections the way search does (`today`, `waiting`, `moved`, `ahead`), each entry a ref with a
+  title, an href, what happened, who, and when. A module that fails is left out, not fatal.
+- **Host, shared:** a start-page hook, so a module can ask for the first page of the day (Muster uses it when
+  `muster.open_first` is on, the default). The Mac menu gets a Muster item, and its Inbox item opens Traverse's inbox
+  (a chunk 14 leftover).
+- **`tasks`:** its briefing. Due, late and doing; milestones due this week; done and added since; linked tasks with
+  flags.
+- **`plane`:** a change log. From the first pull of chunk 15 on, the pull writes `plane_changes` (item, field,
+  before, after, when) for state, assignees, due date, priority, name, new and removed. It's kept 90 days. The
+  briefing reads it, plus cycles ending, the team's past-due items, and the Outbox. History from before that first
+  pull isn't there.
+- **`inbox`:** proposals waiting.
+- **`muster`:** owns only `muster_days` (the day, picks as refs with order, minutes and done, the intention, when you
+  kicked off and wrapped up, the summary and who wrote it) and its settings: open first, working hours, and AI on or
+  off.
+
+**15a · Muster without AI or calendar.** The briefing hook, the start page, the change log, and the screens above.
+Meetings come from Trailmix only. **Done when:** after a pull with real changes, the first open of the next day lands
+on Muster. It shows what moved since yesterday's Muster from the change log, today's due work and what's waiting.
+Picks carry over, and the wrap-up rolls unfinished picks to tomorrow. Nothing reaches Plane.
+
+**Result 15a (2026-10-21, branch `chunk-15/muster` from `chunk-11/mcp`; the shared files are changed here, not sent to
+the family yet).**
+- **The host** (shared): `core/server/briefing.py` and `Module.brief(since, today)`. Each module answers `today`,
+  `waiting`, `moved` (since a moment) and `ahead` with entries `{id, what, title?, href?, who?, when?, project?, kind?,
+  tone?, minutes?, url?}`; the host makes the refs, fills a missing title and href from `describe`, keeps tones to the
+  family's six, and leaves out (and names) a module that fails. `GET /api/briefing?since=&today=`. The web registry's
+  `start`: `App.tsx` asks it when the app loads at Home, and when the window comes back on a new day while it's still
+  at Home; the first module with a path wins, never when the app opened somewhere else. A new contract,
+  `work.marked_done {ref, done}`: a pick ticked in Muster ticks its task. `describe` may say `done` now (tasks' items,
+  projects and milestones; Plane items in a completed or cancelled state). ARCHITECTURE.md §4, §6 and §7 say so.
+- **`tasks`** (shared): `briefing.py`. Today: yours late, due today and doing, and late milestones. Waiting: linked
+  tasks "Changed in Plane too: due" (and "Removed in Plane" for open ones). Moved: done and added since (with where
+  from: a meeting, Plane, AI), milestones reached. Ahead: yours due in the next seven days (not the ones you're doing,
+  which today has), milestones due, projects at risk or off track. `describe` covers milestones; it listens for
+  `work.marked_done`.
+- **`plane`**, migration step 4: `plane_changes` (item, project, field, before, after, `by`: Plane's `updated_by`, and
+  when). `store.apply` writes it in the pull's own transaction, before the mirror takes the rows: state, assignees, due
+  date, priority and name, and added and removed items. Nothing on a project's first read, an older version of an item
+  skipped as the mirror skips it, and anything older than 90 days forgotten. A push's read of an item (`put_item`) logs
+  too, since it can be the first to see a teammate's edit. `briefing.py` reads the mirror only: one line per item that
+  moved ("Todo → In Progress · by Elijah Anderson-Justis", "Now with Mickey (was you) · by Mickey", "Due Fri 30 Oct
+  (was Sun 11 Oct) · Urgent priority (was Medium)"), "Went past due" for items due since then, the team's past-due
+  items (yours that are linked tasks left out: tasks shows them), cycles ending this week with what's still open, and
+  the Outbox's waiting, stopped and failed pushes.
+- **`inbox`:** `briefing.py`: captures with proposals waiting, and Trailmix's meetings: today's in today, earlier ones
+  since the moment in moved.
+- **`muster`** (new, Traverse's own, first in `app.json`): `muster_days` (the day, its picks as JSON, the intention,
+  the line for tomorrow, since, first and latest look, kicked off, wrapped up, and the summary columns for 15b) and its
+  settings: `open_first` (on) and working hours (`day_starts` 09:00, `day_ends` 17:00, half-hour steps). "Since" is your
+  last look at Muster on an earlier day (a day ago the first time), fixed at the day's first look. Picks are refs (any
+  briefing line, or anything the search finds) or a line of your own, in order, with minutes ("45", "1h30"), ticked
+  here or done where they live. On a day's first look, earlier days' open picks come along once (done, let go or gone
+  ones stay behind); the wrap-up rolls them to tomorrow now, except the ones you let go, and keeps a line for
+  tomorrow-you, shown on the next day's Muster. The API is under `/api/muster`.
+- **The page** (`#/muster`, wide; one column on a phone, with the plan right after Today): the date, a greeting, counts,
+  **Kick off the day**, a line for today, and the note from the last wrap-up. **Today:** meetings, due and in progress,
+  waiting on you, past due on the team. **Plan the day:** the picks with minutes, up and down (or Alt ↑ ↓), out of the
+  plan, a field that finds anything or adds a line, and what's planned against what's left of the working day. **What
+  moved**, by project or by person. **Look ahead.** **Wrap up:** done so far, a switch per open pick (rolls to tomorrow,
+  or let go), the line for tomorrow-you. Every briefing line has "Add to today's plan"; long lists show 8 and "Show N
+  more". The sidebar has Muster (`Sunrise`), Settings has a Muster section, and identity/DESIGN.md lists the icons.
+- **Decided along the way:** a Plane line's "who" is whoever has the item now (so What moved groups by person), with
+  "by X" in its words; ticking a task's pick ticks the task through the contract, so Muster never writes tasks' tables
+  (a linked task ticked this way is then a change to send, like any edit); meetings can't be picked; the working day
+  is the free time until the calendar arrives (Trailmix's meetings only come in after they happen).
+- **Verified:** `scripts/check` passes: 321 tests (31 new: 4 for the host's briefing, 10 for the change log and
+  Plane's briefing, 6 for tasks', 2 for the inbox's, 9 for Muster, among them the done-when end to end against the
+  fake Plane: two teammate edits pulled overnight; the next morning lands on Muster with both in What moved, today's
+  due task, the team's past due and the picks carried; the wrap-up rolls two; only GETs reached Plane); types; build;
+  style. On the dev server (backup `traverse-20261021-180040-manual.db` first; dry run on throughout): the first open
+  landed on Muster and a second load stayed on Home; 4 picks added (two from the lists, a Plane item from the search, a
+  line of my own), minutes set (2 h 50 min planned against 5 h 38 min left), reordered by button and Alt ↑, one ticked
+  (its task went done in My tasks, and showed under What moved); a line for today and Kick off. 1440px and 375px in
+  Dusk; fixed on the way: the search list sat under the next section, pick controls squeezed the title on a phone, and
+  a fast-typed line was wiped when the previous add finished.
+  **The next morning** ran on a throwaway copy of the dev data (backup `traverse-20261021-182351-manual.db`, its own
+  folder and port, no family link, "today" set to Thursday 22). Nobody changed anything in Plane during the session
+  (every pull said 0 changed), so one mirror row was rewound in the copy (SOFTWARE-5 back to Backlog, due 9 Oct) and a
+  real pull (31 GETs) logged the difference. The first open landed on Muster; What moved showed "Backlog → Todo · Due
+  Tue 13 Oct (was Fri 9 Oct)" and Wednesday's ticked task; Wednesday's three open picks came along with their minutes
+  ("From yesterday"); the wrap-up rolled two to Friday and let one go, and Friday's Muster has the note. Settings →
+  Muster (working hours to 6 pm moved "left today" to match) and the page checked in Day there. Only GETs reached Plane.
+- **Left in the dev data:** today's Muster: 4 picks, kicked off, a line for today. Ticking the pick finished the
+  example task "Example: send Ana the outline". The dev change log is empty until something moves in Plane.
+- **Not done:** the Mac menu's Muster item and its Inbox item opening Traverse's inbox (the Swift host, with chunk 14);
+  the AI summary and plan, and the calendar (15b). Meetings show only when Trailmix brought them in, which it does for
+  meetings with open action items. Muster has no Claude tool. The shared files (`core/`, `modules/tasks/`,
+  ARCHITECTURE.md) go to the family with `scripts/sync-family --push` when you say.
+- §8's Muster questions, as built: working hours are a setting (preset 9 to 5); the wrap-up waits for you to open it,
+  with no reminder; nothing is posted to Plane.
+
+**15b · AI and your Mac's Calendar.**
+- AI writes the morning summary in a job, marked with who wrote it.
+- AI suggests a plan with `ai.structured`: ordered picks, a reason and an estimate each, fitted around meetings.
+  Each pick is accepted, moved or dropped by you.
+- The Mac host reads the Mac's Calendar through EventKit, read-only, after macOS asks once. That covers every account
+  the Calendar app has (Google, iCloud, Exchange). Today's and the week's events reach the page through the host.
+  Spike first: whether the host bridges by a script message handler in the web view or by a local endpoint.
+  In a browser without the Mac app, Muster says the calendar shows in the app.
+- **Done when:** the morning view shows today's real calendar events, a written summary of what moved, and a
+  suggested plan around those meetings that you can accept into today's picks.
+
 ## 6b. Family track
 
 Shared host work, made in Traverse, sent to `TrailmixFamily` with `scripts/sync-family --push`, committed there, and
@@ -879,8 +1004,14 @@ It's a change in Trailmix's own repository, independent of the rest. Until then,
 | Two inboxes if the apps ever combine (People's and Traverse's) | Traverse's inbox is for work; The Lodge's meeting import already feeds `tasks` through `actions.found`, so the Trailmix bridge turns off when People is present |
 | Chunk 0 touches The Lodge, which holds real data | Code-only change on a branch, a backup first, and The Lodge's full `scripts/check` before merging |
 | Tasks v2 is shared code | Built only in `TrailmixFamily`; The Lodge takes it when Mark chooses (blueprint §3) |
+| Muster's "what moved" needs history the mirror doesn't keep | The pull's change log (chunk 15a) starts recording on its first run; nothing before that. Plane's per-item activity API could fill gaps, but it's one request per item, so not by default |
+| Calendar access on the Mac (EventKit's full-access permission, the app's signing) | A spike at the start of 15b; read-only, never stored beyond the day; Muster works without it |
 
 ## 8. Questions for later chunks
+
+- **Muster (chunk 15):** working hours to plan against (preset 9 to 5)? Should the evening wrap-up remind you, or
+  wait until you open it? Should Muster offer to post a short daily update to Plane? (Off by default; that would go
+  through the Outbox like any push.)
 
 - **Milestones in Plane:** map Traverse milestones to Plane modules, Plane milestones, or keep them local? (Chunk 7.)
 - **Sandbox:** may chunks 7 and 13 send real test pushes to the "Cold Connect" demo project in Plane?
