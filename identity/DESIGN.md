@@ -33,7 +33,8 @@ Lodge's scene keeps later.
 ## Section icons
 
 Lucide: `Mountain` (projects), `Flag` (milestones), `ListChecks` (my tasks), `Kanban` (board), `Users` (team),
-`Inbox` (inbox), `Send` (sent to Plane).
+`Inbox` (inbox), `Send` (sent to Plane), `Sunrise` (Muster; inside it `Sun` today, `Signpost` the plan, `History` what
+moved, `Compass` ahead, `Moon` the wrap-up).
 
 ## Files
 
