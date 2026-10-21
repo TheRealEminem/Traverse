@@ -27,7 +27,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 11 | MCP server in the host: Claude Desktop and Claude Code can use Traverse | M | ☑ 2026-10-20 on `chunk-11/mcp`: Claude Code answered from the dev server, left 4 proposals in the inbox and a push waiting in the Outbox; Claude Desktop's config tried over stdin, not in the app |
 | 12 | AI in the app: status drafts, break a task down | M | ☑ 2026-10-21 on `claude/chunk-12-ai-c80a35` (from `chunk-11/mcp`): drafts and breakdowns tried live on Ollama; a status update waits in the Outbox as a comment, never sent (dry run) |
 | 13 | Home card, search, export, Settings, the auto-sync switch | M | ☐ |
-| 14 | Mac: mark, menu, build and install beside The Lodge | M | ◐ 2026-10-21 on `claude/chunk-14-mac-ca4e9f`: the menu lists the modules' sections; the new build runs beside The Lodge. Updates stay off for now (Mark's choice); installing the merged build waits for its checks |
+| 14 | Mac: mark, menu, build and install beside The Lodge | M | ◐ 2026-10-21 on `claude/chunk-14-mac-ca4e9f`: the menu lists the modules' sections; the new build runs beside The Lodge. Updates stay off for now (Mark's choice). Merged on `merge/muster-ai-mac` and installed as 0.2.0 (c3fd94d) over 0.1.0 |
 | 15 | **Muster**: the day's kick-off, what moved, plan the day, look ahead, wrap-up (15a), with AI and your Mac's Calendar (15b) | L | ◐ 2026-10-21: 15a on `chunk-15/muster` (the next morning tried on a copy of the dev data); 15b not started |
 
 Milestones: **A** "it runs" = 0–1 · **B** "my work, locally" = 2–4 · **C** "sees the team" = 5–6 ·
@@ -807,8 +807,9 @@ Mark, `Mark.swift`, icon, build and install. **Done when:** Traverse.app install
 - **Found:** `check-app.py` runs its copy on port 8795, the dev servers' port since 2026-10-20. While a dev server
   runs, it stops with "Something is already listening", and so does `install-app.sh`, which calls it.
 - **Not done:**
-  - Installing in /Applications replaces 0.1.0, so it waits for Mark's yes. Then `scripts/install-app.sh --no-check`,
-    since the checks have just passed (see Found).
+  - ~~Installing in /Applications~~ Done 2026-10-21: merged with 15a, F6 and 12 on `merge/muster-ai-mac`, bumped to
+    0.2.0 and installed with the full `scripts/install-app.sh` (backup first; 22 tables, nothing missing). The
+    installed app has Muster, 23 linked tasks, and dry run still on.
   - Releases: **updates off for now** (Mark's choice, 2026-10-21). `updateRepo` stays empty and
     `scripts/install-app.sh` updates this Mac. `TheRealEminem/Traverse` is private; the other choices, kept for later,
     were a small public releases repo (the code repo stays private) or a read-only token in the app.
