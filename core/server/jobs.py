@@ -19,6 +19,7 @@ running twice is harmless (check what's already done, then do the rest).
 import logging
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Callable
 
@@ -32,6 +33,7 @@ _executors = {name: ThreadPoolExecutor(max_workers=n, thread_name_prefix=f"jobs-
 _handlers: dict[tuple[str, str], tuple[Callable, "str | Callable[[str], str]"]] = {}
 _pending: list[Future] = []
 _pending_lock = threading.Lock()
+_current: ContextVar["Job | None"] = ContextVar("job", default=None)
 
 
 class Wait(Exception):
@@ -135,6 +137,11 @@ def waiting(module: str, kind: str) -> list[str]:
                                       (module, kind))]
 
 
+def current() -> Job | None:
+    """The job this thread is running, if any (the AI usage log names the module and job that asked)."""
+    return _current.get()
+
+
 def busy() -> bool:
     return db.one("SELECT 1 AS x FROM core_jobs WHERE status IN ('queued', 'running')") is not None
 
@@ -201,6 +208,7 @@ def _run(job_id: str) -> None:
         return
     job = Job(row["id"], row["module"], row["kind"], row["target"], bool(row["approved"]), bool(row["forced"]))
     _set(job_id, status="running", stage=None, error=None)
+    running = _current.set(job)
     try:
         handler(job)
     except Wait as why:
@@ -210,3 +218,5 @@ def _run(job_id: str) -> None:
         _set(job_id, status="error", error=str(e) or type(e).__name__, stage=None)
     else:
         _set(job_id, status="done", stage=None)
+    finally:
+        _current.reset(running)
