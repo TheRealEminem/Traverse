@@ -1,6 +1,6 @@
 // The host app: sign-in, the shell (sidebar, top bar on narrow windows, content column), and routing to the
 // host's own views and every enabled module's views.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AUTH_EVENT, api } from "./api";
 import type { AppInfo } from "./api";
 import { MenuIcon } from "./components/icons";
@@ -33,6 +33,37 @@ function useWide() {
     return () => mq.removeEventListener("change", on);
   }, []);
   return wide;
+}
+
+/**
+ * The first page of the day: when the app opens at Home, a module may show something else first (registry.start).
+ * Asked once when the app loads, and again when the window comes back on a new day while it's still at Home; never
+ * when the app opened somewhere else, or after you've moved on.
+ */
+function useStartPage(modules: ModuleWeb[]) {
+  const askedOn = useRef<string | null>(null);
+  useEffect(() => {
+    const starters = modules.filter((m) => m.start);
+    if (!starters.length) return;
+    const atHome = () => location.hash.replace(/^#\/?/, "").split("?")[0] === "";
+    const ask = async () => {
+      const day = new Date().toDateString();
+      if (askedOn.current === day) return;
+      askedOn.current = day;
+      if (!atHome()) return;
+      for (const m of starters) {
+        const to = await m.start!().catch(() => null);
+        if (to) {
+          if (atHome()) navigate(to);
+          return;
+        }
+      }
+    };
+    void ask();
+    const onShow = () => document.visibilityState === "visible" && void ask();
+    document.addEventListener("visibilitychange", onShow);
+    return () => document.removeEventListener("visibilitychange", onShow);
+  }, [modules]);
 }
 
 function resolve(path: string, modules: ModuleWeb[]): { view: ComponentType<RouteProps>; params: Record<string, string>; wide?: boolean } {
@@ -98,6 +129,8 @@ export default function App() {
   useEffect(() => {
     if (path === "" && modules.length === 1 && !modules[0].home && modules[0].nav?.[0]) navigate(modules[0].nav[0].path);
   }, [path, modules]);
+
+  useStartPage(modules);
 
   useEffect(() => setDrawer(false), [path]);
 

@@ -29,6 +29,11 @@ export interface ModuleWeb {
   homeWide?: boolean;
   /** A section on the Settings page. */
   settings?: ComponentType;
+  /**
+   * The first page of the day. Asked when the app opens at Home (and when its window comes back on a new day): a path
+   * to show instead, without "#/", or null. The first enabled module with an answer wins.
+   */
+  start?: () => Promise<string | null>;
 }
 
 const found = import.meta.glob<{ default: ModuleWeb }>("../../modules/*/web/index.tsx", { eager: true });

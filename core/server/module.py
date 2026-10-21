@@ -8,6 +8,7 @@ jobs, settings and AI. Claude reaches it the same way, through the tools it list
 import importlib
 import logging
 from dataclasses import dataclass, field
+from datetime import date
 import sqlite3
 from typing import Callable
 
@@ -37,6 +38,7 @@ class Module:
     offers: dict[str, Callable[[dict], object]] = field(default_factory=dict)  # "people.search" -> handler(args): what other family apps may ask it (family.py)
     people: Callable[[str, int], list[dict]] | None = None         # (q, limit) -> [{id, name, email?, detail?, is_self?}]: its part of the people directory (people.py)
     tools: list = field(default_factory=list)                      # [mcp.Tool]: what Claude may do here, through the host's MCP server (mcp.py)
+    brief: Callable[[str, date], dict] | None = None               # (since, today) -> {"today"|"waiting"|"moved"|"ahead": [entries]}: its part of the day's briefing (briefing.py)
     startup: Callable[[], None] | None = None
 
 

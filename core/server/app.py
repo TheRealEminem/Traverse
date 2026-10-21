@@ -9,6 +9,7 @@ import signal
 import threading
 import time
 from contextlib import asynccontextmanager
+from datetime import date, datetime
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -16,7 +17,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ai, auth, backup, config, db, events, family, jobs, links, mcp, module, people, schedule, search, settings
+from . import ai, auth, backup, briefing, config, db, events, family, jobs, links, mcp, module, people, schedule, search, settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("core")
@@ -257,6 +258,19 @@ async def ai_test(pid: str):
 @core_router.get("/search")
 def search_all(q: str = "", limit: int = 8):
     return search.search(q, limit)
+
+
+@core_router.get("/briefing")
+def briefing_all(since: str = "", today: str = ""):
+    """The day's briefing (briefing.py): every module's today, waiting, moved (since `since`, a moment; the last day
+    when it's left out) and ahead. `today` is a day, YYYY-MM-DD; this computer's when it's left out."""
+    try:
+        day = date.fromisoformat(today) if today else None
+        if since:
+            datetime.fromisoformat(since.replace("Z", "+00:00"))
+    except ValueError as e:
+        raise HTTPException(400, "since is a moment like 2026-10-21T07:30:00Z, and today a day like 2026-10-21") from e
+    return briefing.gather(since or None, day)
 
 
 @core_router.get("/people")
