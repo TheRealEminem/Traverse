@@ -1,7 +1,7 @@
 // The host app: sign-in, the shell (sidebar, top bar on narrow windows, content column), and routing to the
 // host's own views and every enabled module's views.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AUTH_EVENT, api } from "./api";
+import { AUTH_EVENT, api, showInAppMenu } from "./api";
 import type { AppInfo } from "./api";
 import { MenuIcon } from "./components/icons";
 import { Ambient, Logo } from "./components/illustrations";
@@ -93,6 +93,11 @@ export default function App() {
   }, [auth]);
 
   const modules = useMemo(() => modulesFor(info?.modules.map((m) => m.id) ?? []), [info]);
+
+  // The Mac app's menu bar menu lists the same sections as the sidebar (it keeps them for when no window is open).
+  useEffect(() => {
+    if (info) showInAppMenu(modules.flatMap((m) => (m.nav ?? []).map(({ label, path }) => ({ label, path }))));
+  }, [info, modules]);
 
   // A single-module app with nothing for Home opens straight into that module.
   useEffect(() => {
