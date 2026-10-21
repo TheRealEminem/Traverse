@@ -2,8 +2,11 @@
 // and Send reads the item from Plane again first: a field someone changed there meanwhile stops it, showing both
 // values, until you choose Plane's or yours. Each field shows what Plane has and what it will have; notes start left
 // out (a description is replaced whole). What was sent is listed with each field's before and after, and Undo, which
-// is a new push of the values from before, with the same check. ?push=<id> points at one (where a task's link opens);
-// ?view=sent shows what was sent.
+// is a new push of the values from before, with the same check. A comment (one of your Traverse updates, added to the
+// item as a new comment) shows the words as Plane will have them; it's only ever added, so it has no Undo. ?push=<id>
+// points at one (where a task's link opens); ?view=sent shows what was sent.
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useEffect, useState } from "react";
 import { Empty } from "@core/components/blocks";
 import { ExternalIcon, icon } from "@core/components/icons";
@@ -30,7 +33,7 @@ const STATUS: Record<Push["status"], { tone: Tone; label: string; live?: boolean
   sent: { tone: "forest", label: "Sent" },
   discarded: { tone: "neutral", label: "Discarded" },
 };
-const KIND: Record<Push["kind"], string> = { update: "Changes", create: "New in Plane", undo: "Undo" };
+const KIND: Record<Push["kind"], string> = { update: "Changes", create: "New in Plane", undo: "Undo", comment: "Comment on" };
 const EMPTY: Partial<Record<PushField, string>> = { start_on: "None", due_on: "None", assignee: "No one", notes: "Empty", priority: "None" };
 
 /** A value as the outbox shows it: days formatted, nothing said in words. */
@@ -99,7 +102,7 @@ export default function Outbox() {
           </Empty>
         ) : (
           <Empty icon={<SendIcon size={20} />} title="Nothing waiting to send">
-            When you send a linked task's changes to Plane (from its page), they wait here for you to look over and send.
+            When you send a linked task's changes to Plane, or post an update there as a comment, they wait here for you to look over and send.
           </Empty>
         )
       ) : (
@@ -220,7 +223,7 @@ function Waiting({ push: p, data, focused, delay, onChanged }: { push: Push; dat
         <StatusChip tone={failed ? "trail" : status.tone} label={failed ? "Didn't go" : sending && p.job?.stage ? p.job.stage : status.label} live={sending} />
       </div>
       {note && <Note push={p} failed={failed} text={note} />}
-      <FieldTable push={p} busy={busy} act={act} />
+      {p.kind === "comment" ? <CommentPreview push={p} /> : <FieldTable push={p} busy={busy} act={act} />}
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3">
         <span className="mr-auto text-meta text-ink-soft" data-tip={formatDate(p.created_at)}>
           Asked {relativeTime(p.created_at)}
@@ -236,11 +239,32 @@ function Waiting({ push: p, data, focused, delay, onChanged }: { push: Push; dat
           onClick={() => void act("send", () => planeApi.send(p.id))}
         >
           {sending || busy === "send" ? <Spinner /> : <SendIcon size={16} />}
-          {data.dry_run ? "Check (dry run)" : failed ? "Try again" : p.kind === "create" ? "Add to Plane" : `Send ${ready.length === 1 ? "it" : plural(ready.length, "change")}`}
+          {data.dry_run
+            ? "Check (dry run)"
+            : failed
+              ? "Try again"
+              : p.kind === "create"
+                ? "Add to Plane"
+                : p.kind === "comment"
+                  ? "Add the comment"
+                  : `Send ${ready.length === 1 ? "it" : plural(ready.length, "change")}`}
         </button>
       </div>
       {dialog}
     </section>
+  );
+}
+
+/** A comment as Plane will show it (the words, and which AI drafted them, when one did). */
+function CommentPreview({ push: p }: { push: Push }) {
+  const words = p.fields.find((f) => f.field === "comment")?.after ?? "";
+  return (
+    <div className="mx-5 mt-3 mb-1">
+      <div className="mb-1.5 text-meta text-ink-soft">{p.status === "sent" ? "Added as a comment" : "It will add this comment, as you"}</div>
+      <div className="inset-surface prose-family max-h-80 overflow-y-auto px-4 py-3">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{words}</ReactMarkdown>
+      </div>
+    </div>
   );
 }
 
@@ -372,13 +396,18 @@ function Sent({ push: p, focused, delay, onChanged }: { push: Push; focused: boo
           <a href={`#/plane/outbox?push=${undone.id}`} className="shrink-0">
             <StatusChip tone="neutral" label={undone.status === "sent" ? "Undone" : "Being undone"} />
           </a>
-        ) : p.kind === "create" ? null : (
+        ) : p.kind === "create" || p.kind === "comment" ? null : (
           <button className="btn btn-sm btn-ghost -my-1 shrink-0" disabled={!!busy} onClick={() => void act("undo", () => planeApi.undo(p.id), "Undo is waiting for you to send it")}>
             {busy === "undo" ? <Spinner /> : <UndoIcon size={16} />} Undo
           </button>
         )}
       </div>
-      <ul className="mt-3 flex flex-col gap-1.5">
+      {p.kind === "comment" && (
+        <div className="-mx-5">
+          <CommentPreview push={p} />
+        </div>
+      )}
+      <ul className={`mt-3 flex flex-col gap-1.5 ${p.kind === "comment" ? "hidden" : ""}`}>
         {sent.map((f) => (
           <li key={f.field} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 text-ui">
             <span className="text-label font-medium">{f.label}</span>
@@ -402,6 +431,7 @@ function Sent({ push: p, focused, delay, onChanged }: { push: Push; focused: boo
         {p.approved_at && <> · approved by you {relativeTime(p.approved_at)}</>}
         {p.note && <> · {p.note}</>}
         {p.kind === "create" && <> · Traverse never deletes in Plane, so a new item can't be undone from here</>}
+        {p.kind === "comment" && <> · Traverse never edits or deletes comments in Plane, so this one stays as it is</>}
       </p>
     </section>
   );
