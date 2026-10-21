@@ -80,6 +80,44 @@ export interface ProviderInfo {
   reason: string;
 }
 
+/** What AI calls cost (core/server/pricing.py). Costs are US dollars; `unknown` counts calls at a price nobody
+ * published, which aren't in `cost`. */
+export interface UsageTotals {
+  calls: number;
+  cost: number;
+  failed: number;
+  unknown: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+export interface UsageGroup extends UsageTotals {
+  id: string; // a provider id, or a module id ("core" for Settings, "" for calls made outside a job)
+  label: string;
+}
+export interface UsageCall {
+  at: string;
+  module: string;
+  module_label: string;
+  job: string;
+  call: "complete" | "structured";
+  provider: string;
+  provider_label: string;
+  model: string;
+  input_tokens: number | null;
+  cached_tokens: number | null;
+  output_tokens: number | null;
+  cost: number | null; // null: unknown, or a failure that spent nothing
+  failed: boolean;
+  unknown: boolean;
+  error: string | null;
+}
+export interface AIUsage {
+  month: UsageTotals & { start: string };
+  last_30_days: UsageTotals & { by_provider: UsageGroup[]; by_module: UsageGroup[] };
+  recent: UsageCall[];
+  prices_checked: string;
+}
+
 /** Running inside the Mac app's own window (rather than a browser): it can be asked to quit, or to show a file. */
 type AppBridge = { postMessage: (message: string) => void };
 const bridge = (window as unknown as { webkit?: { messageHandlers?: { app?: AppBridge } } }).webkit?.messageHandlers?.app;
@@ -165,6 +203,7 @@ export const api = {
   providers: () => request<ProviderInfo[]>("/ai/providers"),
   providerModels: (id: ProviderId) => request<{ models: string[] }>(`/ai/providers/${id}/models`),
   providerTest: (id: ProviderId) => request<{ message: string }>(`/ai/providers/${id}/test`, json("POST")),
+  aiUsage: () => request<AIUsage>("/ai/usage"),
 
   search: (q: string) => request<SearchGroup[]>(`/search?q=${encodeURIComponent(q)}`),
   people: (q: string, limit = 8) => request<PeopleResult>(`/people?q=${encodeURIComponent(q)}&limit=${limit}`),

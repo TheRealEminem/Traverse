@@ -46,6 +46,24 @@ CORE_MIGRATIONS = [
     );
     CREATE INDEX core_links_to ON core_links(to_ref);
     """,
+    """
+    CREATE TABLE core_ai_usage (       -- every AI call, written by ai.attempt (pricing.py)
+        id            TEXT PRIMARY KEY,
+        at            TEXT NOT NULL,   -- when it finished
+        module        TEXT NOT NULL,   -- whose job asked ("inbox"), "core" for Settings' Test button, "" for neither
+        job           TEXT NOT NULL,   -- that job's kind ("extract"), "test", or ""
+        call          TEXT NOT NULL,   -- complete | structured
+        provider      TEXT NOT NULL,
+        model         TEXT NOT NULL,   -- the one that answered, when the reply says
+        input_tokens  INTEGER,         -- NULL: the provider didn't say (or never answered)
+        cached_tokens INTEGER,         -- how many of input_tokens were read from the provider's cache
+        output_tokens INTEGER,         -- thinking included
+        cost          REAL,            -- US dollars; NULL when the price isn't known, or nothing was spent
+        failed        INTEGER NOT NULL DEFAULT 0,
+        error         TEXT
+    );
+    CREATE INDEX core_ai_usage_at ON core_ai_usage(at);
+    """,
 ]
 
 

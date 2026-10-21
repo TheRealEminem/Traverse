@@ -15,7 +15,7 @@ os.environ["TRAILMIX_FAMILY_DIR"] = tempfile.mkdtemp(prefix="family-link-test-")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from core.server import ai, config, db, jobs, module  # noqa: E402
+from core.server import ai, config, db, jobs, module, settings  # noqa: E402
 from core.server.app import app  # noqa: E402
 
 ENABLED = config.enabled_modules()
@@ -56,14 +56,20 @@ def client():
 
 @pytest.fixture
 def fake_ai(monkeypatch):
-    """Replies with `fake_ai.reply` (set it in the test) and records every prompt in `fake_ai.prompts`."""
+    """Replies with `fake_ai.reply` (set it in the test) and records every prompt in `fake_ai.prompts`. Each call is
+    counted in the usage log like a real one, as `fake_ai.tokens` (input, output) from a provider with no price."""
     class Fake:
         reply = "Overview.\n\n## Action items\n- [ ] Do the thing"
         prompts: list[str] = []
+        tokens = (1200, 300)
 
         def __call__(self, prompt, system=None, choice="auto"):
             self.prompts.append(prompt)
-            return self.reply, "fake"
+
+            def answer(pid, meter):
+                meter.add(*self.tokens)
+                return self.reply
+            return ai.attempt("fake", {}, "complete", answer), "fake"
 
     fake = Fake()
     monkeypatch.setattr(ai, "complete", fake)
@@ -74,20 +80,26 @@ def fake_ai(monkeypatch):
 @pytest.fixture
 def fake_structured(monkeypatch):
     """Stands in for ai.structured. Set `.reply` to an object of the schema asked for, an exception to raise, or a
-    function (prompt, system, schema) -> either. `.calls` records every call."""
+    function (prompt, system, schema) -> either. `.calls` records every call. Each is counted in the usage log as a
+    call to Claude's model in Settings that used `.tokens` (input, output); an exception, as a failure with none."""
     class Fake:
         reply: object = None
+        tokens = (2000, 400)
 
         def __init__(self):
             self.calls: list[dict] = []
 
         def __call__(self, prompt, system, schema, choice="auto", max_tokens=None):
             self.calls.append({"prompt": prompt, "system": system, "schema": schema, "choice": choice})
-            reply = self.reply(prompt, system, schema) if callable(self.reply) else self.reply
-            if isinstance(reply, Exception):
-                raise reply
-            assert isinstance(reply, schema), f"the test's reply is a {type(reply).__name__}, not a {schema.__name__}"
-            return reply, "anthropic"
+
+            def answer(pid, meter):
+                reply = self.reply(prompt, system, schema) if callable(self.reply) else self.reply
+                if isinstance(reply, Exception):
+                    raise reply
+                meter.add(*self.tokens)
+                assert isinstance(reply, schema), f"the test's reply is a {type(reply).__name__}, not a {schema.__name__}"
+                return reply
+            return ai.attempt("anthropic", settings.section("ai"), "structured", answer), "anthropic"
 
     fake = Fake()
     monkeypatch.setattr(ai, "structured", fake)
