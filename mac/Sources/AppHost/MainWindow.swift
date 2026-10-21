@@ -8,6 +8,7 @@ import WebKit
 /// The page talks to this window through window.webkit.messageHandlers.app (see core/web/api.ts):
 ///   "quit"            quit the app
 ///   "reveal:<path>"   show a file or folder in Finder
+///   "menu:<json>"     the sidebar's sections, [{"label", "path"}], for the menu bar menu
 @MainActor
 final class MainWindow: NSObject, NSWindowDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     static let shared = MainWindow()
@@ -75,6 +76,7 @@ final class MainWindow: NSObject, NSWindowDelegate, WKUIDelegate, WKNavigationDe
             let url = URL(fileURLWithPath: String(body.dropFirst("reveal:".count)))
             if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
         }
+        if body.hasPrefix("menu:") { Host.shared.setSections(fromJSON: Data(body.dropFirst("menu:".count).utf8)) }
     }
 
     /// File and folder pickers on the page (<input type="file">).

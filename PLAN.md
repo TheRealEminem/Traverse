@@ -27,7 +27,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 11 | MCP server in the host: Claude Desktop and Claude Code can use Traverse | M | ☑ 2026-10-20 on `chunk-11/mcp`: Claude Code answered from the dev server, left 4 proposals in the inbox and a push waiting in the Outbox; Claude Desktop's config tried over stdin, not in the app |
 | 12 | AI in the app: status drafts, break a task down | M | ☑ 2026-10-21 on `claude/chunk-12-ai-c80a35` (from `chunk-11/mcp`): drafts and breakdowns tried live on Ollama; a status update waits in the Outbox as a comment, never sent (dry run) |
 | 13 | Home card, search, export, Settings, the auto-sync switch | M | ☐ |
-| 14 | Mac: mark, menu, build and install beside The Lodge | M | ☐ |
+| 14 | Mac: mark, menu, build and install beside The Lodge | M | ◐ 2026-10-21 on `claude/chunk-14-mac-ca4e9f`: the menu lists the modules' sections; the new build runs beside The Lodge. Updates stay off for now (Mark's choice); installing the merged build waits for its checks |
 | 15 | **Muster**: the day's kick-off, what moved, plan the day, look ahead, wrap-up (15a), with AI and your Mac's Calendar (15b) | L | ◐ 2026-10-21: 15a on `chunk-15/muster` (the next morning tried on a copy of the dev data); 15b not started |
 
 Milestones: **A** "it runs" = 0–1 · **B** "my work, locally" = 2–4 · **C** "sees the team" = 5–6 ·
@@ -785,6 +785,34 @@ conflicting edit still waits.
 ### Chunk 14 · Mac (M)
 
 Mark, `Mark.swift`, icon, build and install. **Done when:** Traverse.app installs beside The Lodge and both run.
+
+**Result (2026-10-21, on `claude/chunk-14-mac-ca4e9f`).**
+- **Mark and icon: already right, unchanged.** Chunk 1's match `identity/`: `public/favicon.svg` is `art.tsx`'s `Logo`
+  path for path, `make-icon.swift` redraws `AppIcon.icns` from it byte for byte, and `Mark.swift` is the same sun,
+  trail and cairn as a template image (macOS colors it). Nothing in `mac/` has a color of its own.
+- **The menu lists the app's own sections.** The hard-coded "Inbox" (The Lodge's `crm/inbox`) is gone. Each time the
+  page loads it sends the enabled modules' nav items (label and path) through the bridge as `menu:<json>`, and the
+  menu lists them under "Open Traverse". The app keeps the last list (its preferences, `menuSections`), so a launch
+  at login with no window has them too. Traverse's: My tasks, Projects, Team, Linking, Outbox, Inbox (`#/inbox`).
+  Muster shows up when its module is on. The Lodge's, once it takes this family code: People, Network, Groups,
+  Inbox (`crm/inbox`, as before) and its tasks. Changed (shared): `core/web/api.ts` (`showInAppMenu`), one effect in
+  `core/web/App.tsx`, `mac/Sources/AppHost/HostApp.swift` and `MainWindow.swift`, and ARCHITECTURE.md §10.
+- **Verified:** `swift build -c release` has no compiler warnings. The linker warns that two Command Line Tools
+  folders don't exist, with or without this change: this Mac's Swift 6.4 looks for `CommandLineTools/Developer/…`.
+  `build-app.sh --dmg` built it, and the update checks pass. `check-app.py`: all 14 checks good. It ran on 8798,
+  against a copy with its own bundle ID, so nothing it quits could be the installed app. The smoke test passed.
+  `scripts/check`: 290 tests, style clear, and the expected family-drift note. A copy of the new build ran on 8798 with
+  its own data beside the installed Traverse (8793) and The Lodge (8791). Its window loaded, and the page sent its
+  six sections, which the app kept. The menu itself wasn't looked at on screen.
+- **Found:** `check-app.py` runs its copy on port 8795, the dev servers' port since 2026-10-20. While a dev server
+  runs, it stops with "Something is already listening", and so does `install-app.sh`, which calls it.
+- **Not done:**
+  - Installing in /Applications replaces 0.1.0, so it waits for Mark's yes. Then `scripts/install-app.sh --no-check`,
+    since the checks have just passed (see Found).
+  - Releases: **updates off for now** (Mark's choice, 2026-10-21). `updateRepo` stays empty and
+    `scripts/install-app.sh` updates this Mac. `TheRealEminem/Traverse` is private; the other choices, kept for later,
+    were a small public releases repo (the code repo stays private) or a read-only token in the app.
+  - The Lodge hasn't been built with the new menu.
 
 ### Chunk 15 · Muster (L)
 

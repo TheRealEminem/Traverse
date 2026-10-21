@@ -118,12 +118,14 @@ export interface AIUsage {
   prices_checked: string;
 }
 
-/** Running inside the Mac app's own window (rather than a browser): it can be asked to quit, or to show a file. */
+/** Running inside the Mac app's own window (rather than a browser): it can be asked to quit, or to show a file,
+ *  and it lists the sidebar's sections in its menu bar menu. */
 type AppBridge = { postMessage: (message: string) => void };
 const bridge = (window as unknown as { webkit?: { messageHandlers?: { app?: AppBridge } } }).webkit?.messageHandlers?.app;
 export const inApp = !!bridge;
 export const quitApp = () => bridge?.postMessage("quit");
 export const revealInFinder = (path: string) => bridge?.postMessage(`reveal:${path}`);
+export const showInAppMenu = (sections: { label: string; path: string }[]) => bridge?.postMessage(`menu:${JSON.stringify(sections)}`);
 
 /** A family app installed on this Mac (core/server/family.py). */
 export interface FamilyApp {
