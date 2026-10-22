@@ -61,7 +61,7 @@ Mac sharing data, keys and basic preferences.
 | F2 | Gemini's default model (`gemini-2.5-flash` is closed to new accounts) | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
 | F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ☑ 2026-10-18 (family 3a26cf7); The Lodge has it on its `family/link` branch |
 | F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ☑ 2026-10-19 (family 44da03f); its workflows haven't run on GitHub yet |
-| F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☑ 2026-10-21 on `claude/f5-lockdown-1e250b`; not yet sent to the family |
+| F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☑ 2026-10-21 on `claude/f5-lockdown-1e250b`, merged on `merge/muster-ai-mac` (fa7e5dc); not yet sent to the family |
 | F6 | AI pricing and usage: what each AI call costs, and a running total | M | before chunk 9 | ☑ 2026-10-21 on `claude/f6-ai-costs-f43084`; not yet sent to the family |
 | F7 | Trailmix joins the family link (reads shared keys and preferences, offers its meetings) | S–M | Mark's call | ☐ a change in Trailmix's own repo |
 
@@ -516,7 +516,8 @@ family yet).**
 - **Verified**: `scripts/check` passes: 252 tests, among them 23 push tests covering every rule in §3.3 end to end
   against the fake Plane (which now takes PATCH and POST, records every write and refuses DELETE and PUT), 7 new client
   tests and 5 contract tests in tasks; types; build; style. (In a shell where `ANTHROPIC_API_KEY` is set, one inbox
-  test fails because the AI label then includes a model; it passes without it, and isn't touched here.)
+  test fails because the AI label then includes a model; it passes without it, and isn't touched here. Fixed
+  2026-10-21: `conftest.py` clears the shell's AI keys and addresses before the app loads.)
   On dev data in a browser (a backup first, `traverse-20261020-181450-manual.db`, and a copy from before the
   migration): a priority change on OPERATIONS-10, "Send it to Plane", the Outbox, Check (dry run). Traverse read the
   item from Cold Connect's Plane (one GET, so the live single-item read works) and found Plane had High already (the
