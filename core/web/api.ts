@@ -127,6 +127,36 @@ export const quitApp = () => bridge?.postMessage("quit");
 export const revealInFinder = (path: string) => bridge?.postMessage(`reveal:${path}`);
 export const showInAppMenu = (sections: { label: string; path: string }[]) => bridge?.postMessage(`menu:${JSON.stringify(sections)}`);
 
+/** Whether the Mac app may read your calendar: "unasked" until macOS has asked you, "unavailable" when this app
+ *  doesn't use it (mac/Sources/AppHost/CalendarBridge.swift). */
+export type CalendarAccess = "full" | "unasked" | "denied" | "restricted" | "write_only" | "unavailable";
+/** An event from your Mac's Calendar. start and end carry the Mac's offset; free: it doesn't block time. */
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  all_day: boolean;
+  calendar: string;
+  free: boolean;
+}
+type CalendarBridge = { postMessage: (message: object) => Promise<unknown> };
+const calendarBridge = (window as unknown as { webkit?: { messageHandlers?: { calendar?: CalendarBridge } } }).webkit?.messageHandlers?.calendar;
+const askCalendar = <T>(message: object) => calendarBridge!.postMessage(message) as Promise<T>;
+
+/** Your Mac's Calendar, read-only, through the Mac app's window: every account the Calendar app has. null in a browser
+ *  (and in an app built before it could). Nothing is kept: each call reads it afresh. */
+export const macCalendar = calendarBridge
+  ? {
+      access: () => askCalendar<{ access: CalendarAccess }>({ ask: "access" }).then((r) => r.access),
+      /** macOS asks you, the first time; afterwards it answers for you (System Settings changes it). */
+      request: () => askCalendar<{ access: CalendarAccess }>({ ask: "request" }).then((r) => r.access),
+      events: (from: Date, to: Date) =>
+        askCalendar<{ access: CalendarAccess; events: CalendarEvent[] }>({ ask: "events", from: from.toISOString(), to: to.toISOString() }),
+      openSettings: () => askCalendar<unknown>({ ask: "settings" }),
+    }
+  : null;
+
 /** A family app installed on this Mac (core/server/family.py). */
 export interface FamilyApp {
   id: string;

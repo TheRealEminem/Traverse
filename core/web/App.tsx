@@ -183,6 +183,10 @@ export default function App() {
           </div>
         </main>
       </div>
+      {modules.map((m) => {
+        const Background = m.background;
+        return Background ? <Background key={m.id} /> : null;
+      })}
       <TooltipLayer />
       <Toast toast={toast} onClose={() => setToast(null)} />
       {confirmDialog}
