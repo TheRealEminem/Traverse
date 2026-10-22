@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from core.server import db, events, jobs, links, settings
+from core.server import db, events, jobs, links, lockdown, settings
 from core.server.jobs import Job
 
 from . import store
@@ -73,6 +73,7 @@ def check(job: Job) -> None:
     if not cfg["trailmix"]:
         return
     base = cfg["trailmix_url"].rstrip("/")
+    lockdown.check(base)                    # Trailmix runs on this Mac; one elsewhere waits while Lockdown is on
     try:
         with _client(base) as client:
             job.stage("Looking for new meetings")
