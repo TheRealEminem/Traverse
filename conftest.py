@@ -15,7 +15,7 @@ os.environ["TRAILMIX_FAMILY_DIR"] = tempfile.mkdtemp(prefix="family-link-test-")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from core.server import ai, config, db, jobs, module, settings  # noqa: E402
+from core.server import ai, config, db, jobs, lockdown, module, settings  # noqa: E402
 from core.server.app import app  # noqa: E402
 
 ENABLED = config.enabled_modules()
@@ -52,6 +52,17 @@ def probe_item():
 @pytest.fixture(scope="session")
 def client():
     return TestClient(app)
+
+
+@pytest.fixture
+def lockdown_on():
+    """Lockdown on for one test (here and in the test family folder), then off, with any work it parked forgotten
+    rather than run after the test's own fixtures are gone. A test that wants parked work to go turns it off itself."""
+    settings.update({lockdown.KEY: True})
+    yield
+    jobs.drain()
+    settings.update({lockdown.KEY: False})
+    db.execute("DELETE FROM core_jobs WHERE status = 'waiting' AND wait_reason LIKE ?", (lockdown.REASON + "%",))
 
 
 @pytest.fixture

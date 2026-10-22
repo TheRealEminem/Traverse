@@ -61,7 +61,7 @@ Mac sharing data, keys and basic preferences.
 | F2 | Gemini's default model (`gemini-2.5-flash` is closed to new accounts) | S | with chunk 1 | ☑ 2026-10-18 (family 5166181) |
 | F3 | **Family link:** shared keys and preferences, a registry of installed apps, app-to-app data calls | M–L | after chunk 1 | ☑ 2026-10-18 (family 3a26cf7); The Lodge has it on its `family/link` branch |
 | F4 | Updater: beta channel, Go back, skip a version; CI publishes a pre-release and promotes it later | M | before chunk 14 | ☑ 2026-10-19 (family 44da03f); its workflows haven't run on GitHub yet |
-| F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☐ |
+| F5 | Lockdown: one switch that stops every cloud call, shared across the family | M | after F3 | ☑ 2026-10-21 on `claude/f5-lockdown-1e250b`; not yet sent to the family |
 | F6 | AI pricing and usage: what each AI call costs, and a running total | M | before chunk 9 | ☑ 2026-10-21 on `claude/f6-ai-costs-f43084`; not yet sent to the family |
 | F7 | Trailmix joins the family link (reads shared keys and preferences, offers its meetings) | S–M | Mark's call | ☐ a change in Trailmix's own repo |
 
@@ -1078,6 +1078,51 @@ after a few days with no blocking issue. Before Traverse's first release (chunk 
 
 One switch, shared through the family link, that stops every cloud call: AI providers (at `ai.configured()`, the
 one choke point), update checks and anything a module adds. From Trailmix's Lockdown.
+
+**Result (2026-10-21, on `claude/f5-lockdown-1e250b`, cut from `merge/muster-ai-mac`; not yet sent to the family).**
+- **The switch:** `core.lockdown`, one of the family's shared settings (F3), so turning it on in one family app turns
+  it on in every one that shares keys and preferences (an app with sharing off keeps its own). `core/server/lockdown.py`
+  has `on()`, `local(url)` (localhost or a loopback address: never the cloud) and, for modules, `may_reach(url)` ("may
+  I reach the cloud?") and `check(url)`, which raises `lockdown.Blocked`. `GET /api/lockdown` → `{on, parked}`. A
+  request to the app's API that meets it gets 409 with a sentence.
+- **AI:** `ai.configured()` says a provider beyond this Mac isn't ready ("Lockdown is on, so only AI on this Mac is
+  used"). Ollama and an OpenAI-compatible server at a local address keep working; an Ollama on another machine
+  doesn't. `ai.attempt()` stops the call before anything runs and raises `ai.Locked` (an `AIError` and a `jobs.Wait`).
+  A fallback on this Mac still answers; if it fails too, the job parks rather than failing, since the cloud one might
+  answer later. Model lists and Settings' Test refuse too, and both generate paths call the new `ai.require()`, so a
+  direct adapter call is stopped as well.
+- **The usage log (F6):** a stopped call is logged at a cost of 0, failed, with Lockdown's reason. Totals count it as
+  `stopped`, apart from `failed`; Settings → AI usage says "1 call · 1 stopped by Lockdown" and marks the call
+  "Stopped by Lockdown". It's told apart by its reason, so no new core migration step.
+- **Plane:** `PlaneClient._ask`, which every request passes through, checks before each one. A pull parks, a push you
+  sent parks (its row stays "sending"; the outbox says it goes when Lockdown is off), and Test connection gets 409. A
+  pull already reading when it's turned on stops at its next request and writes nothing. A Plane on this Mac still
+  works. Inbox's Trailmix reader checks its address too (Trailmix is local, so it keeps working).
+- **Updates:** the Mac updater asks `GET /api/lockdown` before every check and download, and goes ahead only on a
+  clear "off" (not when the server can't say). The menu shows "Lockdown is on · Check again". Go back needs no
+  download, so it still works. `UpdateRules.lockedDown` has 6 new checks; `smoke-test.sh` has a Lockdown step.
+- **Parked work:** `Blocked` and `Locked` are `jobs.Wait`s, so a job parks with a reason starting "Lockdown is on".
+  The new `jobs.release()` puts a job back in the queue without approving it. `lockdown.resume()` runs when the
+  switch is saved here, and every 5 seconds from a watch thread, which notices another app turning it off. Only work
+  Lockdown parked goes again, never "Needs you"; pressing Go on it while Lockdown is on parks it again. On screen
+  (`JobChip`, `JobStatus`): "Lockdown is on · It goes ahead by itself when Lockdown is off", with no Go button.
+- **Screens:** Settings → Lockdown, between Appearance and AI: the switch (turning it on asks first), what stops,
+  how many things wait, and a toast when they go. The sign: "Lockdown is on · N waiting" at the top of the sidebar,
+  and a small "Lockdown" chip in a narrow window's top bar, both opening Settings → Lockdown.
+- **Verified:** `scripts/check` passes (392 tests, 20 new: 15 host, 5 Plane; style clear; the family-drift note as
+  expected). Breaking each choke point in turn fails a test: `attempt`, `configured`, the Plane client, the shared
+  key, resuming on save, the stopped call's cost, the fallback chain, local addresses, model lists. A second copy of
+  the app, in its own process with its own data and the same temp family folder, sees the switch this one turned on
+  and turns it off for this one. `swift build` and UpdateChecks (47/47) pass, and `build-app.sh --dmg` then `smoke-test.sh` passed all six
+  steps on the built 0.2.0, the new one included (with Lockdown on, the app said so and didn't look). In the browser, on the
+  worktree's dev copy with every key blanked and a scratch family folder: the dialog, the sign (desktop and narrow,
+  Day and Dusk), the provider's hint, an inbox capture parked as "Lockdown is on", the stopped call in AI usage; then
+  "another app" turned it off in the family file, and within 5 seconds the capture went ahead on Ollama.
+- **Not done / to know:** not sent to the family (`scripts/sync-family --push`, Mark's call); the new shared files
+  are under `core/`, plus `conftest.py`, `mac/` and `scripts/smoke-test.sh`. The real family folder was never
+  touched. Checking for updates by hand is refused too (Trailmix allows it; the brief said every cloud call). While
+  Lockdown is on, the scheduled Plane pull is re-run every few minutes and parks again at once, without a request. A
+  push held by Lockdown can't be discarded until it's off (it's "sending", as before).
 
 ### F6 · AI pricing and usage (M)
 

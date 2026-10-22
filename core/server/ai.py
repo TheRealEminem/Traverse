@@ -6,6 +6,8 @@ when it fails are app-wide settings ("ai.*"), chosen once in Settings → AI. A 
 one of its jobs (choice="anthropic"); "auto" means the app-wide one.
 Local models are unloaded right after use (keep_alive 0) so they don't sit in memory.
 Every provider's attempt goes through attempt(), which writes what it used and cost to the usage log (pricing.py).
+While Lockdown is on (lockdown.py), only providers on this Mac are ready (configured()), and attempt() stops the
+others before anything is sent: it raises Locked, which a job parks on until Lockdown is off.
 
 Failures come in two kinds (AIError.provider_down). A *provider* failure says nothing about the text: no credit,
 a wrong key or model, a rate limit, unreachable, any server error. Every other request would fail the same
@@ -20,7 +22,7 @@ from urllib.parse import urlparse
 import httpx
 from pydantic import BaseModel
 
-from . import module, pricing, settings
+from . import lockdown, module, pricing, settings
 
 OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "0")  # "0" = unload right after the last call
 TIMEOUT = httpx.Timeout(600, connect=8)
@@ -73,6 +75,14 @@ class AIError(Exception):
         self.provider_down = provider_down
 
 
+class Locked(AIError, lockdown.Blocked):
+    """Lockdown stopped a call to a cloud provider before anything was sent. Also a jobs.Wait: a job that meets it
+    parks with this reason and goes again when Lockdown is off."""
+
+
+LOCKED_OUT = f"{lockdown.REASON}, so only AI on this Mac is used"
+
+
 # ── For modules ────────────────────────────────────────────────────────
 
 def complete(prompt: str, system: str | None = None, choice: str = "auto") -> tuple[str, str]:
@@ -111,24 +121,38 @@ def local_first() -> bool:
 # ── Provider facts ─────────────────────────────────────────────────────
 
 def label(pid: str, cfg: dict) -> str:
-    return (cfg.get("custom_name") or "OpenAI-compatible") if pid == "custom" else PROVIDERS[pid]["label"]
+    if pid == "custom":
+        return cfg.get("custom_name") or "OpenAI-compatible"
+    return PROVIDERS[pid]["label"] if pid in PROVIDERS else pid
 
 
 def is_local(pid: str, cfg: dict) -> bool:
-    return pid == "ollama" and _on_this_machine(cfg["ollama_url"])
+    return pid == "ollama" and lockdown.local(cfg["ollama_url"])
 
 
 def is_free(pid: str, cfg: dict) -> bool:
     """Costs nothing per call: Ollama, wherever it runs, or an OpenAI-compatible server on this machine."""
-    return pid == "ollama" or (pid == "custom" and _on_this_machine(cfg.get("custom_base_url", "")))
+    return pid == "ollama" or (pid == "custom" and lockdown.local(cfg.get("custom_base_url", "")))
 
 
-def _on_this_machine(url: str) -> bool:
-    return (urlparse(url).hostname or "") in ("localhost", "127.0.0.1", "::1")
+def runs_here(pid: str, cfg: dict) -> bool:
+    """The model runs on this Mac: Ollama or an OpenAI-compatible server, at a local address. Only these answer while
+    Lockdown is on (an Ollama on another machine is beyond this Mac too)."""
+    if pid == "ollama":
+        return lockdown.local(cfg.get("ollama_url"))
+    return pid == "custom" and lockdown.local(cfg.get("custom_base_url"))
+
+
+def locked_out(pid: str, cfg: dict) -> bool:
+    """Lockdown is on and this provider is beyond this Mac."""
+    return not runs_here(pid, cfg) and lockdown.on()
 
 
 def configured(pid: str, cfg: dict) -> tuple[bool, str]:
-    """(ready, reason-if-not). Cheap: no network call except Ollama's model list."""
+    """(ready, reason-if-not). Cheap: no network call except Ollama's model list. The one choke point: while Lockdown
+    is on, a provider beyond this Mac is never ready."""
+    if locked_out(pid, cfg):
+        return False, LOCKED_OUT
     if pid == "ollama":
         return (True, "") if _ollama_tags(cfg) else (False, f"Ollama isn't reachable at {cfg['ollama_url']} (or has no models)")
     if pid == "custom":
@@ -140,6 +164,13 @@ def configured(pid: str, cfg: dict) -> tuple[bool, str]:
     if not cfg[f"{pid}_api_key"]:
         return False, f"Add an API key for {PROVIDERS[pid]['label']} in Settings"
     return True, ""
+
+
+def require(pid: str, cfg: dict) -> None:
+    """Raises unless pid can take a call now: Locked when Lockdown stops it, AIError for anything else."""
+    ok, why = configured(pid, cfg)
+    if not ok:
+        raise (Locked if why == LOCKED_OUT else AIError)(why, provider_down=True)
 
 
 def model_for(pid: str, cfg: dict) -> str:
@@ -185,9 +216,14 @@ def run_chain(choice: str, cfg: dict, call: str, fn) -> tuple[object, str]:
     for pid in chain(choice, cfg):
         try:
             return attempt(pid, cfg, call, fn), pid
+        except Locked as e:
+            errors.append(e)
         except AIError as e:
             errors.append(e)
             reasons.append(f"{label(pid, cfg)}: {e}")
+    if any(isinstance(e, Locked) for e in errors):
+        # A provider Lockdown stopped might have answered: the job waits for Lockdown to be off rather than failing.
+        raise Locked("; ".join([LOCKED_OUT, *reasons]), provider_down=True)
     # Provider-down only if every provider tried failed for reasons that have nothing to do with the text.
     raise AIError("; ".join(reasons), provider_down=all(e.provider_down for e in errors))
 
@@ -195,8 +231,12 @@ def run_chain(choice: str, cfg: dict, call: str, fn) -> tuple[object, str]:
 def attempt(pid: str, cfg: dict, call: str, fn, asker: tuple[str, str] | None = None):
     """One provider's go at a call ("complete" or "structured"): fn(pid, meter) does it and reports the tokens.
     The one place AI calls are counted: what it used and cost go in the usage log, whether it worked or not.
-    asker: (module, job) when it isn't the job running in this thread."""
+    asker: (module, job) when it isn't the job running in this thread. While Lockdown is on, a provider beyond this
+    Mac is stopped here, before fn runs: the log shows it, at no cost, and Locked is raised."""
     meter = pricing.Meter(pid, cfg.get(f"{pid}_model", ""), free=is_free(pid, cfg), asker=asker)
+    if locked_out(pid, cfg):
+        meter.record(call, error=LOCKED_OUT, stopped=True)
+        raise Locked(LOCKED_OUT, provider_down=True)
     try:
         result = fn(pid, meter)
     except Exception as e:
@@ -212,9 +252,7 @@ def generate(pid: str, cfg: dict, prompt: str, system: str | None = None, keep_a
              meter: pricing.Meter | None = None) -> str:
     """meter: where the tokens are reported (attempt() gives one; without it they aren't recorded)."""
     meter = meter or pricing.Meter(pid)
-    ok, why = configured(pid, cfg)
-    if not ok:
-        raise AIError(why, provider_down=True)
+    require(pid, cfg)
     if pid == "ollama":
         text = _ollama(cfg, prompt, system, keep_alive or OLLAMA_KEEP_ALIVE, meter)
     elif pid == "anthropic":
@@ -416,6 +454,8 @@ def providers() -> list[dict]:
 
 def list_models(pid: str) -> list[str]:
     cfg = settings.section("ai")
+    if locked_out(pid, cfg):
+        raise Locked(LOCKED_OUT, provider_down=True)
     if pid == "ollama":
         tags = _ollama_tags(cfg)
         if not tags:

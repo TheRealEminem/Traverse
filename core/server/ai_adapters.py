@@ -17,8 +17,8 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from . import pricing
-from .ai import (AIError, PROVIDERS, TIMEOUT, _CLAUDE_FALLBACK_MODELS, _error_text, claude_error, claude_usage, configured,
-                 label, model_for, ollama_usage, openai_usage, too_long)
+from .ai import (AIError, PROVIDERS, TIMEOUT, _CLAUDE_FALLBACK_MODELS, _error_text, claude_error, claude_usage, label,
+                 model_for, ollama_usage, openai_usage, require, too_long)
 from .ai_schema import blank_to_none, parse_json_text, portable_schema, strict_schema
 
 log = logging.getLogger("core.ai")
@@ -36,9 +36,7 @@ def generate_structured(pid: str, cfg: dict, prompt: str, system: str | None, sc
                         max_tokens: int | None, meter: pricing.Meter | None = None) -> BaseModel:
     """meter: where the tokens are reported (ai.attempt gives one; without it they aren't recorded)."""
     meter = meter or pricing.Meter(pid)
-    ok, why = configured(pid, cfg)
-    if not ok:
-        raise AIError(why, provider_down=True)
+    require(pid, cfg)
     system = system or ""
     if pid == "anthropic":
         return _claude(cfg, system, prompt, schema, max_tokens or CLAUDE_MAX_TOKENS, meter)
