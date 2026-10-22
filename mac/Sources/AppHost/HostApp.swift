@@ -101,6 +101,8 @@ struct UpdateItems: View {
             Text("Checking for updates…")
         case .offline:
             Button("Couldn’t reach GitHub · Try again") { Task { await updater.check(manual: true) } }
+        case .lockedDown:
+            Button("Lockdown is on · Check again") { Task { await updater.check(manual: true) } }
         case .upToDate:
             Button("Up to date · Check again") { Task { await updater.check(manual: true) } }
         case .idle:

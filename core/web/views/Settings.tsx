@@ -1,5 +1,5 @@
-// Settings: the host's own sections (appearance, you, AI, Claude, family apps), then one section per module, then
-// your data and the app.
+// Settings: the host's own sections (appearance, you, Lockdown, AI, Claude, family apps), then one section per module,
+// then your data and the app.
 import { useEffect, useState } from "react";
 import { api, inApp, quitApp } from "../api";
 import type { FamilyStatus, ProviderId, ProviderInfo } from "../api";
@@ -12,6 +12,7 @@ import { useSettings, useShell } from "../shell";
 import type { ThemePref } from "../theme";
 import AIUsage from "./AIUsage";
 import ClaudeAccess from "./ClaudeAccess";
+import Lockdown from "./Lockdown";
 import YourData from "./YourData";
 
 function ModelPicker({ provider, value, onSave }: { provider: ProviderId; value: string; onSave: (v: string) => void }) {
@@ -172,6 +173,8 @@ export default function Settings() {
           <TextSetting label="Your name" value={String(values["core.your_name"] ?? "")} onSave={(x) => save({ "core.your_name": x })} placeholder="e.g. Sam" />
         </ControlRow>
       </Section>
+
+      <Lockdown shared={!!family?.sharing} />
 
       <Section
         icon={<SparkleIcon size={16} />}

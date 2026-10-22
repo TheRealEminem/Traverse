@@ -11,7 +11,9 @@ check against the base) is push.py's business; this only carries it.
 Plane signs requests in with a personal API key in the X-API-Key header. Lists come back a page at a time (cursor
 and per_page, at most 100) and are followed to the end. Plane allows 60 requests a minute per key: a 429 waits for
 X-RateLimit-Reset (or backs off) and tries again, and running out of the minute's allowance waits before the next.
-Errors are raised as PlaneError with a sentence a person can act on.
+Errors are raised as PlaneError with a sentence a person can act on. While Lockdown is on (core/server/lockdown.py)
+no request is sent to a Plane beyond this Mac: each one raises lockdown.Blocked first, so a pull or a push parks
+until Lockdown is off.
 """
 import logging
 import time
@@ -20,7 +22,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from core.server import mcp
+from core.server import lockdown, mcp
 
 log = logging.getLogger("plane.client")
 
@@ -192,8 +194,10 @@ class PlaneClient:
 
     def _ask(self, request: Callable[[], httpx.Response], path: str, again: bool):
         """Sends one request, waiting out rate limits (which Plane answers before doing anything, so any request can
-        go again) and, when `again`, Plane's hiccups and timeouts."""
+        go again) and, when `again`, Plane's hiccups and timeouts. Every request passes here, so Lockdown stops each
+        one, even in a pull that started before it was turned on."""
         for attempt in range(1, MAX_TRIES + 1):
+            lockdown.check(self.base_url)
             try:
                 r = request()
             except httpx.TimeoutException as e:

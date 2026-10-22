@@ -48,6 +48,18 @@ export interface Job {
   updated_at: string;
 }
 
+/** Lockdown (core/server/lockdown.py): nothing leaves this Mac. `parked`: jobs waiting for it to be off. */
+export interface LockdownStatus {
+  on: boolean;
+  parked: number;
+}
+export const LOCKDOWN = "Lockdown is on";
+
+/** The job is parked until Lockdown is off: it goes ahead by itself then, so there's nothing to press. */
+export function heldByLockdown(job: Job | null | undefined): boolean {
+  return job?.status === "waiting" && !!job.wait_reason?.startsWith(LOCKDOWN);
+}
+
 /** Something in another module, described by that module. */
 export interface Linked {
   ref: string;
@@ -81,11 +93,12 @@ export interface ProviderInfo {
 }
 
 /** What AI calls cost (core/server/pricing.py). Costs are US dollars; `unknown` counts calls at a price nobody
- * published, which aren't in `cost`. */
+ * published, which aren't in `cost`; `stopped` counts calls Lockdown stopped, which aren't in `failed`. */
 export interface UsageTotals {
   calls: number;
   cost: number;
   failed: number;
+  stopped: number;
   unknown: number;
   input_tokens: number;
   output_tokens: number;
@@ -108,6 +121,7 @@ export interface UsageCall {
   output_tokens: number | null;
   cost: number | null; // null: unknown, or a failure that spent nothing
   failed: boolean;
+  stopped: boolean; // Lockdown stopped it before anything was sent
   unknown: boolean;
   error: string | null;
 }
@@ -206,6 +220,7 @@ export const api = {
   providerModels: (id: ProviderId) => request<{ models: string[] }>(`/ai/providers/${id}/models`),
   providerTest: (id: ProviderId) => request<{ message: string }>(`/ai/providers/${id}/test`, json("POST")),
   aiUsage: () => request<AIUsage>("/ai/usage"),
+  lockdown: () => request<LockdownStatus>("/lockdown"),
 
   search: (q: string) => request<SearchGroup[]>(`/search?q=${encodeURIComponent(q)}`),
   people: (q: string, limit = 8) => request<PeopleResult>(`/people?q=${encodeURIComponent(q)}&limit=${limit}`),
