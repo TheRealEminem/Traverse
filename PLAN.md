@@ -28,7 +28,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 12 | AI in the app: status drafts, break a task down | M | ☑ 2026-10-21 on `claude/chunk-12-ai-c80a35` (from `chunk-11/mcp`): drafts and breakdowns tried live on Ollama; a status update waits in the Outbox as a comment, never sent (dry run) |
 | 13 | Home card, search, export, Settings, the auto-sync switch | M | ☐ |
 | 14 | Mac: mark, menu, build and install beside The Lodge | M | ◐ 2026-10-21 on `claude/chunk-14-mac-ca4e9f`: the menu lists the modules' sections; the new build runs beside The Lodge. Updates stay off for now (Mark's choice). Merged on `merge/muster-ai-mac` and installed as 0.2.0 (c3fd94d) over 0.1.0 |
-| 15 | **Muster**: the day's kick-off, what moved, plan the day, look ahead, wrap-up (15a), with AI and your calendars (15b) | L | ◐ 2026-10-21: 15a on `chunk-15/muster` (the next morning tried on a copy of the dev data); 15b on `claude/chunk-15b-muster-24961f`: summary and plan tried live on Ollama; calendars as a server-side module (iCal address, and the Mac's Calendar); Mark's Google calendar read in the dev app; installed as 0.3.0 on 2026-10-22 (uncommitted) |
+| 15 | **Muster**: the day's kick-off, what moved, plan the day, look ahead, wrap-up (15a), with AI and your calendars (15b) | L | ◐ 2026-10-21: 15a on `chunk-15/muster` (the next morning tried on a copy of the dev data); 15b on `claude/chunk-15b-muster-24961f`: summary and plan tried live on Ollama; calendars as a server-side module (iCal address, and the Mac's Calendar); Mark's Google calendar read in the dev app; installed as 0.3.0 on 2026-10-22; committed (4e153c4) and pushed |
 
 Milestones: **A** "it runs" = 0–1 · **B** "my work, locally" = 2–4 · **C** "sees the team" = 5–6 ·
 **D** "shares with the team" = 7–8 · **E** "AI does the typing" = 9–12 · **F** "shipped" = 13–14 ·
@@ -1050,8 +1050,11 @@ shared files are changed here, not sent to the family yet).**
 - **Going public:** Mark asked (2026-10-22) to build Traverse and make it public on GitHub under Trailmix's license
   (AGPL-3.0). Passed to the session that wrote the going-public review (`going-public-review.md` in the shared notes);
   nothing was pushed or published.
+- **Committed** as 4e153c4 on `claude/chunk-15b-muster-24961f` and pushed to the private repo (2026-10-22, Mark's
+  go-ahead; `main` untouched). Its code is what 0.3.0 was built from. The push carried the never-pushed base
+  (`merge/muster-ai-mac`: 15a, 12, 14 and F6) with it.
 - **Not done:** F5 Lockdown should stop calendar reads too (they're cloud calls). The two new packages were installed
-  into the main checkout's `.venv`. Not committed. The shared files (`core/web/`, `mac/`, `scripts/build-app.sh`,
+  into the main checkout's `.venv`. The shared files (`core/web/`, `mac/`, `scripts/build-app.sh`,
   ARCHITECTURE.md) go to the family with `scripts/sync-family --push` when Mark says.
 
 ## 6b. Family track
