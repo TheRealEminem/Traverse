@@ -12,6 +12,7 @@ it, else "default".
                     -> error    (POST /api/jobs/<id>/retry puts it back in the queue)
                     -> waiting  (the handler raised Wait: e.g. not enough free memory; "go" with force)
   waiting <- enqueue(..., approve=True): parked until you press the button ("Needs you"; POST /api/jobs/<id>/go)
+  waiting -> queued by itself (release) when what it waited for has passed: Lockdown turned off (lockdown.py)
 
 State lives in the database, so after a restart unfinished jobs simply run again: write handlers so that
 running twice is harmless (check what's already done, then do the rest).
@@ -101,6 +102,15 @@ def go(job_id: str, force: bool = False) -> None:
 def retry(job_id: str) -> None:
     _yours_only("try failed work again")
     if db.execute("UPDATE core_jobs SET status = 'queued', error = NULL, updated_at = ? WHERE id = ? AND status = 'error'",
+                  (db.now(), job_id)):
+        _notify(job_id)
+        _submit(job_id)
+
+
+def release(job_id: str) -> None:
+    """Starts a waiting job again because what it waited for has passed by itself (Lockdown turned off). Not an
+    approval: only work that was already going parks that way, so Claude's tools don't stop it."""
+    if db.execute("UPDATE core_jobs SET status = 'queued', wait_reason = NULL, updated_at = ? WHERE id = ? AND status = 'waiting'",
                   (db.now(), job_id)):
         _notify(job_id)
         _submit(job_id)
