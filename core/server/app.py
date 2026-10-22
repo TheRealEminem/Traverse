@@ -17,14 +17,15 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ai, auth, backup, briefing, config, db, events, family, jobs, links, mcp, module, people, schedule, search, settings
+from . import ai, auth, backup, briefing, config, db, events, family, jobs, links, lockdown, mcp, module, people, schedule, search, settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("core")
 
 # Shared by every module. your_name: "You" in anything that names people. appearance: Day, Dusk or the system's.
 # share_with_family: whether this app shares keys and preferences with the other family apps on this Mac (family.py).
-CORE_SETTINGS = {"your_name": "", "appearance": "system", "share_with_family": True}
+# lockdown: nothing leaves this Mac (lockdown.py); shared with the family.
+CORE_SETTINGS = {"your_name": "", "appearance": "system", "share_with_family": True, "lockdown": False}
 CORE_CHOICES = {"appearance": ("system", "light", "dusk")}
 
 
@@ -66,6 +67,7 @@ async def lifespan(_: FastAPI):
     _exit_with_parent()
     jobs.recover()
     schedule.start()
+    lockdown.watch()                            # work Lockdown parked goes again once it's off, here or in another app
     try:
         family.register()                       # other family apps on this Mac can find this one now
         family.start_heartbeat()
@@ -90,6 +92,11 @@ def create_app() -> FastAPI:
         if path.startswith("/api/") and path not in auth.OPEN_PATHS and not is_family_call and not auth.is_authorized(request):
             return JSONResponse({"detail": "Sign in required"}, status_code=401)
         return await call_next(request)
+
+    @app.exception_handler(lockdown.Blocked)
+    async def blocked(_: Request, e: lockdown.Blocked):
+        """A request that would have reached the cloud while Lockdown is on (a job parks instead)."""
+        return JSONResponse({"detail": lockdown.SENTENCE}, status_code=409)
 
     app.include_router(core_router, prefix="/api")
     app.include_router(backup.router, prefix="/api")
@@ -227,7 +234,16 @@ def put_settings(changes: dict):
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
     events.publish("core.settings.changed", {"keys": list(changes)})
+    if lockdown.KEY in changes:
+        lockdown.resume()                       # turned off: what it parked goes now, not on the next look
     return out
+
+
+@core_router.get("/lockdown")
+def lockdown_status():
+    """Whether Lockdown is on and how much work waits for it: for the app's chrome, and for the Mac app, which doesn't
+    check for updates while it's on."""
+    return lockdown.status()
 
 
 @core_router.get("/ai/providers")
