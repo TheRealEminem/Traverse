@@ -12,6 +12,12 @@ _prefix = json.loads((Path(__file__).parent / "app.json").read_text())["envPrefi
 os.environ[f"{_prefix}_DATA_DIR"] = tempfile.mkdtemp(prefix="family-test-")
 os.environ[f"{_prefix}_UI_DIR"] = "/nonexistent"
 os.environ["TRAILMIX_FAMILY_DIR"] = tempfile.mkdtemp(prefix="family-link-test-")   # never the Mac's real family folder
+# Nothing the shell sets up for AI reaches the tests: a real key would make a provider look ready, and a base address
+# would send the SDK somewhere else.
+for _name in [n for n in os.environ if n.startswith((f"{_prefix}_AI_", "APP_AI_"))] + [
+        "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_API_KEY", "OPENAI_BASE_URL", "GEMINI_API_KEY",
+        "DEEPSEEK_API_KEY", "OLLAMA_URL", "OLLAMA_MODEL"]:
+    os.environ.pop(_name, None)
 
 from fastapi.testclient import TestClient  # noqa: E402
 
