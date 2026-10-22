@@ -28,7 +28,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 12 | AI in the app: status drafts, break a task down | M | ☑ 2026-10-21 on `claude/chunk-12-ai-c80a35` (from `chunk-11/mcp`): drafts and breakdowns tried live on Ollama; a status update waits in the Outbox as a comment, never sent (dry run) |
 | 13 | Home card, search, export, Settings, the auto-sync switch | M | ☐ |
 | 14 | Mac: mark, menu, build and install beside The Lodge | M | ◐ 2026-10-21 on `claude/chunk-14-mac-ca4e9f`: the menu lists the modules' sections; the new build runs beside The Lodge. Updates stay off for now (Mark's choice). Merged on `merge/muster-ai-mac` and installed as 0.2.0 (c3fd94d) over 0.1.0 |
-| 15 | **Muster**: the day's kick-off, what moved, plan the day, look ahead, wrap-up (15a), with AI and your Mac's Calendar (15b) | L | ◐ 2026-10-21: 15a on `chunk-15/muster` (the next morning tried on a copy of the dev data); 15b not started |
+| 15 | **Muster**: the day's kick-off, what moved, plan the day, look ahead, wrap-up (15a), with AI and your calendars (15b) | L | ◐ 2026-10-21: 15a on `chunk-15/muster` (the next morning tried on a copy of the dev data); 15b on `claude/chunk-15b-muster-24961f`: summary and plan tried live on Ollama; calendars as a server-side module (iCal address, and the Mac's Calendar); Mark's Google calendar read in the dev app; installed as 0.3.0 on 2026-10-22 (uncommitted) |
 
 Milestones: **A** "it runs" = 0–1 · **B** "my work, locally" = 2–4 · **C** "sees the team" = 5–6 ·
 **D** "shares with the team" = 7–8 · **E** "AI does the typing" = 9–12 · **F** "shipped" = 13–14 ·
@@ -94,6 +94,7 @@ Mac sharing data, keys and basic preferences.
 | D8 | Plane members become people through the host's people directory (blueprint §6), with `plane` as a provider | Assignees then work the same way with or without The Lodge's People |
 | D9 | MCP lives in the host (`core/server/mcp.py`), and modules contribute tools | A shared host feature: any family app (The Lodge too) can expose its modules' tools the same way |
 | D10 | **Muster** is a section of Traverse (module `muster`), built family-ready: the host gathers each module's briefing (`Module.brief`), so The Lodge can have one too. AI writes a summary and suggests a plan; the first open each day lands on it; your Mac's Calendar is read through the Mac host | Mark's answers, 2026-10-21 |
+| D11 | **Calendars are a server-side module (`calendar`) with sources:** a calendar's private iCal address first, this Mac's Calendar (through the Mac host) as another source, Google Calendar's API only if the feed is stale. Other modules see meetings only through the briefing | Mark's call, 2026-10-21: the app should work across platforms (a browser, a server install), not only in the Mac app's window |
 
 ## 3. Plane: what syncs, and the rules that protect the team's work
 
@@ -936,6 +937,123 @@ the family yet).**
 - **Done when:** the morning view shows today's real calendar events, a written summary of what moved, and a
   suggested plan around those meetings that you can accept into today's picks.
 
+**Result 15b (2026-10-21, worktree branch `claude/chunk-15b-muster-24961f` from `merge/muster-ai-mac` at c40c41f; the
+shared files are changed here, not sent to the family yet).**
+- **Changed on the way (D11, Mark's call):** the first version read the calendar only in the Mac app's window and
+  handed the events to Muster, so a browser or a server install had none, and the server saw them only when the page
+  sent them. Calendars now live in their own module on the server, with sources: a calendar's private iCal address
+  first, the Mac's Calendar kept as a source, and Google Calendar's API only if the feed turns out stale. Muster reads
+  meetings from the briefing like everything else. Its migration step 2 lost the `calendar` column before it shipped.
+- **Spike: the Mac's Calendar comes through a script message handler, not a local endpoint.** The Mac host answers a
+  second bridge, `calendar` (`WKScriptMessageHandlerWithReply`: `postMessage` returns a promise). Why: macOS asks when
+  you add the calendar, in front of the window that asked, not at a launch at login; no port or token another process
+  or a web page could reach; and the same shape as chunk 14's `app` bridge. Its cost: the server sees those events
+  only when a page sends them, which the calendar module's page half does while the window is open. It builds with the
+  Command Line Tools (Swift 6.4, no new warnings).
+- **The Mac host** (shared `mac/`): `CalendarBridge.swift`, read-only EventKit (macOS 14's full access): whether it may
+  read (`full`, `unasked`, `denied`, `restricted`, `write_only`), asking macOS once, a span's events (up to a month,
+  every account the Calendar app has; declined and cancelled ones left out; `free` for "Show as: Free"), and opening
+  System Settings at Privacy & Security → Calendars. Only the window's own page may ask; nothing is kept. **`app.json`
+  has a new optional `calendarUse`**, which `build-app.sh` writes into Info.plist as the reason macOS shows (and lints
+  the plist). An app without one (The Lodge) gets no reason, so its bridge answers `unavailable` and never touches
+  EventKit: asking without a reason would end the app.
+- **The host's web half** (shared): `macCalendar` in `core/web/api.ts` (null in a browser), and **`ModuleWeb.background`**,
+  a component the shell keeps mounted on every screen, rendering nothing, for work a module does in the page.
+  ARCHITECTURE.md §5, §6 (with the briefing's meeting lines) and §10 say so.
+- **`calendar`** (new, Traverse's own module, written so a family app could take it; after `inbox` in `app.json`, no
+  sidebar entry): `calendar_sources` and `calendar_events`. Settings → Calendar adds a calendar by its private iCal
+  address (`https://` or `webcal://`; `http` only on this computer), with where to find it in Google Calendar and
+  Outlook. **The address is a secret:** stored, never sent back (only its host), not exported, never in an error, and
+  httpx's own log line for the request names only the host while a calendar is read (it logs every URL at INFO,
+  which the server log keeps; found by a test). The `calendar/read` job (lane "cloud") reads each enabled feed every
+  15 minutes while there are calendars, at once when one is added, and on "Read now": `icalendar` and
+  `recurring-ical-events` (new in `requirements.txt`) expand repeats, honour moved and skipped times and time zones,
+  and leave out cancelled events and ones you declined (when the calendar says who you are, as Google's main calendar
+  does). A failed read keeps the last good events, shows why in Settings, and puts the calendar in Muster's "Waiting
+  on you". In the Mac app, Settings → Calendar can also add **This Mac's Calendar** (macOS asks then); its
+  `background` component sends today's and the next week's events while the window is open (on load, every 5
+  minutes, when the window comes back). Events are kept from today to a week ahead, each read replaces its source's,
+  and ones that ended before today are forgotten. Its briefing: today's events in "today", the next week's in
+  "ahead", each `{when: start, minutes: length, kind: "meeting" | "event", project: the calendar's name}` ("event":
+  all day, or shown as free), unreadable calendars in "waiting".
+- **Muster** reads the meetings from the briefing (`meetings.py`, `time.ts`) and never sees a calendar. **Today →
+  Meetings:** the day's meetings (all-day first, past ones faded, "Now" on the current one, "Shown as free"), then
+  Trailmix's recorded meetings as before; with none, "No meetings today. Calendars you add in Settings → Calendar show
+  here." **Look ahead → Meetings this week:** each day's count, hours and titles. **Plan the day:** "3 h free today,
+  around 2 meetings", working hours less what's gone by and less the meetings that take time.
+- **The morning summary** (`summary.py`, job `muster/summary`): on the day's first look, when something moved and AI in
+  Muster is on, the AI (Settings → AI) writes 1 to 4 sentences from the briefing's "What moved" lines and nothing else
+  (`ai.structured`, so no preamble). It shows under the day's line as "Written by Ollama · qwen2.5:7b at 4:52 PM" with
+  "Write again", "· 2 more moved since" once more has, a spinner while it's written, and the reason with Try again when
+  it fails (the last summary stays). Nothing moved: no AI call and no summary. Opened before AI was on: "Sum up what
+  moved".
+- **The suggested plan** (`suggest.py`, job `muster/plan`): the job tells the AI the working hours, the day's meetings
+  and the free stretches between them (computed, not left to the model), what's already planned and the day's line,
+  and candidates from the briefing: today's, what waits on you, what's due this week; not meetings or other calendar
+  lines, the team's past due, projects at risk, cycles or milestones, not what's planned or dropped today, and one line
+  per title (a task and its push in the Outbox are one). The AI answers with candidate keys in order, a reason each and
+  minutes (a task's own estimate wins; the AI's is rounded), and a note; unknown keys and repeats are dropped. **It
+  never applies itself.** Each pick shows where it would land after what's already planned ("6:00 – 6:45 PM", "…,
+  around a meeting", or "Doesn't fit today"), with Accept, earlier/later and Drop (Bring back); Accept all; Discard. An
+  accepted pick joins the day's picks right after the nearest accepted one before it. Asking again replaces the
+  suggestion and keeps what you dropped out of it.
+- **Muster's data**, migration step 2: `muster_days.summary_at`, `summary_moved` and `plan` (JSON). A new setting, **AI
+  in Muster** (`muster.ai`, on), in Settings → Muster, whose hint says the plan sends the AI today's meeting times and
+  titles. API: `POST /days/{day}/summary`, `POST|DELETE /days/{day}/plan`, `POST /days/{day}/plan/accept`, `POST
+  /days/{day}/plan/{id}/accept`, `PATCH /days/{day}/plan/{id}`, `POST /days/{day}/plan/{id}/move`.
+- **Verified:** `env -u ANTHROPIC_API_KEY -u ANTHROPIC_BASE_URL scripts/check` passes: 384 tests (12 new), types,
+  build, style, the expected family-drift note. Calendar (5, against a stand-in calendar server): a feed in another
+  time zone with a daily repeat, a skipped and a moved time, a two-day all-day event, DURATION, floating times, free,
+  cancelled and declined events; failed reads in words, never the address, in errors or the log; the API never
+  returning it, the same refs read after read, a failure keeping the last read and showing in "waiting", switching off
+  and removing; the Mac source as the window sends it (EventKit's all-day ends, checks); events forgotten once over.
+  Muster (7, with the fake AI): meeting lines to free time; the summary's first look, a second look, Write again, a
+  failure and Try again; none with AI off or nothing moved; the plan's prompt with meetings fed through the calendar
+  module, its picks mapped, accepted in order, moved, dropped and brought back, accept all; asking again with no
+  calendar left; nothing to suggest; which lines are candidates. Muster's tests keep AI in Muster off unless a test
+  fakes it. **Two live AI calls**, both to Ollama qwen2.5:7b on this Mac (Settings' provider), on this worktree's copy
+  of the dev data, with the first design: the summary of 2 moved lines, and a plan around three made-up "Sample:"
+  meetings (5 picks, 180 min free, fitted). What they found, fixed and tested but not tried live again: the summary
+  copied the example sentence from its instructions ("Elijah moved three Operations items along"), so neither prompt
+  has examples now (a test checks); the plan picked a task's Outbox push under the same title as a planned pick
+  (titles dedupe now); reasons repeated titles (asked not to); and it overfilled the day, which the page shows as
+  "Doesn't fit today". **In the browser** (1440px and 375px, Dusk, nothing wider than the screen): Settings →
+  Calendar added a made-up "Sample:" feed served from this computer (12 events, "read at 11:29 PM"; the server log line
+  says `GET http://127.0.0.1/…`); Muster showed its meetings in Today (the cancelled one left out, the free one
+  marked) and the week in Look ahead, with no Mac app involved. The suggestion's accept, move and drop were checked
+  with the first design. **The built app:** `build-app.sh` into the scratchpad, made a test copy (`Traverse Test`, bundle
+  ID `com.traverse.app.calendartest`, port 8794, its own copy of the data with AI off, no family link). Its Info.plist
+  has the reason; its bundled Python has the two new packages and read the sample feed (12 events; its log says only
+  the host); and its Settings → Calendar offered "This Mac's Calendar · Add", so the bridge answered "unasked". Add
+  wasn't pressed, so macOS's prompt never showed, and nothing touched the installed app or its data. Only the pulls'
+  GETs reached Plane.
+- **Found:** the first two test runs, before Muster's tests turned AI off, let the 15a "next morning" test's summary
+  job call the real Ollama on this Mac (5 local calls, free; nothing left the Mac). Any test elsewhere that queues an
+  AI job without the fakes would do the same; the host's `conftest.py` doesn't stop it. The app is signed ad hoc, so
+  each build has a new code hash and macOS may ask for the calendar again after every install; a real signature keeps
+  the answer, and a Developer ID build (hardened runtime) also needs the
+  `com.apple.security.personal-information.calendars` entitlement (`mac/App.entitlements` doesn't exist yet).
+- **A real calendar (2026-10-22):** Mark added his Google calendar's secret iCal address himself, in the dev app's
+  Settings → Calendar ("Work", on `calendar.google.com`). The first read worked: 20 events from today to a week
+  ahead, 4 meetings today (8:00, 10:00, 11:00 to 2:00, 2:00), and Muster showed them. Whether they match his Google
+  Calendar, and whether the feed keeps up with changes, is his to say; that decides whether Google Calendar's API is
+  needed. The address is in this worktree's dev copy only; the installed app needs it added again there.
+- **Licenses:** `icalendar` is BSD-2-Clause; `recurring-ical-events` and `x-wr-timezone` are LGPL-3.0-or-later, the
+  first GPL-family code in the bundle (compatible with AGPL-3.0; the third-party notices need them). Passed to the
+  going-public review.
+- **Installed as 0.3.0 (2026-10-22, Mark's go-ahead)** over 0.2.0 with the full `scripts/install-app.sh`, from this
+  branch's working tree (c40c41f with uncommitted changes; `VERSION` 0.3.0): `scripts/check` and all 14 app checks
+  passed, a backup first (`traverse-20261022-172846-manual.db`), 24 tables checked and nothing missing. The installed
+  app has the calendar module (no calendars yet: Mark adds his address again there, and This Mac's Calendar if he
+  wants it, which is when macOS asks), Muster's summary and plan with AI in Muster on, and the calendar reason in its
+  Info.plist. Chunks 13 and F5 aren't in it.
+- **Going public:** Mark asked (2026-10-22) to build Traverse and make it public on GitHub under Trailmix's license
+  (AGPL-3.0). Passed to the session that wrote the going-public review (`going-public-review.md` in the shared notes);
+  nothing was pushed or published.
+- **Not done:** F5 Lockdown should stop calendar reads too (they're cloud calls). The two new packages were installed
+  into the main checkout's `.venv`. Not committed. The shared files (`core/web/`, `mac/`, `scripts/build-app.sh`,
+  ARCHITECTURE.md) go to the family with `scripts/sync-family --push` when Mark says.
+
 ## 6b. Family track
 
 Shared host work, made in Traverse, sent to `TrailmixFamily` with `scripts/sync-family --push`, committed there, and
@@ -1136,7 +1254,7 @@ It's a change in Trailmix's own repository, independent of the rest. Until then,
 | Chunk 0 touches The Lodge, which holds real data | Code-only change on a branch, a backup first, and The Lodge's full `scripts/check` before merging |
 | Tasks v2 is shared code | Built only in `TrailmixFamily`; The Lodge takes it when Mark chooses (blueprint §3) |
 | Muster's "what moved" needs history the mirror doesn't keep | The pull's change log (chunk 15a) starts recording on its first run; nothing before that. Plane's per-item activity API could fill gaps, but it's one request per item, so not by default |
-| Calendar access on the Mac (EventKit's full-access permission, the app's signing) | A spike at the start of 15b; read-only, never stored beyond the day; Muster works without it |
+| Calendar access on the Mac (EventKit's full-access permission, the app's signing) | A spike at the start of 15b; read-only, never stored beyond the day; Muster works without it. Since D11 the Mac's Calendar is one source of several, and a private iCal address works anywhere |
 
 ## 8. Questions for later chunks
 

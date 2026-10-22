@@ -9,6 +9,7 @@ import WebKit
 ///   "quit"            quit the app
 ///   "reveal:<path>"   show a file or folder in Finder
 ///   "menu:<json>"     the sidebar's sections, [{"label", "path"}], for the menu bar menu
+/// and asks your Mac's Calendar through window.webkit.messageHandlers.calendar, which answers (CalendarBridge.swift).
 @MainActor
 final class MainWindow: NSObject, NSWindowDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     static let shared = MainWindow()
@@ -38,6 +39,7 @@ final class MainWindow: NSObject, NSWindowDelegate, WKUIDelegate, WKNavigationDe
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
         config.applicationNameForUserAgent = "\(AppConfig.name.replacingOccurrences(of: " ", with: ""))App/\(version)"
         config.userContentController.add(self, name: "app")
+        config.userContentController.addScriptMessageHandler(CalendarBridge.shared, contentWorld: .page, name: "calendar")
 
         let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 860), configuration: config)
         web.uiDelegate = self
