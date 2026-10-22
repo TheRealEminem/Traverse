@@ -3,3 +3,6 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 httpx>=0.27
 anthropic>=1.0
+# The calendar module reads private iCal addresses: repeats, moved times and time zones included.
+icalendar>=6.1
+recurring-ical-events>=3.4

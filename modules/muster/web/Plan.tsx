@@ -1,8 +1,9 @@
 // Plan the day, and the evening's wrap-up. Picks are refs to work anywhere in the app (or a line of your own), in
-// your order, each with your minutes; the total is measured against what's left of your working hours. The wrap-up
-// rolls the open ones to tomorrow, except those you let go, and keeps a line for tomorrow-you.
+// your order, each with your minutes; the total is measured against what's left of your working hours, less the day's
+// meetings (from the briefing: Settings → Calendar). The wrap-up rolls the open ones to tomorrow, except those you let
+// go, and keeps a line for tomorrow-you.
 import { useEffect, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { api } from "@core/api";
 import type { SearchGroup } from "@core/api";
 import { CloseIcon, PineIcon, SignpostIcon, icon } from "@core/components/icons";
@@ -12,6 +13,7 @@ import { ChevronDown, ChevronUp, Moon } from "lucide-react";
 import { musterApi } from "./api";
 import type { Day, Pick } from "./api";
 import { Check, Part, clock, dayWords, hourMinutes, hourWords, minutesWords, readMinutes } from "./bits";
+import { busy, freeBlocks } from "./time";
 
 const UpIcon = icon(ChevronUp);
 const DownIcon = icon(ChevronDown);
@@ -192,15 +194,7 @@ function AddPick({ day, picked }: { day: string; picked: (ref: string) => boolea
   );
 }
 
-/** Minutes left in today's working hours from now (all of them before the day starts, none after it ends). */
-function minutesLeft(hours: Day["hours"], now: Date) {
-  const start = hourMinutes(hours.start);
-  const end = hourMinutes(hours.end);
-  const at = now.getHours() * 60 + now.getMinutes();
-  return Math.max(0, end - Math.max(start, at));
-}
-
-function useNow(everyMs = 60_000) {
+export function useNow(everyMs = 60_000) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), everyMs);
@@ -215,23 +209,43 @@ function Total({ day }: { day: Day }) {
   const planned = open.reduce((n, p) => n + (p.minutes ?? 0), 0);
   const guessless = open.filter((p) => !p.minutes).length;
   const isToday = day.day === day.today;
-  const left = isToday ? minutesLeft(day.hours, now) : hourMinutes(day.hours.end) - hourMinutes(day.hours.start);
+  const today = day.briefing.sections.today;
+  const blocks = freeBlocks(today, day.day, day.hours, isToday ? now : undefined);
+  const left = blocks.reduce((n, [a, b]) => n + b - a, 0);
+  const from = Math.max(hourMinutes(day.hours.start), isToday ? now.getHours() * 60 + now.getMinutes() : 0);
+  const meetings = busy(today, day.day).filter(([a, b]) => b > from && a < hourMinutes(day.hours.end)).length;
+  const known = busy(today, day.day).length > 0;
   const over = planned - left;
+  const hours = `Working hours: ${hourWords(day.hours.start)} to ${hourWords(day.hours.end)} (Settings → Muster)`;
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3 text-hint text-ink-soft sm:px-5">
       <span>
         <span className="font-medium tabular-nums text-ink">{minutesWords(planned)}</span> planned
         {guessless ? ` · ${guessless} without minutes` : ""}
       </span>
-      <span className={over > 0 ? "font-medium text-sun-deep" : ""} data-tip={`Working hours: ${hourWords(day.hours.start)} to ${hourWords(day.hours.end)} (Settings → Muster)`}>
+      <span className={over > 0 ? "font-medium text-sun-deep" : ""} data-tip={known ? `${hours}, less today’s meetings` : hours}>
         {over > 0 ? `${minutesWords(over)} more than ` : ""}
-        <span className="tabular-nums">{minutesWords(left)}</span> left {isToday ? "today" : "in the day"}
+        <span className="tabular-nums">{minutesWords(left)}</span> {known ? "free" : "left"} {isToday ? "today" : "in the day"}
+        {meetings ? `, around ${meetings} ${meetings === 1 ? "meeting" : "meetings"}` : ""}
       </span>
     </div>
   );
 }
 
-export function PlanTheDay({ day, className, delay }: { day: Day; className?: string; delay?: number }) {
+/** suggestion: the AI's suggested plan, shown above the picks; aside: what goes at the top right ("Suggest a plan"). */
+export function PlanTheDay({
+  day,
+  className,
+  delay,
+  aside,
+  suggestion,
+}: {
+  day: Day;
+  className?: string;
+  delay?: number;
+  aside?: ReactNode;
+  suggestion?: ReactNode;
+}) {
   const act = useAct();
   const picks = inPlan(day.picks);
   const elsewhere = day.picks.filter((p) => p.rolled_to || p.let_go);
@@ -252,7 +266,9 @@ export function PlanTheDay({ day, className, delay }: { day: Day; className?: st
       blurb={carried ? `What you'll do today, in order. ${carried} carried over from before.` : "What you'll do today, in order."}
       className={className}
       delay={delay}
+      aside={aside}
     >
+      {suggestion}
       <div className="panel divide-y divide-line">
         {picks.length > 0 && (
           <div role="list" aria-label="Today's picks" className="divide-y divide-line">

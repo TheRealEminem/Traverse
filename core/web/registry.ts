@@ -34,6 +34,12 @@ export interface ModuleWeb {
    * to show instead, without "#/", or null. The first enabled module with an answer wins.
    */
   start?: () => Promise<string | null>;
+  /**
+   * Work the module does in the page while the app is open, on any screen: a component that renders nothing visible
+   * (e.g. sending what the Mac app's window can read to the module's server). Keep it light, and keep the module
+   * working without it, as it doesn't run in a server install nobody has open.
+   */
+  background?: ComponentType;
 }
 
 const found = import.meta.glob<{ default: ModuleWeb }>("../../modules/*/web/index.tsx", { eager: true });

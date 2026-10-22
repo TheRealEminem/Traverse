@@ -8,6 +8,8 @@
   except for the picks you let go. A pick its own module says is done, or that's gone, stays behind.
 - **Ticking a pick** that's work somewhere else (a task) says so through the shared contract work.marked_done, and
   that module marks it done. Muster never writes another module's tables, and nothing it does reaches Plane.
+- **The AI** (while "AI in Muster" is on) writes the morning summary on the day's first look, when something moved
+  (summary.py), and suggests a plan when you ask (suggest.py). Neither changes the plan by itself.
 
 Everything else the page shows comes from the host: the briefing (core/server/briefing.py) and describe.
 """
@@ -16,9 +18,8 @@ from datetime import date, timedelta
 
 from core.server import briefing, contracts, db, events, module, settings
 
-from . import store
+from . import store, suggest, summary
 
-MAX_MINUTES = 24 * 60
 
 
 def today() -> date:
@@ -97,15 +98,41 @@ def ensure(day: str) -> dict:
 
 
 def open_day(day: str) -> dict:
-    """You're looking at Muster on this day: the first look fixes "since"; every look is the latest one."""
+    """You're looking at Muster on this day: the first look fixes "since" (and, when something moved, has the AI write
+    the morning summary); every look is the latest one."""
     row = ensure(day)
     stamp = db.now()
-    if not row["opened_at"]:
+    first = not row["opened_at"]
+    if first:
         store.save(day, since=_since_for(day), opened_at=stamp, seen_at=stamp)
     else:
         store.save(day, seen_at=stamp)
     _changed(day)
-    return view(day)
+    shown = view(day)
+    if first and shown["ai"] and shown["briefing"]["sections"]["moved"] and not row["summary_at"]:
+        summary.start(day)
+        shown["summary"] = summary.shaped(store.row(day))
+    return shown
+
+
+def write_summary(day: str) -> dict:
+    """"Write it again" (or for the first time, on a day you opened before AI was on)."""
+    _ai_on()
+    ensure(day)
+    summary.start(day)
+    _changed(day)
+    return summary.shaped(store.row(day))
+
+
+def suggest_plan(day: str) -> dict:
+    _ai_on()
+    ensure(day)
+    return suggest.start(day)
+
+
+def _ai_on() -> None:
+    if not settings.section("muster").get("ai"):
+        raise ValueError("AI in Muster is off. Turn it on in Settings → Muster.")
 
 
 def start_page() -> str | None:
@@ -117,14 +144,6 @@ def start_page() -> str | None:
 
 
 # ── The plan ──────────────────────────────────────────────────────────
-
-def _minutes(value) -> int | None:
-    if value in (None, ""):
-        return None
-    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_MINUTES:
-        raise ValueError("Minutes are a whole number, up to a day's worth")
-    return value
-
 
 def _find(picks: list[dict], pick_id: str) -> dict:
     for p in picks:
@@ -151,7 +170,7 @@ def add_pick(day: str, *, ref: str | None = None, title: str | None = None, href
     elif not title:
         raise ValueError("A pick needs some text")
     pick = {"id": uuid.uuid4().hex[:12], "ref": ref, "title": title[:300], "href": href if isinstance(href, str) else None,
-            "minutes": _minutes(minutes), "done": False, "first_day": day, "rolled_to": None, "let_go": False,
+            "minutes": store.minutes(minutes), "done": False, "first_day": day, "rolled_to": None, "let_go": False,
             "added_at": db.now()}
     store.save(day, picks=[*row["picks"], pick])
     _changed(day)
@@ -168,7 +187,7 @@ def update_pick(day: str, pick_id: str, changes: dict) -> dict:
     if pick.get("rolled_to"):
         raise ValueError("That went on to another day")
     if "minutes" in changes:
-        pick["minutes"] = _minutes(changes["minutes"])
+        pick["minutes"] = store.minutes(changes["minutes"])
     if "title" in changes:
         if pick.get("ref"):
             raise ValueError("Its own module names it; rename it there")
@@ -280,7 +299,7 @@ def _shown(pick: dict) -> dict:
 
 def view(day: str) -> dict:
     """Everything #/muster shows for a day: the day's row, its picks as their modules name them now, the note from
-    your last wrap-up, working hours, and the briefing from the day's "since"."""
+    your last wrap-up, working hours, the briefing from the day's "since", and the AI's summary and suggested plan."""
     row = ensure(day)
     since = row["since"] or _since_for(day)
     before = store.earlier(day, limit=1)
@@ -294,4 +313,7 @@ def view(day: str) -> dict:
         "picks": [_shown(p) for p in row["picks"]],
         "hours": {"start": cfg.get("day_starts") or "09:00", "end": cfg.get("day_ends") or "17:00"},
         "briefing": briefing.gather(since, date.fromisoformat(day)),
+        "ai": bool(cfg.get("ai")),
+        "summary": summary.shaped(row),
+        "plan": suggest.shaped(row),
     }

@@ -34,7 +34,8 @@ Lodge's scene keeps later.
 
 Lucide: `Mountain` (projects), `Flag` (milestones), `ListChecks` (my tasks), `Kanban` (board), `Users` (team),
 `Inbox` (inbox), `Send` (sent to Plane), `Sunrise` (Muster; inside it `Sun` today, `Signpost` the plan, `History` what
-moved, `Compass` ahead, `Moon` the wrap-up).
+moved, `Compass` ahead, `Moon` the wrap-up, `Sparkles` the AI's summary and suggested plan), `CalendarDays`
+(Settings → Calendar, and a calendar read by its address; `Laptop` this Mac's Calendar).
 
 ## Files
 
