@@ -8,6 +8,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useEffect, useState } from "react";
+import { LOCKDOWN, heldByLockdown } from "@core/api";
 import { Empty } from "@core/components/blocks";
 import { ExternalIcon, icon } from "@core/components/icons";
 import { PageHeader, Segmented, Skeleton, Spinner, StatusChip, Switch, useConfirm } from "@core/components/ui";
@@ -198,11 +199,16 @@ function Waiting({ push: p, data, focused, delay, onChanged }: { push: Push; dat
   const { act, busy } = useAct(onChanged);
   const [confirm, dialog] = useConfirm();
   const status = STATUS[p.status];
-  const sending = p.status === "sending" && p.job?.status !== "error";
+  const held = p.status === "sending" && heldByLockdown(p.job); // approved, and waiting for Lockdown to be off
+  const sending = p.status === "sending" && p.job?.status !== "error" && !held;
   const choosing = p.fields.some((f) => f.theirs !== null && f.include);
   const ready = p.fields.filter((f) => f.include && !f.skip);
   const failed = p.status === "failed" || (p.status === "sending" && p.job?.status === "error");
-  const note = p.status === "sending" && p.job?.status === "error" ? p.job.error : p.note;
+  const note = held
+    ? "Lockdown is on, so nothing goes to Plane yet. It's sent by itself when Lockdown is off."
+    : p.status === "sending" && p.job?.status === "error"
+      ? p.job.error
+      : p.note;
   const discard = async () => {
     const ok = await confirm({
       title: "Discard this?",
@@ -220,7 +226,11 @@ function Waiting({ push: p, data, focused, delay, onChanged }: { push: Push; dat
     >
       <div className="flex flex-wrap items-start gap-3 px-5 pt-4">
         <Heading push={p} />
-        <StatusChip tone={failed ? "trail" : status.tone} label={failed ? "Didn't go" : sending && p.job?.stage ? p.job.stage : status.label} live={sending} />
+        {held ? (
+          <StatusChip tone="neutral" label={LOCKDOWN} />
+        ) : (
+          <StatusChip tone={failed ? "trail" : status.tone} label={failed ? "Didn't go" : sending && p.job?.stage ? p.job.stage : status.label} live={sending} />
+        )}
       </div>
       {note && <Note push={p} failed={failed} text={note} />}
       {p.kind === "comment" ? <CommentPreview push={p} /> : <FieldTable push={p} busy={busy} act={act} />}
@@ -229,12 +239,12 @@ function Waiting({ push: p, data, focused, delay, onChanged }: { push: Push; dat
           Asked {relativeTime(p.created_at)}
           {p.checked_at ? ` · checked against Plane ${relativeTime(p.checked_at)}` : ""}
         </span>
-        <button className="btn btn-sm btn-ghost" disabled={sending || !!busy} onClick={() => void discard()}>
+        <button className="btn btn-sm btn-ghost" disabled={sending || held || !!busy} onClick={() => void discard()}>
           Discard
         </button>
         <button
           className="btn btn-sm btn-sun"
-          disabled={sending || choosing || !ready.length || !!busy}
+          disabled={sending || held || choosing || !ready.length || !!busy}
           data-tip={choosing ? "Choose Plane's or yours first" : !ready.length ? "Include something to send" : undefined}
           onClick={() => void act("send", () => planeApi.send(p.id))}
         >

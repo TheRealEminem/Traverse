@@ -16,6 +16,7 @@ import type { Shell } from "./shell";
 import Sidebar from "./Sidebar";
 import { useTheme } from "./theme";
 import Home from "./views/Home";
+import { LockdownSign } from "./views/Lockdown";
 import Login from "./views/Login";
 import NotFound from "./views/NotFound";
 import Settings from "./views/Settings";
@@ -177,6 +178,7 @@ export default function App() {
             </button>
             <Logo size={26} />
             <span className="font-display text-lead font-semibold tracking-[-0.02em]">{info!.name}</span>
+            <LockdownSign compact />
           </div>
           <div key={path} className={`relative mx-auto w-full px-5 pb-24 pt-7 sm:px-8 lg:pt-12 ${fullWidth ? "max-w-[1400px] lg:px-8" : "max-w-[872px] lg:px-10"}`}>
             <View params={params} />

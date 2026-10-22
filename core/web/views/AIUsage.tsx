@@ -26,11 +26,12 @@ function plural(n: number, one: string, many = `${one}s`) {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`;
 }
 
-/** "12 calls · 1 failed · 2 at an unknown price" */
+/** "12 calls · 1 failed · 3 stopped by Lockdown · 2 at an unknown price" */
 function counts(t: UsageTotals) {
   return [
     plural(t.calls, "call"),
     t.failed ? `${t.failed.toLocaleString()} failed` : "",
+    t.stopped ? `${t.stopped.toLocaleString()} stopped by Lockdown` : "",
     t.unknown ? `${t.unknown.toLocaleString()} at an unknown price` : "",
   ].filter(Boolean).join(" · ");
 }
@@ -84,7 +85,11 @@ function Call({ c }: { c: UsageCall }) {
             <StatusChip tone="trail" label="Failed" />
           </span>
         )}
-        {c.unknown ? (
+        {c.stopped ? (
+          <span data-tip="Lockdown was on, so nothing was sent. It cost nothing.">
+            <StatusChip tone="neutral" label="Stopped by Lockdown" />
+          </span>
+        ) : c.unknown ? (
           <StatusChip tone="neutral" label="Price unknown" />
         ) : c.cost !== null ? (
           <span className="text-ui tabular-nums text-ink">{money(c.cost)}</span>

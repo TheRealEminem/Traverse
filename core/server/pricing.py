@@ -10,14 +10,16 @@ model and reports the tokens of every request the provider answered, and the att
 core_ai_usage whether it worked or not: when, which module's job asked, provider, model, tokens, cost, and the
 error if it failed. The cost is worked out when the call is made, so a later price change doesn't rewrite what
 was spent. A failed attempt that got no answer has no tokens and no cost; one that got an answer and failed on
-it anyway (a refusal, running out of output, the wrong shape) was billed, so it's counted.
+it anyway (a refusal, running out of output, the wrong shape) was billed, so it's counted. A call Lockdown stopped
+(lockdown.py) never left the Mac: it's logged as *stopped*, failed with Lockdown's reason, at a cost of 0, and
+counted apart from failures.
 """
 import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from . import db, jobs
+from . import db, jobs, lockdown
 
 log = logging.getLogger("core.ai")
 
@@ -210,14 +212,15 @@ class Meter:
             total += part
         return total
 
-    def record(self, call: str, error: str | None = None) -> None:
-        """Writes the attempt to the usage log. Never raises: a call doesn't fail over its own bookkeeping."""
+    def record(self, call: str, error: str | None = None, stopped: bool = False) -> None:
+        """Writes the attempt to the usage log. Never raises: a call doesn't fail over its own bookkeeping.
+        stopped: Lockdown stopped it before anything was sent (error is Lockdown's reason), so it cost nothing."""
         try:
             when = datetime.now(timezone.utc)
             job = jobs.current()
             module, kind = self.asker or ((job.module, job.kind) if job else ("", ""))
             inp, cached, out = self.tokens()
-            spent = None if error and not self.requests else self.cost(when)
+            spent = 0.0 if stopped else None if error and not self.requests else self.cost(when)
             model = next((r.model for r in reversed(self.requests) if r.model), self.model)
             db.execute(
                 "INSERT INTO core_ai_usage (id, at, module, job, call, provider, model, input_tokens, cached_tokens, "
@@ -233,7 +236,11 @@ class Meter:
 
 # Spent, but at a price this table doesn't know. (A failure that got no answer spent nothing.)
 UNKNOWN = "cost IS NULL AND (failed = 0 OR input_tokens IS NOT NULL OR output_tokens IS NOT NULL)"
-_TOTALS = (f"COUNT(*) AS calls, COALESCE(SUM(cost), 0) AS cost, COALESCE(SUM(failed), 0) AS failed, "
+# Stopped by Lockdown before it was sent: a failure only in that it didn't happen, so counted apart.
+STOPPED = f"failed = 1 AND error LIKE '{lockdown.REASON}%'"
+_TOTALS = (f"COUNT(*) AS calls, COALESCE(SUM(cost), 0) AS cost, "
+           f"COALESCE(SUM(CASE WHEN failed = 1 AND NOT ({STOPPED}) THEN 1 ELSE 0 END), 0) AS failed, "
+           f"COALESCE(SUM(CASE WHEN {STOPPED} THEN 1 ELSE 0 END), 0) AS stopped, "
            f"COALESCE(SUM(CASE WHEN {UNKNOWN} THEN 1 ELSE 0 END), 0) AS unknown, "
            f"COALESCE(SUM(input_tokens), 0) AS input_tokens, COALESCE(SUM(output_tokens), 0) AS output_tokens")
 
@@ -254,15 +261,17 @@ def _by(column: str, since: datetime) -> list[dict]:
 
 def summary(now: datetime | None = None, recent: int = 15) -> dict:
     """This month's total (in this machine's time zone), the last 30 days by provider and by module, and the most
-    recent calls. Costs are dollars; `unknown` counts calls whose price isn't known, which aren't in `cost`."""
+    recent calls. Costs are dollars; `unknown` counts calls whose price isn't known, which aren't in `cost`;
+    `stopped` counts calls Lockdown stopped, which aren't in `failed`."""
     now = (now or datetime.now()).astimezone()
     month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     days30 = now - timedelta(days=30)
     calls = db.query(
         f"SELECT at, module, job, call, provider, model, input_tokens, cached_tokens, output_tokens, cost, failed, "
-        f"error, ({UNKNOWN}) AS unknown FROM core_ai_usage ORDER BY at DESC LIMIT ?", (recent,))
+        f"error, ({UNKNOWN}) AS unknown, ({STOPPED}) AS stopped FROM core_ai_usage ORDER BY at DESC LIMIT ?", (recent,))
     for c in calls:
-        c["failed"], c["unknown"] = bool(c["failed"]), bool(c["unknown"])
+        c["stopped"] = bool(c["stopped"])
+        c["failed"], c["unknown"] = bool(c["failed"]) and not c["stopped"], bool(c["unknown"])
     return {
         "month": {"start": _stamp(month), **_totals(month)},
         "last_30_days": {**_totals(days30), "by_provider": _by("provider", days30), "by_module": _by("module", days30)},

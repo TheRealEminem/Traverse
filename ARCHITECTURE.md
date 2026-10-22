@@ -79,7 +79,8 @@ These keep modules combinable. Breaking one now means a rewrite when the apps me
    up where it left off.
 7. **Nothing is written inside the app bundle at runtime.** That would break its signature. All data goes in `DATA_DIR`.
 8. **Works offline and locally by default.** Cloud services are optional and chosen in Settings, and local AI
-   models are unloaded after use.
+   models are unloaded after use. **Lockdown** (Settings, shared with the family) stops every call beyond this Mac at
+   once, so anything that reaches out asks `lockdown.check(url)` first (§7).
 9. **Shared code has one copy: the family's, and each app pins a version of it.** `core/`, `mac/`, the shared
    scripts, the shared modules (`tasks`, `notes`) and the build setup live in `~/Code/TrailmixFamily`.
    `scripts/sync-family` copies a family commit into the app and records it in `family.lock`, so every app is
@@ -104,6 +105,7 @@ core/
     settings.py           namespaced settings, secrets never sent back
     jobs.py               resumable background jobs, approval and "wait" gates
     ai.py                 AI providers (Ollama, Claude, OpenAI, Gemini, DeepSeek, OpenAI-compatible)
+    lockdown.py           Lockdown: one switch, shared with the family, that stops every call beyond this Mac
     events.py             publish/subscribe between modules, plus the change counter
     contracts.py          ★ shared events any module can publish or listen to
     links.py              links between things in different modules
@@ -140,7 +142,7 @@ scripts/
   check                   everything CI checks (tests, types, build, style rules)
   build-app.sh            build the Mac app (and the disk image with --dmg)
   install-app.sh          check, build, back up, and swap the new app into /Applications, with a rollback
-  smoke-test.sh           try a built app's updater end to end: update, go back, beta updates, busy, skip
+  smoke-test.sh           try a built app's updater end to end: update, go back, beta updates, busy, Lockdown, skip
   promote-beta.sh         make the newest beta the release everyone gets, once it's been tried
   new-module              start a module from scripts/module-template
   sync-family             take a family version and pin it (--check: warn about drift; --push: send a change back)
@@ -224,7 +226,8 @@ another module's.
 | Files | `config.DATA_DIR / "<id>"` | Never inside the app bundle. |
 | A setting | `Module.settings` + `settings.section("<id>")` | Secrets end in `_api_key`/`_token`; they're write-only and preset from `<PREFIX>_<ID>_<NAME>`. |
 | Slow work | `jobs.enqueue(id, kind, target, approve=…)` | One worker by default (a "cloud" lane runs four side by side), resumable. `approve=True` parks it as "Needs you". A handler can `raise jobs.Wait("reason")` to park itself (low memory…), and the user can force past that. `job.stage("…")` shows progress. |
-| AI | `ai.complete(prompt, system)` → `(text, provider)` | Uses the app-wide provider and fallback from Settings → AI. Raises `ai.AIError` with readable reasons. `ai.local_first()` tells you whether it would run on this Mac. Every call is logged with its tokens and cost (`core/server/pricing.py`, shown in Settings → AI usage), put down to the job that made it, so call AI from a job. |
+| AI | `ai.complete(prompt, system)` → `(text, provider)` | Uses the app-wide provider and fallback from Settings → AI. Raises `ai.AIError` with readable reasons. `ai.local_first()` tells you whether it would run on this Mac. Every call is logged with its tokens and cost (`core/server/pricing.py`, shown in Settings → AI usage), put down to the job that made it, so call AI from a job. While Lockdown is on only AI on this Mac answers: a cloud provider raises `ai.Locked`, which parks the job until it's off. |
+| Reach beyond this Mac | `lockdown.check(url)` right before the request; `lockdown.may_reach(url)` to ask | While Lockdown is on, `check` raises `lockdown.Blocked` (a `jobs.Wait`) unless the address is this Mac: a job parks as "Lockdown is on" and goes again by itself when it's off; a request to the API gets 409. Plane's client checks before every request. |
 | Tell others | `events.publish("<id>.thing.happened", {...})` | Handlers run immediately and must be quick. Every publish also refreshes open screens. |
 | A shared meaning | `contracts.py` (`ACTIONS_FOUND`, `ITEM_DELETED`, the `WORK_*` ones for work kept elsewhere too) | Add a contract when a second module cares about the same kind of thing. |
 | Point at something elsewhere | `links.add(from_ref, to_ref, kind)`, `links.linked(ref)` | The host stores the pair; each side's module describes its own things. |
@@ -271,7 +274,7 @@ What happens when you summarize a note:
 **The family link** (`core/server/family.py`). Family apps installed on one Mac share some settings and ask each
 other for data, while each stays its own app:
 
-- *Shared settings:* the AI settings, your name and the appearance live in `family.db` in the family folder
+- *Shared settings:* the AI settings, your name, the appearance and Lockdown live in `family.db` in the family folder
   (`~/Library/Application Support/Trailmix Family/`), which every family app opens directly, so they're there even
   while the other apps are closed. Each app also keeps its own copy, and Settings → Your family apps → "Share keys
   and preferences" turns sharing off for one app. An app joining fills in what the family lacks, and never
@@ -372,6 +375,9 @@ by `mac/Checks/UpdateChecks` with the Command Line Tools alone):
   "before-update" backup first. A fresh install has nothing to go back to.
 - **Not while busy:** before starting, and again just before swapping (waiting up to a minute), it asks the server,
   `GET /api/jobs/busy` (background jobs queued or running). While the app is busy it says so and offers Try again.
+- **Not in Lockdown:** before every check and download it asks `GET /api/lockdown`, and neither checks nor downloads
+  while Lockdown is on, or while the server can't say ("Lockdown is on · Check again" in the menu). Going back needs no
+  download, so it still works.
 - Your choices are in `updates.noindex/choices.json` in the data folder, so `<PREFIX>_DATA_DIR` keeps a test apart
   from the real app. For tests: `<PREFIX>_UPDATE_URL` (a stand-in release list), `_UPDATE_DELAY`,
   `_UPDATE_NO_RELAUNCH`, and `_UPDATE_TEST=install` or `go-back` (does that after the first check, and writes each
