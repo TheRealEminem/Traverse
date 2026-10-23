@@ -1,6 +1,6 @@
 {
-  "commit": "c32327713d5a57980b6eb3b9509b1c8249ff712c",
-  "subject": "Tasks: linked tasks that follow work kept elsewhere",
-  "synced_on": "2026-10-20",
+  "commit": "2acbd61245aa115b6a5401aa66e1b421ea4210bc",
+  "subject": "TRAILMIX.md: what Trailmix has, and what every family app keeps the same",
+  "synced_on": "2026-10-22",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }
