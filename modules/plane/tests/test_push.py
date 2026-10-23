@@ -7,7 +7,7 @@ from core.server import db, jobs, settings
 from modules.plane.server import pull, push
 from modules.plane.tests.fakeplane import MEMBERS, PROJECTS
 
-DALE, ELI, MICKEY = MEMBERS["dale"], MEMBERS["eli"], MEMBERS["mickey"]
+DALE, ALEX, SAM = MEMBERS["dale"], MEMBERS["alex"], MEMBERS["sam"]
 
 
 @pytest.fixture
@@ -141,7 +141,7 @@ def test_a_teammates_change_to_the_same_field_stops_the_push(plane, client):
     tid = _bring(client, plane, "OPERATIONS-10")
     _edit(client, tid, due_on="2026-10-31")
     _share(client, tid)
-    plane.edit("OPERATIONS-10", target_date="2026-10-24")                  # Mickey moved it in Plane
+    plane.edit("OPERATIONS-10", target_date="2026-10-24")                  # Sam moved it in Plane
     stopped = _send(client, _waiting(client)["id"])
     assert stopped["status"] == "stopped" and "Due changed in Plane" in stopped["note"]
     due = _field(stopped, "due_on")
@@ -201,18 +201,18 @@ def test_sending_twice_writes_once(plane, client):
 
 def test_an_assignee_added_in_plane_survives_a_push_that_adds_another(plane, client):
     tid = _bring(client, plane, "DALEETING-6")                              # yours
-    _edit(client, tid, assignee_ref=f"plane:{MICKEY}", assignee_name="Mickey")
+    _edit(client, tid, assignee_ref=f"plane:{SAM}", assignee_name="Sam")
     _share(client, tid)
     waiting = _waiting(client)
-    assert (_field(waiting, "assignee")["before"], _field(waiting, "assignee")["after"]) == ("Dale Morgan", "Mickey")
-    plane.edit("DALEETING-6", assignees=[DALE, ELI])                       # Elijah added in Plane, meanwhile
+    assert (_field(waiting, "assignee")["before"], _field(waiting, "assignee")["after"]) == ("Dale Morgan", "Sam")
+    plane.edit("DALEETING-6", assignees=[DALE, ALEX])                       # Alex added in Plane, meanwhile
     assert _send(client, waiting["id"])["status"] == "sent"
-    assert _writes(plane) == [("PATCH", {"assignees": sorted([ELI, MICKEY])})]   # you're swapped for Mickey; Elijah stays
+    assert _writes(plane) == [("PATCH", {"assignees": sorted([ALEX, SAM])})]   # you're swapped for Sam; Alex stays
     task = _task(client, tid)
-    assert task["assignee_ref"] == f"plane:{MICKEY}" and task["synced"]["edited"] == []
+    assert task["assignee_ref"] == f"plane:{SAM}" and task["synced"]["edited"] == []
     assert task["synced"]["conflicts"] == []
-    _pull()                                                                  # Plane says Elijah and Mickey: still Mickey here
-    assert _task(client, tid)["assignee_ref"] == f"plane:{MICKEY}"
+    _pull()                                                                  # Plane says Alex and Sam: still Sam here
+    assert _task(client, tid)["assignee_ref"] == f"plane:{SAM}"
 
 
 def test_someone_plane_doesnt_have_isnt_sent(plane, client):
@@ -379,14 +379,14 @@ def test_undo_after_sending_over_a_change_in_plane_puts_back_plane_s_value(plane
 
 def test_undo_puts_back_the_list_it_changed_and_keeps_later_additions(plane, client):
     tid = _bring(client, plane, "DALEETING-6")
-    _edit(client, tid, assignee_ref=f"plane:{MICKEY}", assignee_name="Mickey")
+    _edit(client, tid, assignee_ref=f"plane:{SAM}", assignee_name="Sam")
     _share(client, tid)
-    sent = _send(client, _waiting(client)["id"])                           # Dale → Mickey
-    plane.edit("DALEETING-6", assignees=[MICKEY, ELI])                     # then Elijah joins in Plane
+    sent = _send(client, _waiting(client)["id"])                           # Dale → Sam
+    plane.edit("DALEETING-6", assignees=[SAM, ALEX])                     # then Alex joins in Plane
     _pull()
     undo_id = client.post(f"/api/plane/pushes/{sent['id']}/undo").json()["id"]
     _send(client, undo_id)
-    assert _writes(plane)[-1] == ("PATCH", {"assignees": sorted([DALE, ELI])})
+    assert _writes(plane)[-1] == ("PATCH", {"assignees": sorted([DALE, ALEX])})
 
 
 # ── Rule 8: dry run ────────────────────────────────────────────────────

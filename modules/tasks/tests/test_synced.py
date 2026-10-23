@@ -41,10 +41,10 @@ def test_a_project_and_its_work_arrive_as_a_linked_project_and_task():
 
 def test_untouched_fields_follow_the_other_side():
     item_id = _arrive(project_ref=None)
-    _there(text="Share the repos with Dale", due_on="2026-10-31", assignee_ref="elsewhere:mick", assignee_name="Mickey")
+    _there(text="Share the repos with Dale", due_on="2026-10-31", assignee_ref="elsewhere:sam", assignee_name="Sam")
     task = items.get(item_id)
     assert (task["text"], task["due_on"], task["assignee_ref"], task["assignee_name"]) == \
-        ("Share the repos with Dale", "2026-10-31", "elsewhere:mick", "Mickey")
+        ("Share the repos with Dale", "2026-10-31", "elsewhere:sam", "Sam")
     assert _about(item_id)["conflicts"] == [] and _about(item_id)["edited"] == []
 
 
@@ -144,13 +144,13 @@ def listener(monkeypatch, probe_item):
 
 def test_send_asks_for_only_what_you_changed_with_its_base(listener, client):
     item_id = _arrive()
-    items.update(item_id, {"due_on": "2026-11-07", "assignee_ref": "elsewhere:mick", "assignee_name": "Mickey"})
+    items.update(item_id, {"due_on": "2026-11-07", "assignee_ref": "elsewhere:sam", "assignee_name": "Sam"})
     r = client.post(f"/api/tasks/{item_id}/share")
     assert r.status_code == 200 and r.json()["asked"] == {"fields": ["due_on", "assignee"], "new": False}
     [asked] = listener
     project = links.sources("elsewhere:proj1", "synced")
     assert asked == {"ref": "elsewhere:item1", "local_ref": f"tasks:{item_id}",
-                     "fields": {"due_on": "2026-11-07", "assignee_ref": "elsewhere:mick", "assignee_name": "Mickey"},
+                     "fields": {"due_on": "2026-11-07", "assignee_ref": "elsewhere:sam", "assignee_name": "Sam"},
                      "base": {"due_on": "2026-10-24", "assignee_ref": "core:me", "assignee_name": None},
                      "project_ref": project[0] if project else None}
     assert r.json()["sharing"] == [{"title": "Waiting to send it", "href": r.json()["sharing"][0]["href"]}]

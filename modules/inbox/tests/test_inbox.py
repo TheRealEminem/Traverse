@@ -11,20 +11,20 @@ needs_tasks = pytest.mark.skipif("tasks" not in config.enabled_modules(), reason
 
 THREAD = """\
 #acme-launch
-Elijah Park  9:12 AM
+Alex Park  9:12 AM
   Acme wants the revised quote before their board meets. I'll send it to them by Friday.
-Mickey Ruiz  9:15 AM
+Sam Ruiz  9:15 AM
   I can update the pricing sheet tomorrow so the numbers match.
 Dale Morgan  9:20 AM
   Great. I'll book the kickoff call with Acme for next Tuesday. This one's urgent, the board meets Wednesday.
-Mickey Ruiz  9:21 AM
+Sam Ruiz  9:21 AM
   :thumbsup:
 """
 
 READING = Reading(title="Acme quote thread", proposals=[
-    Proposal(text="Send Acme the revised quote", assignee_name="Elijah Park", when_said="by Friday", due_on="2026-10-23",
+    Proposal(text="Send Acme the revised quote", assignee_name="Alex Park", when_said="by Friday", due_on="2026-10-23",
              quote="I'll send it to them by Friday."),
-    Proposal(text="Update the pricing sheet", assignee_name="Mickey Ruiz", when_said="tomorrow", due_on="2026-10-20",
+    Proposal(text="Update the pricing sheet", assignee_name="Sam Ruiz", when_said="tomorrow", due_on="2026-10-20",
              quote="I can update the pricing sheet tomorrow so the numbers match."),
     Proposal(text="Book the kickoff call with Acme", assignee_name="Dale Morgan", when_said="next Tuesday",
              due_on="2026-10-27", urgency_said="urgent", priority=4,
@@ -63,15 +63,15 @@ def test_a_pasted_thread_is_read_into_proposals_with_people_dates_and_the_senten
     assert got["title"] == "Acme quote thread"                      # the AI named it, since you didn't
     assert got["read_by"] == "Claude (Anthropic)"                   # which AI wrote them, for the screen
     assert [(p["text"], p["assignee_name"], p["due_on"], p["priority"]) for p in got["proposals"]] == [
-        ("Send Acme the revised quote", "Elijah Park", "2026-10-23", 0),
-        ("Update the pricing sheet", "Mickey Ruiz", "2026-10-20", 0),
+        ("Send Acme the revised quote", "Alex Park", "2026-10-23", 0),
+        ("Update the pricing sheet", "Sam Ruiz", "2026-10-20", 0),
         ("Book the kickoff call with Acme", "Dale Morgan", "2026-10-27", 4),
     ]
     assert got["proposals"][0]["quote"] == "I'll send it to them by Friday."
     assert client.get("/api/inbox/count").json() == {"waiting": 1}
 
     call = fake_structured.calls[0]
-    assert call["schema"] is Reading and "Elijah Park" in call["prompt"]
+    assert call["schema"] is Reading and "Alex Park" in call["prompt"]
     assert "REFERENCE DATE: " in call["prompt"] and "\nnext Tuesday = " in call["prompt"]
     assert "RECORDED THE MEETING" not in call["prompt"]       # in a chat, "I" is whoever wrote the message
 
@@ -156,9 +156,9 @@ def test_reading_again_replaces_only_what_still_waits(client, fake_structured):
 
 def test_files_txt_md_and_eml_become_captures(client, fake_structured):
     fake_structured.reply = READING
-    md = client.post("/api/inbox/file", json={"name": "notes.md", "text": "# Ops review\n\n- Mickey: renew the domain"})
+    md = client.post("/api/inbox/file", json={"name": "notes.md", "text": "# Ops review\n\n- Sam: renew the domain"})
     assert md.status_code == 201
-    eml = ("From: Elijah Park <elijah@cinderlabs.co>\r\nTo: Dale <dale@cinderlabs.co>\r\n"
+    eml = ("From: Alex Park <alex@acme-team.example>\r\nTo: Dale <dale@acme-team.example>\r\n"
            "Subject: Acme quote\r\nDate: Fri, 16 Oct 2026 10:00:00 -0700\r\nContent-Type: text/plain\r\n\r\n"
            "Dale, can you send Acme the quote by Monday?\r\n")
     mail = client.post("/api/inbox/file", json={"name": "Acme quote.eml", "text": eml})
@@ -169,7 +169,7 @@ def test_files_txt_md_and_eml_become_captures(client, fake_structured):
     assert (md_capture["source"], md_capture["origin_title"]) == ("file", "notes.md")
     mail_capture = store.get(mail.json()["id"])
     assert mail_capture["title"] == "Acme quote" and mail_capture["origin_at"] == "2026-10-16"
-    assert mail_capture["raw_text"].startswith("From: Elijah Park <elijah@cinderlabs.co>\nTo: Dale")
+    assert mail_capture["raw_text"].startswith("From: Alex Park <alex@acme-team.example>\nTo: Dale")
     assert "send Acme the quote by Monday" in mail_capture["raw_text"]
 
     html_mail = ("From: a@b.co\r\nSubject: Hi\r\nContent-Type: text/html\r\n\r\n"
@@ -197,10 +197,10 @@ def test_edit_drop_and_bring_back(client, fake_structured):
     first, second, _ = _capture(client, capture_id)["proposals"]
 
     edited = client.patch(f"/api/inbox/proposals/{first['id']}",
-                          json={"text": "Send Acme the v2 quote", "assignee_name": " Elijah ", "due_on": "2026-10-22",
+                          json={"text": "Send Acme the v2 quote", "assignee_name": " Alex ", "due_on": "2026-10-22",
                                 "priority": 3}).json()
     assert (edited["text"], edited["assignee_name"], edited["due_on"], edited["priority"]) == (
-        "Send Acme the v2 quote", "Elijah", "2026-10-22", 3)
+        "Send Acme the v2 quote", "Alex", "2026-10-22", 3)
     assert client.patch(f"/api/inbox/proposals/{first['id']}", json={"due_on": ""}).json()["due_on"] is None
     assert client.patch(f"/api/inbox/proposals/{first['id']}", json={"due_on": "Friday"}).status_code == 400
     assert client.patch(f"/api/inbox/proposals/{first['id']}", json={"priority": 7}).status_code == 400
@@ -260,8 +260,8 @@ def test_accepting_files_them_into_the_chosen_project_with_their_people_and_date
     filed = sorted(_tasks_from(client, capture_id), key=lambda t: t["text"])
     assert [(t["text"], t["project_id"], t["assignee_name"], t["due_on"], t["priority"]) for t in filed] == [
         ("Book the kickoff call with Acme", project_id, "Dale Morgan", "2026-10-27", 4),
-        ("Send Acme the revised quote", project_id, "Elijah Park", "2026-10-23", 0),
-        ("Update the pricing sheet", project_id, "Mickey Ruiz", "2026-10-20", 0),
+        ("Send Acme the revised quote", project_id, "Alex Park", "2026-10-23", 0),
+        ("Update the pricing sheet", project_id, "Sam Ruiz", "2026-10-20", 0),
     ]
     assert filed[0]["came_from"]["href"] == f"#/inbox/{capture_id}"
     got = _capture(client, capture_id)

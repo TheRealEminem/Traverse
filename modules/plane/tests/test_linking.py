@@ -98,7 +98,7 @@ def test_one_item_comes_in_with_its_fields(pulled, client):
     task = _task_for(client, "SOFTWARE-5")
     assert (task["text"], task["notes"], task["priority"], task["due_on"], task["status"]) == \
         ("Share GitHub repos with Dale", "Share GitHub repos with Dale.", 3, "2026-10-13", "todo")
-    assert task["synced"]["url"].endswith("/cold-connect/browse/SOFTWARE-5/") and task["synced"]["source"] == "Plane"
+    assert task["synced"]["url"].endswith("/acme-team/browse/SOFTWARE-5/") and task["synced"]["source"] == "Plane"
     assert task["synced"]["title"] == "SOFTWARE-5 Share GitHub repos with Dale"
 
 

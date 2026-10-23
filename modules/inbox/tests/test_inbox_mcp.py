@@ -10,9 +10,9 @@ from modules.inbox.tests.test_inbox import READING, THREAD
 needs_tasks = pytest.mark.skipif("tasks" not in config.enabled_modules(), reason="the tasks module is off")
 
 ITEMS = [
-    {"text": "Send Acme the revised quote", "assignee": "Elijah Park", "due_on": "2026-10-23",
+    {"text": "Send Acme the revised quote", "assignee": "Alex Park", "due_on": "2026-10-23",
      "quote": "I'll send it to them by Friday."},
-    {"text": "Update the pricing sheet", "assignee": "Mickey Ruiz", "due_on": "2026-10-20"},
+    {"text": "Update the pricing sheet", "assignee": "Sam Ruiz", "due_on": "2026-10-20"},
     {"text": "Book the kickoff call with Acme.", "assignee": "me", "due_on": "2026-10-27", "priority": "urgent"},
 ]
 
@@ -34,8 +34,8 @@ def test_claudes_proposals_wait_for_you_and_accepting_files_them(client):
     found = call(text=THREAD, title="Acme quote thread", items=ITEMS, project=f"tasks:{project}")
     assert found["capture"]["title"] == "Acme quote thread" and found["files_into"] == "Acme launch"
     assert [(p["text"], p["assignee"], p["due_on"], p["priority"]) for p in found["proposals"]] == [
-        ("Send Acme the revised quote", "Elijah Park", "2026-10-23", "none"),
-        ("Update the pricing sheet", "Mickey Ruiz", "2026-10-20", "none"),
+        ("Send Acme the revised quote", "Alex Park", "2026-10-23", "none"),
+        ("Update the pricing sheet", "Sam Ruiz", "2026-10-20", "none"),
         ("Book the kickoff call with Acme", "me", "2026-10-27", "urgent")]
     assert "Nothing is a task yet" in found["note"]
     got = _capture(client, found)

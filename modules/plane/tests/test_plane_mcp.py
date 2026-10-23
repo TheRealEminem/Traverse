@@ -57,16 +57,16 @@ def test_team_workload_matches_the_team_view(plane, client):
     found = call(client, plane, "plane_team_workload")
     assert found["totals"]["open"] == 34
     assert {p["name"]: p["open"] for p in found["people"]} == {
-        "Dale Morgan (you)": 23, "Mickey": 5, "Elena Ashworth": 2, "No one": 4}
+        "Dale Morgan (you)": 23, "Sam": 5, "Alex Rivera": 2, "No one": 4}
     assert found["items_shown"] == "Past due" and all(i["past_due"] for i in found["items"])
-    mickey = call(client, plane, "plane_team_workload", person="mickey")
-    assert mickey["items_shown"] == "Mickey's open items" and len(mickey["items"]) == 5
-    assert all(i["assignees"] == ["Mickey"] for i in mickey["items"])
+    sam = call(client, plane, "plane_team_workload", person="sam")
+    assert sam["items_shown"] == "Sam's open items" and len(sam["items"]) == 5
+    assert all(i["assignees"] == ["Sam"] for i in sam["items"])
     assert len(call(client, plane, "plane_team_workload", person="no one")["items"]) == 4
     assert len(call(client, plane, "plane_team_workload", person="me")["items"]) == 23
     software = call(client, plane, "plane_team_workload", project="software")
     assert software["items_shown"] == "Open items in Software" and len(software["items"]) == 3
-    assert software["items"][0]["url"].startswith("https://app.plane.so/cold-connect/browse/SOFTWARE-")
+    assert software["items"][0]["url"].startswith("https://app.plane.so/acme-team/browse/SOFTWARE-")
     assert call(client, plane, "plane_team_workload", person="Zed")["error"].startswith("No one called “Zed”")
     assert plane.requests == []                                       # the mirror only, never Plane
 

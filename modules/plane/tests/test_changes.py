@@ -11,7 +11,7 @@ from modules.plane.server import briefing, pull, store
 from modules.plane.tests.fakeplane import MEMBERS, PROJECTS, WS
 
 TODAY = date(2026, 10, 21)
-ME, MICKEY, ELI = MEMBERS["dale"], MEMBERS["mickey"], MEMBERS["eli"]
+ME, SAM, ALEX = MEMBERS["dale"], MEMBERS["sam"], MEMBERS["alex"]
 
 
 def _pull() -> None:
@@ -40,16 +40,16 @@ def test_a_teammates_edits_are_recorded_field_by_field(fake_plane):
     _pull()
     started = _state(fake_plane, "SOFTWARE", "started")
     before = copy.deepcopy(fake_plane.item("SOFTWARE-5"))
-    fake_plane.edit("SOFTWARE-5", state=started, assignees=[ELI, MICKEY], target_date="2026-10-24", priority="urgent",
-                    name="Share the GitHub repos with Dale", updated_by=MICKEY, description_html="<p>Not logged</p>")
+    fake_plane.edit("SOFTWARE-5", state=started, assignees=[ALEX, SAM], target_date="2026-10-24", priority="urgent",
+                    name="Share the GitHub repos with Dale", updated_by=SAM, description_html="<p>Not logged</p>")
     _pull()
     log = _log()
     assert sorted(f for f, *_ in log) == ["assignees", "due", "name", "priority", "state"]
-    assert ("state", before["state"], started, MICKEY) in log
-    assert ("assignees", [ELI], sorted([ELI, MICKEY]), MICKEY) in log
-    assert ("due", "2026-10-13", "2026-10-24", MICKEY) in log
-    assert ("priority", "high", "urgent", MICKEY) in log
-    assert ("name", "Share GitHub repos with Dale", "Share the GitHub repos with Dale", MICKEY) in log
+    assert ("state", before["state"], started, SAM) in log
+    assert ("assignees", [ALEX], sorted([ALEX, SAM]), SAM) in log
+    assert ("due", "2026-10-13", "2026-10-24", SAM) in log
+    assert ("priority", "high", "urgent", SAM) in log
+    assert ("name", "Share GitHub repos with Dale", "Share the GitHub repos with Dale", SAM) in log
     item_id = fake_plane.item("SOFTWARE-5")["id"]
     assert {r["item_id"] for r in store.changes("2000-01-01")} == {item_id}
     _pull()
@@ -60,11 +60,11 @@ def test_new_removed_and_returning_items_are_recorded(fake_plane):
     _pull()
     items = fake_plane.items("HARDWARE")
     new = {**copy.deepcopy(items[0]), "id": str(uuid.uuid4()), "sequence_id": 99, "name": "Order the enclosure samples",
-           "updated_by": ELI, "updated_at": fake_plane.now()}
+           "updated_by": ALEX, "updated_at": fake_plane.now()}
     items.append(new)
     gone = items.pop(0)
     _pull()
-    assert sorted(_log(), key=lambda r: r[0]) == [("added", None, "Order the enclosure samples", ELI),
+    assert sorted(_log(), key=lambda r: r[0]) == [("added", None, "Order the enclosure samples", ALEX),
                                                   ("removed", gone["name"], None, None)]
     items.append(gone)
     _pull()
@@ -95,31 +95,31 @@ def test_what_moved_reads_as_one_line_per_item(fake_plane):
     _pull()
     since = db.now()
     done = _state(fake_plane, "SOFTWARE", "completed")
-    fake_plane.edit("SOFTWARE-5", state=done, updated_by=ELI)
-    fake_plane.edit("BD-14", assignees=[MICKEY], updated_by=ME)
-    fake_plane.edit("OPERATIONS-2", target_date="2026-10-30", priority="urgent", updated_by=MICKEY)
+    fake_plane.edit("SOFTWARE-5", state=done, updated_by=ALEX)
+    fake_plane.edit("BD-14", assignees=[SAM], updated_by=ME)
+    fake_plane.edit("OPERATIONS-2", target_date="2026-10-30", priority="urgent", updated_by=SAM)
     _pull()
     moved = {e["title"].split(" ")[0]: e for e in briefing.brief(since, TODAY)["moved"]}
     assert set(moved) == {"SOFTWARE-5", "BD-14", "OPERATIONS-2"}
     software = moved["SOFTWARE-5"]
-    assert software["what"] == "Todo → Done · by Elena Ashworth"
-    assert (software["kind"], software["tone"], software["who"]) == ("done", "forest", "Elena Ashworth")
+    assert software["what"] == "Todo → Done · by Alex Rivera"
+    assert (software["kind"], software["tone"], software["who"]) == ("done", "forest", "Alex Rivera")
     bd = moved["BD-14"]
-    assert (bd["what"], bd["kind"], bd["tone"], bd["who"]) == ("Now with Mickey (was you) · by you", "assigned", "neutral",
-                                                               "Mickey")
+    assert (bd["what"], bd["kind"], bd["tone"], bd["who"]) == ("Now with Sam (was you) · by you", "assigned", "neutral",
+                                                               "Sam")
     ops = moved["OPERATIONS-2"]
-    assert ops["what"] == "Due Fri 30 Oct (was Sun 11 Oct) · Urgent priority (was Medium) · by Mickey"
+    assert ops["what"] == "Due Fri 30 Oct (was Sun 11 Oct) · Urgent priority (was Medium) · by Sam"
     assert (ops["kind"], ops["project"]) == ("due", "Operations")
     assert ops["url"].endswith("/browse/OPERATIONS-2/")
     assert ops["href"] == f"#/plane/team?item={fake_plane.item('OPERATIONS-2')['id']}"
     assert briefing.brief(db.now(), TODAY)["moved"] == []              # nothing since now
     later = db.now()
-    fake_plane.edit("BD-14", assignees=[ME, MICKEY], updated_by=MICKEY)
+    fake_plane.edit("BD-14", assignees=[ME, SAM], updated_by=SAM)
     _pull()
     back = briefing.brief(later, TODAY)["moved"]
-    assert [(e["what"], e["tone"]) for e in back] == [("Now with you, Mickey (was Mickey) · by Mickey", "sun")]
-    whole = briefing.brief(since, TODAY)["moved"]              # both edits: from you, to you and Mickey
-    assert [e["what"] for e in whole if e["title"].startswith("BD-14")] == ["Now with you, Mickey (was you) · by Mickey"]
+    assert [(e["what"], e["tone"]) for e in back] == [("Now with you, Sam (was Sam) · by Sam", "sun")]
+    whole = briefing.brief(since, TODAY)["moved"]              # both edits: from you, to you and Sam
+    assert [e["what"] for e in whole if e["title"].startswith("BD-14")] == ["Now with you, Sam (was you) · by Sam"]
 
 
 def test_the_briefing_has_the_teams_past_due_cycles_and_the_outbox(fake_plane):

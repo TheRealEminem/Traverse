@@ -154,7 +154,7 @@ def test_lists_are_followed_page_by_page_to_the_end():
 
 def test_a_plain_list_is_one_page():
     fake = FakePlane()
-    assert {m["display_name"] for m in fake.client().members()} == {"dale", "eli", "mickey", "Plane MCP", "Plane"}
+    assert {m["display_name"] for m in fake.client().members()} == {"dale", "alex", "sam", "Plane MCP", "Plane"}
     assert len(fake.requests) == 1
 
 
@@ -228,8 +228,8 @@ def test_a_wrong_key_says_where_to_get_a_new_one():
 
 def test_an_unknown_workspace_names_it():
     fake = FakePlane()
-    c = PlaneClient("https://api.plane.so", "plane_api_test", "cold-conect", transport=fake.transport)
-    with pytest.raises(PlaneError, match="no workspace called “cold-conect”"):
+    c = PlaneClient("https://api.plane.so", "plane_api_test", "acme-tean", transport=fake.transport)
+    with pytest.raises(PlaneError, match="no workspace called “acme-tean”"):
         c.projects()
 
 

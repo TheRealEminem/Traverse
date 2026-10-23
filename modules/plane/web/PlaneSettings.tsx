@@ -67,7 +67,7 @@ export default function PlaneSettings() {
         <TextSetting
           label="Plane workspace"
           mono
-          placeholder="cold-connect"
+          placeholder="acme-team"
           value={get<string>("plane.workspace_slug") ?? ""}
           onSave={(v) => void save({ "plane.workspace_slug": v.replace(/^https?:\/\/[^/]+\//, "").replace(/\/.*$/, "") })}
         />

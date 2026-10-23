@@ -1,4 +1,4 @@
-"""A fake Plane for the plane module's tests: it answers from fixtures/cold_connect.json (Plane's own shapes) through
+"""A fake Plane for the plane module's tests: it answers from fixtures/acme_team.json (Plane's own shapes) through
 httpx's MockTransport, pages lists the way Plane does, records every request, and can be told to fail.
 
 It takes the writes Plane's API takes for work items: PATCH one (only the fields sent change; a list sent replaces
@@ -17,11 +17,11 @@ from core.server import db
 from modules.plane.server import store
 from modules.plane.server.client import PlaneClient
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "cold_connect.json").read_text())
-WS = "cold-connect"
+FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "acme_team.json").read_text())
+WS = "acme-team"
 PROJECTS = {p["identifier"]: p["id"] for p in FIXTURE[f"/api/v1/workspaces/{WS}/projects/"]["results"]}
 MEMBERS = {m["display_name"]: m["id"] for m in FIXTURE[f"/api/v1/workspaces/{WS}/members/"]}
-REAL_PROJECTS = [pid for ident, pid in PROJECTS.items() if ident != "COLDC"]   # everything but Plane's demo project
+REAL_PROJECTS = [pid for ident, pid in PROJECTS.items() if ident != "ACME"]   # everything but Plane's demo project
 
 
 class FakePlane:

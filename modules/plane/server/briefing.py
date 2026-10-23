@@ -3,7 +3,7 @@ moment, read from the change log (plane_changes); items that went past due meanw
 ending this week; and what waits for you in the Outbox. All of it comes from the mirror and the outbox: nothing here
 talks to Plane.
 
-One entry per item that moved, its changes in one line ("To do → In progress · now with Mickey · by Mickey"), "who"
+One entry per item that moved, its changes in one line ("To do → In progress · now with Sam · by Sam"), "who"
 being whoever has it now, so the screen can group what moved by person as well as by project.
 """
 import json

@@ -12,7 +12,7 @@ A module answers {section: [entry, …]} for the sections it has something for. 
     id       its thing's id in the module; the host makes the ref, "<module>:<id>"
     what     what happened, or why it's here, in a few words ("Due today", "To do → In progress")
     title    and href: filled from the module's describe when left out
-    who      the person it's about or who did it ("Mickey", "You"); when: an ISO day or time
+    who      the person it's about or who did it ("Sam", "You"); when: an ISO day or time
     project  a name to group it under; kind: a short word the page may pick an icon by ("late", "done")
     tone     the family's: trail (late), sun (needs you), sky (in progress), forest (done), berry, neutral
     minutes  an estimate, for planning; url: where it opens outside the app

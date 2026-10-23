@@ -49,8 +49,8 @@ class FakeTrailmix:
 def fake_trailmix(monkeypatch):
     fake = FakeTrailmix([
         _meeting(12, "uid-weekly", "Weekly sync", 1, [
-            {"id": 1, "text": "Elijah to send Acme the revised quote by Friday", "done": False},
-            {"id": 2, "text": "Mickey: update the pricing sheet", "done": False},
+            {"id": 1, "text": "Alex to send Acme the revised quote by Friday", "done": False},
+            {"id": 2, "text": "Sam: update the pricing sheet", "done": False},
             {"id": 3, "text": "Book the room", "done": True},
         ]),
         _meeting(11, "uid-standup", "Standup", 2, []),                                     # nothing to do
@@ -84,9 +84,9 @@ def test_it_is_off_by_default_and_then_reads_nothing(client, fake_trailmix):
 def test_a_finished_meetings_open_action_items_wait_in_the_inbox_saying_which_meeting(client, fake_trailmix, fake_structured):
     """Chunk 10's "done when": yesterday's meeting's action items wait in the inbox, each saying where it came from."""
     fake_structured.reply = Reading(title="ignored", proposals=[
-        Proposal(text="Send Acme the revised quote", assignee_name="Elijah", when_said="by Friday", due_on="2026-10-23",
-                 quote="Elijah to send Acme the revised quote by Friday"),
-        Proposal(text="Update the pricing sheet", assignee_name="Mickey", quote="Mickey: update the pricing sheet"),
+        Proposal(text="Send Acme the revised quote", assignee_name="Alex", when_said="by Friday", due_on="2026-10-23",
+                 quote="Alex to send Acme the revised quote by Friday"),
+        Proposal(text="Update the pricing sheet", assignee_name="Sam", quote="Sam: update the pricing sheet"),
     ])
     settings.update({"inbox.trailmix": True})
     assert trailmix.every() == trailmix.EVERY_SECONDS
@@ -100,7 +100,7 @@ def test_a_finished_meetings_open_action_items_wait_in_the_inbox_saying_which_me
         "Send Acme the revised quote", "Update the pricing sheet"]
     assert "Book the room" not in got["raw_text"]                                         # ticked in Trailmix: done
     assert got["raw_text"].startswith("Meeting: Weekly sync · ")
-    assert "- Elijah to send Acme the revised quote by Friday" in got["raw_text"]
+    assert "- Alex to send Acme the revised quote by Friday" in got["raw_text"]
     prompt = fake_structured.calls[0]["prompt"]
     assert "A meeting's action items (Weekly sync)" in prompt                              # read as the meeting's day
     assert "REFERENCE DATE: " in prompt and capture["origin_at"] == fake_trailmix.meetings[12]["created_at"]
