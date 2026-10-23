@@ -141,6 +141,24 @@ export const quitApp = () => bridge?.postMessage("quit");
 export const revealInFinder = (path: string) => bridge?.postMessage(`reveal:${path}`);
 export const showInAppMenu = (sections: { label: string; path: string }[]) => bridge?.postMessage(`menu:${JSON.stringify(sections)}`);
 
+/** Where the Mac app's updates stand (Updater.report in mac/), sent by its window as an "app-updates" event. */
+export interface UpdateReport {
+  enabled: boolean;
+  current: string;
+  state: "idle" | "checking" | "up-to-date" | "offline" | "locked-down" | "available" | "downloading" | "installing" | "going-back" | "failed";
+  version?: string;
+  progress?: number | null;
+  error?: string;
+  prerelease?: boolean;
+  beta: boolean;
+  skipped?: string | null;
+  previous?: string | null;
+  working: boolean;
+  checked_at?: string | null;
+}
+export type UpdateCommand = "get" | "check" | "install" | "skip" | "unskip" | "beta-on" | "beta-off" | "go-back" | "try-again";
+export const sendUpdates = (what: UpdateCommand) => bridge?.postMessage(`updates:${what}`);
+
 /** A family app installed on this Mac (core/server/family.py). */
 export interface FamilyApp {
   id: string;

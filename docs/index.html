@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Traverse · what's next, and who's on it</title>
+  <meta name="description" content="Traverse is your own workspace for planning work on your Mac: tasks, projects, a morning briefing, and an inbox where AI turns threads and meetings into tasks you approve. Free and open source." />
+  <link rel="icon" href="assets/logo.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Geist:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* Traverse's palette, the family's (identity/tokens.css): Day here, Dusk when the Mac is in dark mode */
+    :root {
+      --bg: #f7f4ec; --bg-top: #fcfaf5; --surface: #fffdf8; --ink: #21271f; --soft: #666a5f; --line: rgba(56, 52, 36, 0.11);
+      --forest: #1f5e4b; --forest-hover: #174a3b; --forest-soft: #d9e8e0; --forest-ink: #174838; --sun: #f2b13c; --on-forest: #ffffff;
+      --contour: rgba(31, 94, 75, 0.09); --glow-green: rgba(31, 94, 75, 0.07); --glow-warm: rgba(245, 184, 58, 0.12); --glow-sky: rgba(69, 127, 156, 0.07);
+      --cta-shadow: rgba(31, 94, 75, 0.25);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0e1416; --bg-top: #121a1d; --surface: #172023; --ink: #eceae3; --soft: #a9aaa1; --line: rgba(214, 228, 226, 0.08);
+        --forest: #52a487; --forest-hover: #66b699; --forest-soft: #19332f; --forest-ink: #96d5be; --sun: #f3b955; --on-forest: #0c1214;
+        --contour: rgba(150, 213, 190, 0.07); --glow-green: rgba(82, 164, 135, 0.08); --glow-warm: rgba(242, 190, 78, 0.04); --glow-sky: rgba(125, 179, 207, 0.07);
+        --cta-shadow: rgba(0, 0, 0, 0.35);
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 Geist, -apple-system, system-ui, sans-serif; }
+    a { color: var(--forest); }
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+    .brand { display: flex; align-items: center; gap: 10px; font: 600 22px Fraunces, serif; color: var(--ink); text-decoration: none; }
+    .brand img { width: 34px; height: 34px; }
+    .gh { color: var(--soft); text-decoration: none; font-weight: 500; }
+    .hero { padding: 48px 0 28px; text-align: center; }
+    .hero .mark { width: 96px; height: 96px; margin-bottom: 22px; filter: drop-shadow(0 14px 30px var(--cta-shadow)); }
+    h1 { font: 600 clamp(38px, 6vw, 64px)/1.05 Fraunces, serif; letter-spacing: -0.02em; margin: 0 auto 18px; max-width: 14ch; }
+    .lead { color: var(--soft); font-size: 19px; max-width: 40rem; margin: 0 auto 30px; }
+    .cta { display: inline-flex; align-items: center; gap: 10px; background: var(--forest); color: var(--on-forest); text-decoration: none; font-weight: 600;
+      padding: 15px 26px; border-radius: 14px; font-size: 18px; box-shadow: 0 6px 20px var(--cta-shadow); }
+    .cta:hover { background: var(--forest-hover); }
+    .cta svg { width: 20px; height: 20px; }
+    .meta { color: var(--soft); font-size: 14px; margin-top: 12px; }
+    section { padding: 56px 0 8px; }
+    h2 { font: 600 32px/1.15 Fraunces, serif; margin: 0 0 8px; letter-spacing: -0.01em; }
+    .sub { color: var(--soft); margin: 0 0 26px; }
+    .steps { display: grid; gap: 16px; counter-reset: step; }
+    .step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 22px 74px; position: relative; }
+    .step::before { counter-increment: step; content: counter(step); position: absolute; left: 22px; top: 20px; width: 34px; height: 34px;
+      border-radius: 50%; background: var(--forest-soft); color: var(--forest-ink); font-weight: 600; display: grid; place-items: center; }
+    .step h3 { margin: 0 0 6px; font-size: 18px; }
+    .step p, .step ol { margin: 6px 0 0; color: var(--soft); }
+    .step ol { padding-left: 20px; }
+    .step li { margin: 3px 0; }
+    b { color: var(--ink); font-weight: 600; }
+    code { font-size: 14px; background: var(--forest-soft); color: var(--forest-ink); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+    .why { font-size: 14px; border-left: 3px solid var(--sun); padding-left: 12px; margin-top: 12px !important; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; }
+    .card h3 { margin: 0 0 6px; font-size: 17px; }
+    .card p { margin: 0; color: var(--soft); font-size: 15.5px; }
+    details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; margin-bottom: 10px; }
+    summary { cursor: pointer; font-weight: 600; }
+    details p { color: var(--soft); margin: 10px 0 0; }
+    /* The app's backdrop: a soft gradient, a sun glow top right, and watermark-faint dashed routes between waypoints */
+    .ambient { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+      background: radial-gradient(34% 28% at 84% 2%, var(--glow-warm), transparent 72%),
+        radial-gradient(48% 44% at 20% 104%, var(--glow-sky), transparent 72%),
+        radial-gradient(55% 50% at 60% 62%, var(--glow-green), transparent 70%),
+        linear-gradient(180deg, var(--bg-top) 0%, var(--bg) 42%); }
+    .ambient svg { position: absolute; inset: 0; width: 100%; height: 100%;
+      -webkit-mask-image: radial-gradient(95% 95% at 78% 18%, #000 30%, transparent 88%); mask-image: radial-gradient(95% 95% at 78% 18%, #000 30%, transparent 88%); }
+    footer { color: var(--soft); font-size: 14px; padding: 56px 0 40px; text-align: center; }
+    @media (max-width: 560px) { .step { padding-left: 22px; padding-top: 66px; } .hero { padding-top: 24px; } }
+  </style>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true">
+    <svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" fill="none" stroke="var(--contour)" stroke-width="2.4" stroke-linecap="round">
+      <path d="M-40 760 C 260 700, 420 560, 700 520 S 1160 380, 1660 150" stroke-dasharray="2 18"/>
+      <path d="M-40 900 C 300 840, 520 700, 820 660 S 1220 540, 1660 330" stroke-dasharray="2 18" opacity="0.6"/>
+      <g fill="var(--contour)" stroke="none"><circle cx="700" cy="520" r="7"/><circle cx="1160" cy="380" r="7"/><circle cx="420" cy="560" r="5"/></g>
+    </svg>
+  </div>
+  <div class="wrap">
+    <header>
+      <a class="brand" href="./"><img src="assets/logo.svg" alt="" />Traverse</a>
+      <a class="gh" href="https://github.com/TheRealEminem/Traverse">GitHub</a>
+    </header>
+
+    <div class="hero">
+      <img class="mark" src="assets/logo.svg" alt="" />
+      <h1>What's next, and who's on it</h1>
+      <p class="lead">Traverse is your own workspace for the work you're responsible for: tasks, projects, a morning briefing, and an inbox where AI turns
+        meetings and threads into tasks you approve. It connects to Plane for your team, and nothing reaches them until you send it.</p>
+      <a class="cta" href="https://github.com/TheRealEminem/Traverse/releases/latest/download/Traverse-arm64.dmg">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
+        Download for Mac
+      </a>
+      <div class="meta">Free and open source · Apple silicon (M1 or newer) · macOS 14 or later</div>
+    </div>
+
+    <section id="install">
+      <h2>Install in three steps</h2>
+      <p class="sub">A couple of minutes. Nothing else to install.</p>
+      <div class="steps">
+        <div class="step">
+          <h3>Open the download and drag Traverse to Applications</h3>
+          <p>Double-click <b>Traverse-arm64.dmg</b> in your Downloads, then drag Traverse onto the Applications folder next to it.</p>
+        </div>
+        <div class="step">
+          <h3>Open it the first time with “Open Anyway”</h3>
+          <p>Open Traverse from Applications. macOS says it “can't verify” Traverse and offers only <b>Done</b> or <b>Move to Trash</b>: click <b>Done</b>. Then:</p>
+          <ol>
+            <li>Open <b>System Settings</b> (Apple menu) → <b>Privacy &amp; Security</b>.</li>
+            <li>Scroll down to <b>“Traverse” was blocked to protect your Mac</b> and click <b>Open Anyway</b>.</li>
+            <li>Enter your Mac password if asked, then click <b>Open Anyway</b> once more.</li>
+          </ol>
+          <p class="why">Why: Traverse isn't signed with a paid Apple developer certificate yet, so macOS asks you to confirm once. Updates install from inside the app without this step.</p>
+        </div>
+        <div class="step">
+          <h3>Start with your tasks</h3>
+          <p>A window opens and a small icon appears in your menu bar. Add tasks and projects by hand. For the AI parts, add a Claude, OpenAI or Gemini key
+            in <b>Settings</b>, or point it at a local model through Ollama. To see your team's work, add your Plane API key there too.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>What it does</h2>
+      <p class="sub">A workspace for one person, built to sit beside the tool your team already uses.</p>
+      <div class="grid">
+        <div class="card"><h3>Tasks and projects</h3><p>My tasks by day and week, projects with milestones and progress, and a board you can drag across. Everything works with no account and no connection.</p></div>
+        <div class="card"><h3>A morning briefing</h3><p>Muster shows what moved since you last looked and suggests a plan for the day around your meetings. You accept, reorder or drop each pick.</p></div>
+        <div class="card"><h3>An inbox that does the typing</h3><p>Paste an email, a Slack thread or notes. AI proposes the tasks with owners and due dates, and you accept, edit or drop each one.</p></div>
+        <div class="card"><h3>Plane, on your terms</h3><p>See your team's work in Traverse. Changes go to Plane only when you send them, after a field-by-field preview, and never overwrite a teammate's edit. Nothing is ever deleted there.</p></div>
+        <div class="card"><h3>Works with Claude</h3><p>Claude Desktop and Claude Code can read your plate and file things in your inbox. Anything meant for Plane waits for your approval.</p></div>
+        <div class="card"><h3>Private by default</h3><p>Your work stays on your Mac. <b>Lockdown</b> stops every cloud call with one switch, paid AI shows its cost first, and your keys are never shown again once saved.</p></div>
+        <div class="card"><h3>Your meetings, filed</h3><p>With Trailmix, the action items from your recorded meetings turn up in the inbox, each saying which meeting it came from.</p></div>
+        <div class="card"><h3>Safe to update</h3><p>It backs up your data before each update, and one click goes back to the version you had.</p></div>
+      </div>
+      <p class="sub" style="margin-top:22px">Want the details: how it's built, how it talks to Plane, where data lives? <a href="https://github.com/TheRealEminem/Traverse/blob/main/ARCHITECTURE.md">It's all on GitHub.</a></p>
+    </section>
+
+    <section>
+      <h2>Questions</h2>
+      <details><summary>What do I need?</summary><p>A Mac with Apple silicon (M1 or newer) on macOS 14 or later. The AI features need your own Claude, OpenAI or Gemini key, or a local model through Ollama; everything else works without one.</p></details>
+      <details><summary>Does anything leave my Mac?</summary><p>Your tasks and notes are stored on your Mac, in <code>~/Library/Application Support/Traverse</code>. Something leaves only when you ask for it: text you have the AI read goes to the provider you chose, and changes you approve go to Plane. Turn on <b>Lockdown</b> and nothing does.</p></details>
+      <details><summary>Do I need Plane?</summary><p>No. Traverse works on its own. Plane is the first connection it supports; others are planned.</p></details>
+      <details><summary>How do updates work?</summary><p>Traverse checks for new versions and offers to install them from its menu bar or <b>Settings → Updates</b>.
+        Turn on <b>Beta updates</b> there to get new versions a few days early. If one lets you down, <b>Go back</b> returns to the version you had.</p></details>
+      <details><summary>Windows, Linux or an Intel Mac?</summary><p>Not as an app. The server also runs in Docker; ARCHITECTURE.md on GitHub says how.</p></details>
+    </section>
+
+    <footer>Traverse is free and open source (AGPL-3.0) · <a href="https://github.com/TheRealEminem/Traverse">Source on GitHub</a> · <a href="https://github.com/TheRealEminem/Traverse/releases">All releases</a> · A sibling of <a href="https://therealeminem.github.io/trailmix/">Trailmix</a> and <a href="https://therealeminem.github.io/TheLodge/">The Lodge</a></footer>
+  </div>
+</body>
+</html>
