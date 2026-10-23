@@ -211,6 +211,28 @@ final class Updater: ObservableObject {
         }
     }
 
+    /// Everything Settings → Updates shows, for the page in the app's window (MainWindow sends it on each change).
+    var report: [String: Any] {
+        var out: [String: Any] = ["enabled": Self.enabled, "current": Self.current, "beta": beta, "working": working]
+        switch state {
+        case .idle: out["state"] = "idle"
+        case .checking: out["state"] = "checking"
+        case .upToDate: out["state"] = "up-to-date"
+        case .offline: out["state"] = "offline"
+        case .lockedDown: out["state"] = "locked-down"
+        case .available(let v): out["state"] = "available"; out["version"] = v
+        case .downloading(let v, let p): out["state"] = "downloading"; out["version"] = v; out["progress"] = p
+        case .installing(let v): out["state"] = "installing"; out["version"] = v
+        case .goingBack(let v): out["state"] = "going-back"; out["version"] = v
+        case .failed(let why): out["state"] = "failed"; out["error"] = why
+        }
+        if let latest, case .available = state { out["prerelease"] = latest.prerelease }
+        out["skipped"] = skipped
+        out["previous"] = previous
+        out["checked_at"] = checkedAt.map { ISO8601DateFormatter().string(from: $0) }
+        return out
+    }
+
     /// After a failure: whatever failed, again (or a fresh check).
     func tryAgain() {
         switch lastTry {

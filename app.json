@@ -5,7 +5,7 @@
   "bundleId": "com.traverse.app",
   "envPrefix": "TRAVERSE",
   "port": 8793,
-  "updateRepo": "",
+  "updateRepo": "TheRealEminem/Traverse",
   "modules": [
     "muster",
     "tasks",

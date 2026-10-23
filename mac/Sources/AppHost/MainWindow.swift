@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import WebKit
 
 /// The app's own window: the web app in a WebKit view, so no browser is involved. While it's open the app has
@@ -9,12 +10,16 @@ import WebKit
 ///   "quit"            quit the app
 ///   "reveal:<path>"   show a file or folder in Finder
 ///   "menu:<json>"     the sidebar's sections, [{"label", "path"}], for the menu bar menu
+///   "updates:<what>"  Settings → Updates: get, check, install, skip, unskip, beta-on, beta-off, go-back, try-again.
+///                     The window answers each, and every change after, with an "app-updates" event on the page
+///                     whose detail is Updater.report.
 @MainActor
 final class MainWindow: NSObject, NSWindowDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     static let shared = MainWindow()
 
     private var window: NSWindow?
     private var webView: WKWebView?
+    private var updatesWatch: AnyCancellable?
 
     func show(_ url: URL) {
         let web = webView ?? build()
@@ -38,6 +43,10 @@ final class MainWindow: NSObject, NSWindowDelegate, WKUIDelegate, WKNavigationDe
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
         config.applicationNameForUserAgent = "\(AppConfig.name.replacingOccurrences(of: " ", with: ""))App/\(version)"
         config.userContentController.add(self, name: "app")
+        // objectWillChange fires before the change, so the report is read on the next turn of the main loop.
+        updatesWatch = Updater.shared.objectWillChange.sink { [weak self] _ in
+            Task { @MainActor in self?.sendUpdates() }
+        }
 
         let web = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 860), configuration: config)
         web.uiDelegate = self
@@ -77,7 +86,33 @@ final class MainWindow: NSObject, NSWindowDelegate, WKUIDelegate, WKNavigationDe
             if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
         }
         if body.hasPrefix("menu:") { Host.shared.setSections(fromJSON: Data(body.dropFirst("menu:".count).utf8)) }
+        if body.hasPrefix("updates:") { updates(String(body.dropFirst("updates:".count))) }
     }
+
+    private func updates(_ what: String) {
+        let updater = Updater.shared
+        switch what {
+        case "check": Task { await updater.check(manual: true) }
+        case "install": updater.install()
+        case "skip": updater.skip()
+        case "unskip": updater.unskip()
+        case "beta-on": updater.beta = true
+        case "beta-off": updater.beta = false
+        case "go-back": if let previous = updater.previous { UpdateItems.confirmGoBack(to: previous, updater: updater) }
+        case "try-again": updater.tryAgain()
+        default: break
+        }
+        sendUpdates()
+    }
+
+    /// Tells the page where updates stand (Settings → Updates listens for it).
+    private func sendUpdates() {
+        guard let webView, let data = try? JSONSerialization.data(withJSONObject: Updater.shared.report),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('app-updates', { detail: \(json) }))")
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { sendUpdates() }
 
     /// File and folder pickers on the page (<input type="file">).
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo,
