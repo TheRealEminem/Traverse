@@ -1,10 +1,10 @@
 // Settings: the host's own sections (appearance, you, Lockdown, AI, Claude, family apps), then one section per module,
 // then your data and the app.
 import { useEffect, useState } from "react";
-import { api, inApp, quitApp } from "../api";
-import type { FamilyStatus, ProviderId, ProviderInfo } from "../api";
+import { api, inApp, quitApp, sendUpdates } from "../api";
+import type { FamilyStatus, ProviderId, ProviderInfo, UpdateReport } from "../api";
 import { Section, SecretSetting, TextSetting } from "../components/blocks";
-import { CheckIcon, AlertIcon, MonitorIcon, MoonIcon, NetworkIcon, PowerIcon, SparkleIcon, SunIcon, UsersIcon, LeafIcon } from "../components/icons";
+import { CheckIcon, AlertIcon, BackIcon, DownloadIcon, MonitorIcon, MoonIcon, NetworkIcon, PowerIcon, RefreshIcon, SparkleIcon, SunIcon, UsersIcon, LeafIcon } from "../components/icons";
 import { ControlRow, PageHeader, Segmented, Select, Spinner, StatusChip, SwitchRow } from "../components/ui";
 import { useLive } from "../live";
 import { modulesFor } from "../registry";
@@ -138,6 +138,101 @@ function FamilyApps({ data, onSharing }: { data: FamilyStatus | null; onSharing:
   );
 }
 
+/** Where the Mac app's updates stand: its window sends a report now and on every change after. */
+function useUpdates() {
+  const [report, setReport] = useState<UpdateReport | null>(null);
+  useEffect(() => {
+    const listen = (e: Event) => setReport((e as CustomEvent<UpdateReport>).detail);
+    window.addEventListener("app-updates", listen);
+    sendUpdates("get");
+    return () => window.removeEventListener("app-updates", listen);
+  }, []);
+  return report;
+}
+
+/** Settings → Updates: the version on offer, beta updates, a skipped version and going back. The Mac app's menu
+ *  has the same; this is them in the window, for the Mac app only. */
+function Updates() {
+  const { app } = useShell();
+  const u = useUpdates();
+  const blurb = "New versions install from here or from the menu bar, in about a minute. Your data stays.";
+  if (!inApp || !u || !u.enabled) {
+    return (
+      <Section icon={<DownloadIcon size={16} />} title="Updates" blurb={blurb}>
+        <p className="py-3.5 text-hint text-ink-soft">
+          {!inApp ? `Open ${app.name} from Applications to check for updates.` : `This copy of ${app.name} doesn't update itself (a development build).`}
+        </p>
+      </Section>
+    );
+  }
+  const busy = u.working || u.state === "checking";
+  let status: string;
+  switch (u.state) {
+    case "available": status = `${app.name} ${u.version}${u.prerelease ? " (beta)" : ""} is ready to install.`; break;
+    case "downloading": status = `Downloading ${u.version}…${u.progress != null ? ` ${Math.round(u.progress * 100)}%` : ""}`; break;
+    case "installing": status = `Installing ${u.version}… ${app.name} restarts when it's done.`; break;
+    case "going-back": status = `Going back to ${u.version}…`; break;
+    case "failed": status = u.error ?? "The update didn't work."; break;
+    case "checking": status = "Checking for updates…"; break;
+    case "offline": status = "Couldn't reach GitHub to check. It tries again in a few hours."; break;
+    case "locked-down": status = "Lockdown is on, so nothing checks for updates or downloads them."; break;
+    case "up-to-date": status = `You have the newest version${u.beta ? ", betas included" : ""}.`; break;
+    default: status = `${app.name} checks for updates a few times a day.`;
+  }
+  return (
+    <Section icon={<DownloadIcon size={16} />} title="Updates" blurb={blurb}>
+      <ControlRow label={`Version ${u.current}`} hint={status}>
+        <div className="flex flex-wrap gap-2">
+          {u.state === "available" && (
+            <>
+              <button className="btn btn-sm btn-ghost" onClick={() => sendUpdates("skip")}>Skip this version</button>
+              <button className="btn btn-sm btn-primary" onClick={() => sendUpdates("install")}>
+                <DownloadIcon size={16} />
+                Update to {u.version}
+              </button>
+            </>
+          )}
+          {u.state === "failed" && (
+            <button className="btn btn-sm btn-soft" onClick={() => sendUpdates("try-again")}>
+              <RefreshIcon size={16} />
+              Try again
+            </button>
+          )}
+          {u.state !== "available" && u.state !== "failed" && (
+            <button className="btn btn-sm btn-soft" disabled={busy} onClick={() => sendUpdates("check")}>
+              {busy ? <Spinner /> : <RefreshIcon size={16} />}
+              Check for updates
+            </button>
+          )}
+        </div>
+      </ControlRow>
+      <SwitchRow
+        label="Beta updates"
+        hint="Get new versions a few days early, to try them out; they may have rough edges. A beta reaches everyone after 3 days unless someone reports that it blocks them."
+        checked={u.beta}
+        disabled={u.working}
+        onChange={(on) => sendUpdates(on ? "beta-on" : "beta-off")}
+      />
+      {u.skipped && (
+        <ControlRow label={`Skipping ${u.skipped}`} hint="It isn't offered; the next version will be.">
+          <button className="btn btn-sm btn-ghost" disabled={u.working} onClick={() => sendUpdates("unskip")}>Offer it again</button>
+        </ControlRow>
+      )}
+      {u.previous && (
+        <ControlRow
+          label={`Go back to ${u.previous}`}
+          hint={`If this version lets you down: puts back ${u.previous}, the version it updated from, and skips ${u.current} until a newer one comes out. Your data stays.`}
+        >
+          <button className="btn btn-sm btn-ghost" disabled={u.working} onClick={() => sendUpdates("go-back")}>
+            <BackIcon size={16} />
+            Go back
+          </button>
+        </ControlRow>
+      )}
+    </Section>
+  );
+}
+
 export default function Settings() {
   const { app, theme } = useShell();
   const { values, hints, save } = useSettings();
@@ -213,6 +308,8 @@ export default function Settings() {
       })}
 
       <YourData />
+
+      <Updates />
 
       <Section icon={<LeafIcon size={16} />} title={app.name} blurb={`Version ${app.version}`}>
         <ControlRow label={`Quit ${app.name}`} hint={inApp ? "Closes the window and the menu bar app." : "Stops the server; open the app again to come back."}>
