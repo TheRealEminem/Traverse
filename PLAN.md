@@ -29,10 +29,17 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 13 | Home card, search, export, Settings, the auto-sync switch | M | ☐ |
 | 14 | Mac: mark, menu, build and install beside The Lodge | M | ◐ 2026-10-21 on `claude/chunk-14-mac-ca4e9f`: the menu lists the modules' sections; the new build runs beside The Lodge. Updates stay off for now (Mark's choice). Merged on `merge/muster-ai-mac` and installed as 0.2.0 (c3fd94d) over 0.1.0 |
 | 15 | **Muster**: the day's kick-off, what moved, plan the day, look ahead, wrap-up (15a), with AI and your Mac's Calendar (15b) | L | ◐ 2026-10-21: 15a on `chunk-15/muster` (the next morning tried on a copy of the dev data); 15b not started |
+| 16 | **Local only**: a first-run choice (Local only / Connect a tool); Traverse works fully with no connector | S | ☐ |
+| 17 | Gate: Plane proven live (chunks 6 and 7 closed: a real edit followed, one real push sent) | S | ☐ waits on 6 and 7 |
+| 18 | **The connector seam, with GitHub Issues as the second connector**: built beside `plane`, then the shared engine lifted into the host | L | ☐ |
+| 19 | Linear | M | ☐ |
+| 20 | Jira (Cloud first): workflow transitions, rich-text descriptions, custom fields | L | ☐ |
+| 21 | monday.com, then Asana, ClickUp, Trello as asked (each a connector; none touches the core) | M each | ☐ |
+| 22 | Connectors for other people: sign-in with OAuth, more than one workspace, "write a connector", releases people can install | L | ☐ |
 
 Milestones: **A** "it runs" = 0–1 · **B** "my work, locally" = 2–4 · **C** "sees the team" = 5–6 ·
 **D** "shares with the team" = 7–8 · **E** "AI does the typing" = 9–12 · **F** "shipped" = 13–14 ·
-**G** "starts my day" = 15.
+**G** "starts my day" = 15 · **H** "works with your tool" = 16–22.
 
 Sizes are relative effort (S ≈ one sitting, M ≈ a few, L ≈ many), not calendar time.
 
@@ -85,7 +92,7 @@ Mac sharing data, keys and basic preferences.
 | # | Decision | Why |
 | --- | --- | --- |
 | D1 | Traverse is the blueprint's project app (Cairn), renamed, with Plane added | Mark's answer, 2026-10-18. The blueprint already keeps it compatible with The Lodge |
-| D2 | **Plane is the team's database.** Traverse is Mark's personal workspace on top of it | Everyone else uses Plane. Traverse is for Mark alone for now |
+| D2 | **Plane is the team's database.** Traverse is Mark's personal workspace on top of it | Everyone else uses Plane. Traverse is for Mark alone for now. _Since D11 (2026-10-22): Plane is Mark's connector, one of several; "alone" no longer holds_ |
 | D3 | **Push only, and explicit.** Every change to Plane is a job that waits for Mark's approval, with a preview of exactly what will change | "Don't want any random deletes or rewrites of anyone's work" |
 | D4 | **Auto-sync is a switch, off by default, per project** (chunk 13). Even on, it never deletes and still stops on conflicts | Mark asked for it as a later, toggleable feature |
 | D5 | Plane integration is its own module, `plane`, owned by Traverse. `tasks` stays Plane-free | `tasks` is shared with The Lodge, which doesn't need Plane. If the apps ever combine, `plane` is an add-on |
@@ -94,6 +101,7 @@ Mac sharing data, keys and basic preferences.
 | D8 | Plane members become people through the host's people directory (blueprint §6), with `plane` as a provider | Assignees then work the same way with or without The Lodge's People |
 | D9 | MCP lives in the host (`core/server/mcp.py`), and modules contribute tools | A shared host feature: any family app (The Lodge too) can expose its modules' tools the same way |
 | D10 | **Muster** is a section of Traverse (module `muster`), built family-ready: the host gathers each module's briefing (`Module.brief`), so The Lodge can have one too. AI writes a summary and suggests a plan; the first open each day lands on it; your Mac's Calendar is read through the Mac host | Mark's answers, 2026-10-21 |
+| D11 | **Traverse is for anyone, with any project tool, or none.** The core stays one design: tasks, projects, the inbox, Muster, MCP, the outbox and the rules of §3.3. Each tool (Plane, GitHub Issues, Linear, Jira, monday.com, …) is a **connector**: a module that translates between that tool and the family's `work.*` contracts, and adds whatever that tool needs (Jira's workflow transitions, monday's columns) on its own side of the line. A connector can't loosen the rules: the shared engine in the host owns "nothing deleted, nothing sent unapproved, changed fields only, check before writing, log and undo, dry run, Lockdown". **Local only** is a first-class mode, and Lockdown's natural home. Connectors live in the host so The Lodge and Trailmix get them too. Each person runs their own Traverse with their own credentials; there is no shared Traverse server | Mark's answers, 2026-10-22: others will use it with Jira, monday.com and more, and everything should tie together across Trailmix, The Lodge and Traverse without changing the core for each new tool. Supersedes the "Mark alone for now" half of D2 and the §9 line about other users. D3 and D5 stand |
 
 ## 3. Plane: what syncs, and the rules that protect the team's work
 
@@ -937,6 +945,102 @@ the family yet).**
 - **Done when:** the morning view shows today's real calendar events, a written summary of what moved, and a
   suggested plan around those meetings that you can accept into today's picks.
 
+### Chunk 16 · Local only (S)
+
+Traverse with no connector at all, as a first-class way to use it (D11).
+
+- First run asks one question: **Local only**, or **Connect a tool** (Plane today, others as they land). Local only is
+  the default. It can be changed later in Settings; going from local to connected links projects by choice (§3.3
+  rule 6, as now).
+- `app.json` without `plane` must give a complete app. Check every screen that today may assume a mirror: Home,
+  Team view (hidden or shows only people from the directory), search, Outbox (hidden), Muster (what moved comes from
+  local changes only), MCP tools (the Plane-only ones don't appear), export, the Mac menu.
+- Empty states say what the screen is for, not "connect Plane".
+- Lockdown story, in the first-run text and Settings → Lockdown: with no connector and a local AI, nothing leaves
+  this Mac.
+
+**Done when:** a new data folder with `plane` left out of `app.json` runs through first run, adding projects and
+tasks, the board, Muster, the inbox and export without an error or a mention of Plane, and a test boots the app both
+ways.
+
+### Chunk 17 · Gate: Plane proven live (S)
+
+Not new code: chunks 6 and 7 closed for real. A real edit in Plane is followed; one real push to the sandbox project
+is sent, undone, and the dry-run switch is turned off on purpose. Chunk 18 starts from a Plane connector that has
+done its job against a real service, because it's what the second connector is measured against.
+
+### Chunk 18 · The connector seam, with GitHub Issues (L)
+
+D11's hard part. Two steps, in this order, so the seam is drawn from two real examples and not guessed from one.
+
+**18a · GitHub Issues, built beside `plane`.** A `github` module (issues and, later, Projects' fields), written the
+way `plane` is: its own client with the Lockdown check in the one request choke point and no delete method, its own
+pull into `github_*` tables, push through the same `work.*` contracts, a fake GitHub for tests. Where it needs
+something `plane` has (base tracking, the conflict check, previews, the outbox, undo), it copies it and puts a
+`# shared` comment on it. GitHub is chosen because its model is small (open and closed, labels, assignees,
+milestones, markdown bodies) and a personal token is enough.
+
+**18b · Lift the shared engine into the host.** What both modules have in common moves to the host
+(`TrailmixFamily`, `core/server/connectors/`), and `plane` and `github` become adapters on it. The seam is small:
+
+| An adapter provides | The engine does |
+| --- | --- |
+| Capabilities: `can_create`, `can_comment`, states or transitions, rich or plain descriptions, which fields exist | Everything in §3.3: bases, changed-fields-only, re-read before write, list merging, conflict stops, the outbox and previews, the log and undo, dry run |
+| `read(project)` → items, states, members, labels in the engine's neutral shape (the `WORK_FIELDS` names) | The pull job, the mirror tables, "Changed in Plane" (now "Changed in <tool>"), removed-elsewhere |
+| `write(item, changed_fields)`, `create`, `comment` | The push job and its checks; the adapter is only called after approval and after Lockdown allows it |
+| A field map and status map, with defaults, for the Linking screen | The Linking screen, once, for every tool |
+| `translate_in` / `translate_out`: whatever the tool needs between its shape and the neutral one (Plane's HTML descriptions, Jira's workflow transitions and rich text, monday's typed columns) | Calling them at the edge, so nothing tool-specific reaches `tasks` or the core |
+| Sign-in: what to ask the person for, and how to test it | Storing it as a write-only secret, and Test connection |
+| The hosts it talks to | Lockdown's check on each, at one place |
+
+`tasks` still never learns any tool's shapes. The contracts in `core/server/contracts.py` gain a `source` that is the
+connector's id wherever they didn't already have one. A **conformance suite** in the host runs against every
+connector's fake: no delete code path, a request while Lockdown is on is refused, nothing is written without
+approval, a stale base stops, lists are merged, and every send is logged and can be undone.
+
+**Done when:** `plane`'s existing tests pass unchanged on the engine; `github` passes the same conformance suite and
+the same linking, push, undo, conflict and Lockdown scenarios as Plane; a task can be linked to a GitHub issue and
+sent with a preview; nothing in `tasks` or `inbox` imported anything new.
+
+### Chunk 19 · Linear (M)
+
+A connector on the engine, with a personal API key. Linear's workflow states map onto the five status groups as
+Plane's do. Its GraphQL client is the connector's own. **Done when:** the conformance suite and the linking and push
+scenarios pass against a fake Linear, and one real project is mirrored and one real edit followed.
+
+### Chunk 20 · Jira (L)
+
+Jira Cloud first (Data Center is a later question, §8). Jira moves an issue between statuses by **transitions** that
+differ per project and workflow, so `translate_out` finds the allowed transition for the status you want and, if there
+isn't one, says so in the preview and sends nothing for that field. Descriptions are Atlassian's document format and
+convert both ways; what can't convert stays local and says so. Custom fields appear on the Linking screen's field map,
+off by default. **Done when:** the conformance suite passes; a status change that needs a transition previews as one;
+a description round-trips without losing what it can hold; an edit in Jira is followed.
+
+### Chunk 21 · monday.com, and the rest as asked (M each)
+
+monday.com: boards, groups and items, with **columns of many types** and no fixed field names, so the field map is
+chosen per board on the Linking screen (the engine's per-project map, as in chunk 18). Then Asana, ClickUp, Trello
+and others as people ask. A new tool is a new connector module and its fake; **if it needs a change to `tasks`, the
+core or the engine's rules, stop and ask**, because that is the thing D11 exists to avoid. The engine may grow a
+capability flag; it doesn't change what it guarantees.
+
+### Chunk 22 · Connectors for other people (L)
+
+What it takes for someone who isn't Mark to use this.
+
+- **Sign-in with OAuth** (loopback redirect, PKCE) where the tool offers it, keeping personal tokens as the simple
+  option. The apps registered with each tool's developer program.
+- **More than one workspace** per connector, and more than one connector at a time (Linear for work, GitHub for a
+  side project), each project linked to one.
+- **"Write a connector":** a short guide and a template module, with the conformance suite as its test. Built in only;
+  nothing loads from outside the app (§8).
+- **Releases people can install:** the updater turned on for a public place to fetch them (Mark's call, §7).
+- First run lists the connectors that exist; Lockdown's list of named hosts if §8 settles that.
+
+**Done when:** someone with no Plane account connects Jira (or monday.com) from first run, links a project, sends a
+change with a preview and undoes it, with Lockdown on in between and the work waiting until it's off.
+
 ## 6b. Family track
 
 Shared host work, made in Traverse, sent to `TrailmixFamily` with `scripts/sync-family --push`, committed there, and
@@ -1183,9 +1287,23 @@ It's a change in Trailmix's own repository, independent of the rest. Until then,
 | Tasks v2 is shared code | Built only in `TrailmixFamily`; The Lodge takes it when Mark chooses (blueprint §3) |
 | Muster's "what moved" needs history the mirror doesn't keep | The pull's change log (chunk 15a) starts recording on its first run; nothing before that. Plane's per-item activity API could fill gaps, but it's one request per item, so not by default |
 | Calendar access on the Mac (EventKit's full-access permission, the app's signing) | A spike at the start of 15b; read-only, never stored beyond the day; Muster works without it |
+| Designing the connector interface from Plane alone shapes it around Plane | Chunk 18 builds GitHub Issues first and lifts the shared engine out only afterward, with Plane's tests unchanged as the check. A connector conformance suite (every connector's client has no delete method, is checked by Lockdown, never sends without approval) runs against each connector's fake |
+| A connector weakens a safety rule to get a tool working | The rules live in the host engine, not in connectors. A connector declares what its tool can do (`can_create`, `can_comment`, states or transitions) and the engine does the rest; there is no way for a connector to write directly |
+| Jira and monday.com have no fixed fields (custom fields; columns of many types) | The engine's field map is configured per linked project and shown on the Linking screen, as Plane's state map already is. Fields a connector can't map stay local and are said to be |
+| Each tool's sign-in: personal tokens are easy, OAuth needs an app registered with Atlassian, Linear and monday.com | Chunks 18–21 use personal tokens (write-only secrets, as Plane's key is). OAuth with a loopback redirect waits for chunk 22 |
+| Each connector is code that talks to a service that changes | Each connector has a fake of its service for tests, and a recorded real response per endpoint (as Plane's spike did). Support for one never blocks the core |
+| Releases: `TheRealEminem/Traverse` is private and updates are off | People other than Mark need a build to install. Chunk 22 decides: a public releases repo, or something else (Mark's call) |
 
 ## 8. Questions for later chunks
 
+- **Connectors (chunks 16–22):**
+  - Should Lockdown learn a list of hosts you name (your own self-hosted Plane or Jira on the LAN), so it stays strict
+    and a self-hosted tool still works? Today only this Mac passes (F5). Likely a small family change.
+  - Which tools first after GitHub, Linear and Jira? monday.com is named; are there others people have asked for?
+  - Jira Cloud only at first, or Data Center too (different API, different sign-in)?
+  - Is a connector a third-party extension one day (installable by someone else), or always built in? Chunk 22 only
+    documents how to write one; it doesn't load code from outside.
+  - Naming: "connector" is the working word. The screens now say "Plane"; they'd say the tool's own name.
 - **Muster (chunk 15):** working hours to plan against (preset 9 to 5)? Should the evening wrap-up remind you, or
   wait until you open it? Should Muster offer to post a short daily update to Plane? (Off by default; that would go
   through the Outbox like any push.)
@@ -1201,7 +1319,7 @@ It's a change in Trailmix's own repository, independent of the rest. Until then,
 ## 9. Not in this plan
 
 - Two-way editing from Plane beyond "linked tasks follow Plane" (Plane webhooks would make pulls instant; later).
-- Other team members using Traverse. Plane is their tool.
+- ~~Other team members using Traverse.~~ Now in scope: D11, chunks 16–22. Still out: a shared Traverse server that several people sign in to.
 - Plane cycles, intake, pages and initiatives, beyond showing cycles in Team view.
 - Taking the new `tasks` into The Lodge (blueprint chunk 10). Possible any time after chunk 4.
 
