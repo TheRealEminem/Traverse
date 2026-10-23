@@ -3,7 +3,7 @@
 _Planning document, written 2026-10-18. Tick the boxes as chunks close. Work one chunk at a time and stop at its
 "done when" so Mark can look before the next one starts._
 
-Traverse is Mark's own workspace for Cold Connect's work: the project app from the Lodge design guide's blueprint
+Traverse is Mark's own workspace for his team's work: the project app from the Lodge design guide's blueprint
 (working name Cairn, `_reference/Lodge Family Design Guide/03-project-app-blueprint.md`), built as a Trailmix family
 app, plus a connection to **Plane**, which stays the team's database and the place everyone else works. Traverse is
 where Mark plans, captures and drafts with AI; Plane is where the shared result lives. Nothing reaches Plane until
@@ -18,7 +18,7 @@ Mark sends it, and nothing Traverse does can delete or overwrite a teammate's wo
 | 2 | Tasks v2 data: projects, milestones, items, updates (migration step 2) | M | ☑ 2026-10-19 (family 842c525) on `chunk-2/tasks-v2` |
 | 3 | My tasks, quick add, the task page | M | ☑ 2026-10-19 (family 1584a3a) on `chunk-3/my-tasks` |
 | 4 | Projects list and project page, milestones, progress | M | ☑ 2026-10-19 on `chunk-4/projects` |
-| 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☑ 2026-10-20: live check against Cold Connect's Plane passed |
+| 5 | Plane connection and a read-only mirror; Team view; the people directory | M–L | ☑ 2026-10-20: live check against Acme Team's Plane passed |
 | 6 | Linking: Traverse projects ↔ Plane projects, bringing Plane items in, "Changed in Plane" | M | ◐ 2026-10-20 (family ca89799) on `chunk-6/linking`: Mark's 23 items are linked tasks; following a Plane edit is tested against the fake Plane, not yet with a real edit |
 | 7 | **Push to Plane**: previews, changed fields only, conflict stops, log and undo | L | ◐ 2026-10-20 on `chunk-7/push`: every §3.3 rule tested against the fake Plane; live, a dry run only (dry run is on until Mark turns it off) |
 | 8 | Board view and drag | M | ◐ 2026-10-19 (family bf6d30a) on `chunk-8/board`; cards say "1 change to send" since chunk 7 |
@@ -49,9 +49,9 @@ sessions. `app.json` now runs `tasks`, `plane` and `inbox`; the shared parts (th
 release flow) are in the family at 44da03f, and sync-family shares the three new release files. One conflict (the
 progress table in this file) and one test that still read a task's origin as `source` rather than `came_from`. All 198
 tests pass, the Mac app builds, the update checks pass, and Home, Team, Inbox and Settings → Plane load in a browser.
-**Live check, 2026-10-20:** with Mark's key, Traverse connected to `cold-connect` ("8 projects to choose from"), read
+**Live check, 2026-10-20:** with Mark's key, Traverse connected to `acme-team` ("8 projects to choose from"), read
 the 7 real projects (49 items, 31 requests; the demo project left off), and the Team view matched Plane exactly: 34
-open, Mark 23, Mickey 5, Elijah 2, 4 with no one (6 past due now). Item links use Plane's own keys (SOFTWARE-5 is
+open, Mark 23, Sam 5, Alex 2, 4 with no one (6 past due now). Item links use Plane's own keys (SOFTWARE-5 is
 "Share Github repo's with Mark"). Found by it: the Plane server field had `https://app.plane.so`, Plane's website,
 whose answer isn't JSON; the module now reads Plane Cloud's web address as its API address (`api.plane.so`).
 Still open: the Mac menu's Inbox item opens The Lodge's People inbox,
@@ -374,7 +374,7 @@ Blueprint chunk 3 and §8: `TaskRow`, My tasks with Today · This week · Everyt
 
 Blueprint chunk 4: projects list with health and progress, the project page (overview, list), milestones.
 
-**Done when:** a real Cold Connect project, with milestones and tasks, reads right.
+**Done when:** a real Acme Team project, with milestones and tasks, reads right.
 
 **Result (2026-10-19).**
 - **Projects** (`#/tasks/projects?status=…`): Active, Planned, Done, All and Archived. Each row has the project's tile
@@ -396,7 +396,7 @@ Blueprint chunk 4: projects list with health and progress, the project page (ove
   focusing the add field; Day and Dusk at 1440px and 375px.
 - **For The Lodge:** taking this family version adds Projects to its sidebar too. A setting to hide projects in an app
   that doesn't want them (the blueprint's `tasks.projects`) belongs with chunk 13's settings.
-- **Not done:** the "real Cold Connect project" part of done-when needs Plane (chunks 5 and 6), which brings real
+- **Not done:** the "real Acme Team project" part of done-when needs Plane (chunks 5 and 6), which brings real
   projects in; until then it was checked with example projects.
 
 ### Chunk 5 · Plane connection, mirror, Team view, people (M–L)
@@ -411,8 +411,8 @@ Blueprint chunk 4: projects list with health and progress, the project page (ove
 - The host's people directory (blueprint §6): `Module.people`, `core/server/people.py`, `GET /api/people`,
   `PersonPicker`, with `plane` as a provider and `core:me` matched to Mark's Plane member by email.
 
-**Done when:** Team view matches Plane: on 2026-10-18 that was 34 open items, Mark 23, Mickey 5, Elijah 2, 4 with no
-one. Assigning a task offers Elijah and Mickey from Plane.
+**Done when:** Team view matches Plane: on 2026-10-18 that was 34 open items, Mark 23, Sam 5, Alex 2, 4 with no
+one. Assigning a task offers Alex and Sam from Plane.
 
 **Result (2026-10-19, branch `claude/chunk-5-plane-mirror-ebcfba`, not yet live-checked).**
 - **`modules/plane`:** settings (`plane.personal_api_key`, write-only; plain `api_key` wouldn't be a secret to the
@@ -425,11 +425,11 @@ one. Assigning a task offers Elijah and Mickey from Plane.
   you first as `core:me`, same email shown once, a note when the other app is closed), `GET /api/people`,
   `PersonPicker` in blocks.tsx. Plane members are `plane:<id>`; the key's owner (or `plane.me`) is `core:me`.
 - **Verified:** 169 tests with `TRAVERSE_MODULES=tasks,plane` (fixtures rebuild the 2026-10-18 workspace: 34 open,
-  Mark 23, Mickey 5, Elijah 2, no one 4). Team view looked at in Day and Dusk at 1440 and 375.
+  Mark 23, Sam 5, Alex 2, no one 4). Team view looked at in Day and Dusk at 1440 and 375.
 - **Not done:** the live check (Mark pastes his key in Settings → Plane, tests, mirrors the 7 real projects and
   compares the counts and that `/browse/KEY-N/` links open); `app.json` still lacks `plane` (run with
-  `TRAVERSE_MODULES=tasks,plane`). Settings → Plane and PersonPicker were tried in a browser (You first, Elijah and
-  Mickey from Plane, "Use “ana” as a name" giving ref null, keyboard choice giving `plane:<id>`), but no screen
+  `TRAVERSE_MODULES=tasks,plane`). Settings → Plane and PersonPicker were tried in a browser (You first, Alex and
+  Sam from Plane, "Use “ana” as a name" giving ref null, keyboard choice giving `plane:<id>`), but no screen
   uses PersonPicker yet: chunk 3's task page is where assignees will pick with it.
 
 ### Chunk 6 · Linking (M)
@@ -486,7 +486,7 @@ The heart of D3, built test-first against a fake Plane:
   same field stops the push; an assignee added in Plane survives a push that adds another; the client has no delete.
 
 **Done when:** an item created and edited in Traverse appears in Plane after Mark approves it, and in a sandbox
-Plane project (the "Cold Connect" demo project, if Mark agrees) a change made in Plane between pull and push is
+Plane project (the "Acme Team" demo project, if Mark agrees) a change made in Plane between pull and push is
 never overwritten.
 
 **Result (2026-10-20, branch `chunk-7/push` from `chunk-6/linking`; the shared files are changed here, not sent to the
@@ -499,7 +499,7 @@ family yet).**
 - **`plane`**, migration step 3: `plane_pushes` (the outbox and the log: each field's Traverse and Plane values before
   and after, when you approved it, when it was sent) and `plane_sent` (what a Plane value means in Traverse after a
   push, for as long as Plane keeps it: a state sent as Waiting reads back as Waiting, not Doing; a merged assignee list
-  as Mickey; notes through HTML. Forgotten once Plane changes it). `push.py`: a request becomes a push with one entry
+  as Sam; notes through HTML. Forgotten once Plane changes it). `push.py`: a request becomes a push with one entry
   per field (status through the project's state map; notes as HTML by `html.to_html`, the inverse of chunk 6's
   `to_markdown`, left out until you include them, per §7; assignees as an addition and a removal; someone not in Plane
   or a status with no state shows why and can't be sent). Its job is parked as Needs you. Send reads the item again;
@@ -528,15 +528,15 @@ family yet).**
   2026-10-21: `conftest.py` clears the shell's AI keys and addresses before the app loads.)
   On dev data in a browser (a backup first, `traverse-20261020-181450-manual.db`, and a copy from before the
   migration): a priority change on OPERATIONS-10, "Send it to Plane", the Outbox, Check (dry run). Traverse read the
-  item from Cold Connect's Plane (one GET, so the live single-item read works) and found Plane had High already (the
+  item from Acme Team's Plane (one GET, so the live single-item read works) and found Plane had High already (the
   copy was from the morning): "Send would write nothing". Discarded. Only GETs reached Plane.
   In a sandbox (a throwaway data folder and the fake Plane over HTTP): a teammate's new due date stopped a push, then
-  Send mine instead sent it; Elijah, added in Plane meanwhile, stayed when the assignee went from Mark to Mickey; Undo
+  Send mine instead sent it; Alex, added in Plane meanwhile, stayed when the assignee went from Mark to Sam; Undo
   put both fields back; a new task in Software was added (one POST) and became its linked copy; Day and Dusk, 375px
   and wide. Found and fixed (with a test): Undo of a push sent over a teammate's change put the task back to its old
   base instead of Plane's value.
 - **Not done**: the live half of done-when needs Mark: turn dry run off and approve one push (say, a new item in the
-  "Cold Connect" demo project, §8). Descriptions haven't been written to the real Plane (it may keep its editor's own
+  "Acme Team" demo project, §8). Descriptions haven't been written to the real Plane (it may keep its editor's own
   copy of a description; they're left out of a push until included). Posting Traverse updates as comments, sending a
   selection or a project's "Send N changes", and milestones in Plane (§8) aren't built. The shared files go to the
   family with `scripts/sync-family --push` when Mark says.
@@ -605,10 +605,10 @@ them into the right project.
   those words are really in the text (it made up the meeting's own day as a due date, and priorities from nothing).
   Naming the reader in the prompt pulled every "I" in a chat towards them, so it's only said for meetings.
 - **Verified:** 21 tests with the fake AI (`fake_structured`), including the done-when: a pasted Slack thread
-  becomes three proposals with Elijah, Mickey and Mark and their days, and accepting them files them into the chosen
+  becomes three proposals with Alex, Sam and Mark and their days, and accepting them files them into the chosen
   project. A real run on Ollama (qwen2.5:7b) through the screen: the right three people, Friday 23, tomorrow (Tue
   20) and next Tuesday (27); picking "Acme launch" and Accept all filed all three there, with Mark's as `core:me`.
-  Left over: "urgent" in Mark's message also landed on Elijah's item (priority is editable before accepting).
+  Left over: "urgent" in Mark's message also landed on Alex's item (priority is editable before accepting).
   Screens checked in Day and Dusk at 375px and 1440px.
 - **Not yet:** `app.json` doesn't list `inbox`, so a plain `scripts/check` skips its tests; run it with
   `TRAVERSE_MODULES=tasks,inbox` (140 pass) until `inbox` is added. Assignees are names until the people directory
@@ -702,7 +702,7 @@ family yet).**
   #hardware Slack thread. It used `tasks_my_plate`, `tasks_find` twice and `inbox_capture`, and answered in 19 s: 4
   late (OPERATIONS-10 and BD-14 with their Plane links, and two of the dev data's example tasks) and 1 this week
   (another example; it said the three looked like sample data). It
-  left 4 proposals in the inbox, filed to Hardware: Elijah's drop tests Thursday, your BOM update tomorrow, Mickey's
+  left 4 proposals in the inbox, filed to Hardware: Alex's drop tests Thursday, your BOM update tomorrow, Sam's
   quote Friday, and "Add the drop test plan to Plane" with no one, which it said nobody had agreed to. It didn't
   propose sending anything, since proposals aren't tasks yet. Asked next to add the drop test plan to Hardware and send
   it to Plane, it called `tasks_add` and `tasks_propose_send` and said it waits for your Send. It waits in the Outbox as
@@ -883,7 +883,7 @@ the family yet).**
   date, priority and name, and added and removed items. Nothing on a project's first read, an older version of an item
   skipped as the mirror skips it, and anything older than 90 days forgotten. A push's read of an item (`put_item`) logs
   too, since it can be the first to see a teammate's edit. `briefing.py` reads the mirror only: one line per item that
-  moved ("Todo → In Progress · by Elijah Anderson-Justis", "Now with Mickey (was you) · by Mickey", "Due Fri 30 Oct
+  moved ("Todo → In Progress · by Alex Rivera", "Now with Sam (was you) · by Sam", "Due Fri 30 Oct
   (was Sun 11 Oct) · Urgent priority (was Medium)"), "Went past due" for items due since then, the team's past-due
   items (yours that are linked tasks left out: tasks shows them), cycles ending this week with what's still open, and
   the Outbox's waiting, stopped and failed pushes.
@@ -1309,7 +1309,7 @@ It's a change in Trailmix's own repository, independent of the rest. Until then,
   through the Outbox like any push.)
 
 - **Milestones in Plane:** map Traverse milestones to Plane modules, Plane milestones, or keep them local? (Chunk 7.)
-- **Sandbox:** may chunks 7 and 13 send real test pushes to the "Cold Connect" demo project in Plane?
+- **Sandbox:** may chunks 7 and 13 send real test pushes to the "Acme Team" demo project in Plane?
 - **Name and mark:** Traverse, "what's next, and who's on it", and the trail-across-a-slope mark are proposals.
 - **Trailmix:** the most mature family app, but on its own architecture and shipping to users through GitHub
   releases. For now Traverse only talks to it over its local API (chunk 10). A comparison of Trailmix with the

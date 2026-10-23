@@ -18,7 +18,7 @@ def test_a_pull_mirrors_the_chosen_projects_and_the_workspace(fake_plane):
     assert counts["states"] == 7 * 5                  # only the 7 mirrored projects' states...
     assert counts["items"] == 49                      # ...and items: not the demo project's 7
     assert (counts["labels"], counts["cycles"]) == (3, 1)
-    assert not db.query("SELECT 1 FROM plane_items WHERE project_id = ?", (PROJECTS["COLDC"],))
+    assert not db.query("SELECT 1 FROM plane_items WHERE project_id = ?", (PROJECTS["ACME"],))
     item = db.one("SELECT * FROM plane_items i JOIN plane_projects p ON p.id = i.project_id "
                   "WHERE p.identifier = 'BD' AND i.sequence_id = 14")
     assert item["name"] == "Send the grant letter of intent" and item["target_date"] == "2026-10-07"
@@ -68,7 +68,7 @@ def test_something_gone_from_plane_is_marked_not_deleted_and_comes_back(fake_pla
 
 
 def test_a_pull_that_fails_half_way_writes_nothing_and_says_why(fake_plane):
-    path = f"/api/v1/workspaces/cold-connect/projects/{PROJECTS['BD']}/work-items/"
+    path = f"/api/v1/workspaces/acme-team/projects/{PROJECTS['BD']}/work-items/"
     fake_plane.fail(path, *[502] * 5)
     job = _pull()
     assert job["status"] == "error" and "Plane had a problem (502)" in job["error"]
@@ -82,12 +82,12 @@ def test_a_pull_only_ever_reads(fake_plane):
 
 
 def test_a_workspace_key_without_the_members_list_gathers_project_members(fake_plane):
-    fake_plane.fail("/api/v1/workspaces/cold-connect/members/", 403)
+    fake_plane.fail("/api/v1/workspaces/acme-team/members/", 403)
     for pid in REAL_PROJECTS:
-        fake_plane.data[f"/api/v1/workspaces/cold-connect/projects/{pid}/members/"] = [
-            {"id": f"pm-{pid[:4]}-{m['id'][:4]}", "member": m, "role": 15} for m in fake_plane.data["/api/v1/workspaces/cold-connect/members/"][1:3]]
+        fake_plane.data[f"/api/v1/workspaces/acme-team/projects/{pid}/members/"] = [
+            {"id": f"pm-{pid[:4]}-{m['id'][:4]}", "member": m, "role": 15} for m in fake_plane.data["/api/v1/workspaces/acme-team/members/"][1:3]]
     assert _pull()["status"] == "done"
-    assert {m["display_name"] for m in store.members(include_bots=True)} == {"eli", "mickey"}
+    assert {m["display_name"] for m in store.members(include_bots=True)} == {"alex", "sam"}
 
 
 def test_without_a_key_it_waits_for_settings(fake_plane, client):
@@ -122,13 +122,13 @@ def test_saving_the_projects_pulls_again_and_pull_now_never_doubles_up(fake_plan
 def test_the_connection_test_says_who_and_where(fake_plane, client):
     r = client.post("/api/plane/test")
     assert r.status_code == 200
-    assert r.json()["message"] == "Connected to cold-connect as Mark Morrison. 8 projects to choose from."
+    assert r.json()["message"] == "Connected to acme-team as Mark Morrison. 8 projects to choose from."
     jobs.drain()
     assert store.counts()["projects"] == 8               # it queued a pull, so Settings can list the projects
-    settings.update({"plane.workspace_slug": "cold-conect"})
+    settings.update({"plane.workspace_slug": "acme-tean"})
     r = client.post("/api/plane/test")
-    assert r.status_code == 502 and "no workspace called “cold-conect”" in r.json()["detail"]
-    settings.update({"plane.workspace_slug": "cold-connect", "plane.personal_api_key": "an-old-key"})
+    assert r.status_code == 502 and "no workspace called “acme-tean”" in r.json()["detail"]
+    settings.update({"plane.workspace_slug": "acme-team", "plane.personal_api_key": "an-old-key"})
     r = client.post("/api/plane/test")
     assert r.status_code == 502 and "didn't accept the API key" in r.json()["detail"]
 
@@ -138,5 +138,5 @@ def test_search_and_links_describe_plane_items_and_people(pulled, client):
     hits = next(g for g in groups if g["module"] == "plane")["hits"]
     assert hits[0]["title"] == "BD-14 Send the grant letter of intent"
     from core.server import module
-    eli = next(m for m in store.members() if m["display_name"] == "eli")
-    assert module.describe(f"plane:{eli['id']}")["title"] == "Elijah Anderson-Justis"
+    alex = next(m for m in store.members() if m["display_name"] == "alex")
+    assert module.describe(f"plane:{alex['id']}")["title"] == "Alex Rivera"

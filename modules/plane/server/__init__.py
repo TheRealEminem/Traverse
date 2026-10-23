@@ -39,7 +39,7 @@ MODULE = Module(
         # A personal API key (Plane → Profile settings → Personal access tokens). Write-only: the host never sends a
         # setting ending in _api_key back to the page. (Plain "api_key" wouldn't be a secret to the host.)
         "personal_api_key": "",
-        "workspace_slug": "",                   # the part after app.plane.so/ in the address, "cold-connect"
+        "workspace_slug": "",                   # the part after app.plane.so/ in the address, "acme-team"
         "base_url": "https://api.plane.so",     # Plane Cloud; a self-hosted Plane's own address otherwise
         "projects": [],                         # the Plane project ids to mirror
         "me": "",                               # the member who is you; empty: whoever the API key belongs to

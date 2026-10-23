@@ -10,7 +10,7 @@ export interface Entry {
   module_name: string;
   title: string;
   href: string | null;
-  /** What happened, or why it's here: "Due today", "To do → In progress · by Mickey". */
+  /** What happened, or why it's here: "Due today", "To do → In progress · by Sam". */
   what: string;
   /** Who it's about, or who has it now. */
   who: string | null;

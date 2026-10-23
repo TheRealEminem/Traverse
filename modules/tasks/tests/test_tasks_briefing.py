@@ -18,7 +18,7 @@ def test_today_is_yours_late_due_and_doing_and_nobody_elses():
     items.create("Late one", due_on="2026-10-15", project_id=pid, estimate_min=30)
     items.create("Due today", due_on=TODAY.isoformat())
     items.create("Doing it", status="doing")
-    items.create("Mickey's", due_on="2026-10-15", assignee_name="Mickey")
+    items.create("Sam's", due_on="2026-10-15", assignee_name="Sam")
     items.create("Later", due_on="2026-10-23")
     items.create("Done already", due_on="2026-10-15", status="done")
     found = briefing.brief("2026-10-19T00:00:00.000Z", TODAY)["today"]
@@ -36,12 +36,12 @@ def test_moved_is_done_and_added_since_then():
     finished = items.create("Write the brief")
     items.set_status(finished, "done")
     items.create("From the meeting", source="action-item", source_ref="probe:nothing")
-    added = items.create("New one", assignee_name="Elijah")
+    added = items.create("New one", assignee_name="Alex")
     moved = briefing.brief(since, TODAY)["moved"]
     assert ("Write the brief", "Done") in _titles(moved)
     assert ("New one", "Added") in _titles(moved) and ("From the meeting", "Added") in _titles(moved)
     assert ("Old and open", "Added") not in _titles(moved)
-    assert next(e for e in moved if e["id"] == added)["who"] == "Elijah"
+    assert next(e for e in moved if e["id"] == added)["who"] == "Alex"
     assert next(e for e in moved if e["id"] == finished)["tone"] == "forest"
 
 

@@ -1,9 +1,9 @@
-"""Writes cold_connect.json: Plane's REST answers for a stand-in of the Cold Connect workspace, for the tests.
+"""Writes acme_team.json: Plane's REST answers for a stand-in of the Acme Team workspace, for the tests.
 
 The shapes are Plane's own, recorded on 2026-10-19 (projects, members, states, labels, cycles and work items, with
 every field Plane sends, through Plane's MCP server, which reads the same API). The workspace is the real one as of
 2026-10-18: the same projects, people, states, assignees, priorities and due dates, so the Team view's numbers can be
-checked against what Plane showed that day (34 open: Mark 23, Mickey 5, Elijah 2, no one 4, leaving out the "Cold
+checked against what Plane showed that day (34 open: Mark 23, Sam 5, Alex 2, no one 4, leaving out the "Cold
 Connect" demo project). Titles are invented, emails are example ones, and ids are made up (stable from run to run).
 
 Run it again only to change the stand-in:  .venv/bin/python modules/plane/tests/fixtures/build.py
@@ -12,8 +12,8 @@ import json
 import uuid
 from pathlib import Path
 
-WS = "cold-connect"
-WS_ID = "13d469b4-e3ad-45ef-8578-2fc80c7139b3"
+WS = "acme-team"
+WS_ID = "5b0d6c2e-7a41-4f0e-9d53-2c8e1f6a7b94"
 NS = uuid.UUID("6f1c1c9e-0b7e-4c47-9a5e-5e3c1d7b2a10")
 
 
@@ -23,8 +23,8 @@ def uid(*parts) -> str:
 
 MEMBERS = {   # key: (first, last, display, role, is_bot)
     "M": ("Mark", "Morrison", "mark", "owner", False),
-    "E": ("Elijah", "Anderson-Justis", "eli", "member", False),
-    "K": ("Mickey", "", "mickey", "member", False),
+    "E": ("Alex", "Rivera", "alex", "member", False),
+    "K": ("Sam", "", "sam", "member", False),
     "mcp": ("Plane MCP", "", "Plane MCP", "admin", True),
     "bot": ("Plane", "", "Plane", "admin", True),
 }
@@ -38,7 +38,7 @@ PROJECTS = [  # identifier, name, description
     ("HARDWARE", "Hardware", ""),
     ("MARKETING", "Marketing", "All things marketing and design"),
     ("BD", "Business Development", ""),
-    ("COLDC", "Cold Connect", "Welcome to the Plane Demo Project!"),
+    ("ACME", "Acme Team", "Welcome to the Plane Demo Project!"),
 ]
 STATES = [("Backlog", "backlog", "#60646C"), ("Todo", "unstarted", "#60646C"), ("In Progress", "started", "#F59E0B"),
           ("Done", "completed", "#46A758"), ("Cancelled", "cancelled", "#9AA4BC")]
@@ -95,13 +95,13 @@ ITEMS = [
     ("CUSTO", 2, "backlog", "-", "none", None, None, "Set up a simple CRM"),
     ("CUSTO", 1, "started", "M", "high", None, None, "Weekly check-in with the pilot site"),
     # The demo project Plane makes for a new workspace: left out of the mirror, so it must not count.
-    ("COLDC", 7, "backlog", "M", "none", None, None, "Explore work items"),
-    ("COLDC", 6, "backlog", "-", "none", None, None, "Try a cycle"),
-    ("COLDC", 5, "started", "M", "medium", "2026-10-01", None, "Invite your team"),
-    ("COLDC", 4, "started", "K", "low", None, None, "Customize your states"),
-    ("COLDC", 3, "unstarted", "E", "none", None, None, "Create a page"),
-    ("COLDC", 2, "completed", "M", "none", None, None, "Welcome to Plane"),
-    ("COLDC", 1, "completed", "M", "none", None, None, "Set up your profile"),
+    ("ACME", 7, "backlog", "M", "none", None, None, "Explore work items"),
+    ("ACME", 6, "backlog", "-", "none", None, None, "Try a cycle"),
+    ("ACME", 5, "started", "M", "medium", "2026-10-01", None, "Invite your team"),
+    ("ACME", 4, "started", "K", "low", None, None, "Customize your states"),
+    ("ACME", 3, "unstarted", "E", "none", None, None, "Create a page"),
+    ("ACME", 2, "completed", "M", "none", None, None, "Welcome to Plane"),
+    ("ACME", 1, "completed", "M", "none", None, None, "Set up your profile"),
 ]
 LABELS = {"SOFTWARE": [("Demo", "#3B82F6")], "BD": [("Grant", "#10B981"), ("Pilot", "#F59E0B")]}
 ITEM_LABELS = {("BD", 14): ["Grant"], ("BD", 6): ["Pilot"], ("BD", 11): ["Pilot"], ("SOFTWARE", 4): ["Demo"]}
@@ -120,7 +120,7 @@ def page(results: list) -> dict:
 
 def member(key: str) -> dict:
     first, last, display, role, bot = MEMBERS[key]
-    email = (f"bot-{key}@plane.so" if bot else f"{display}@cold-connect.example")
+    email = (f"bot-{key}@plane.so" if bot else f"{display}@acme-team.example")
     return {"id": uid("member", key), "first_name": first, "last_name": last, "email": email, "avatar": "",
             "avatar_url": None, "display_name": display, "role": ROLE[role], "role_slug": role, "is_active": True,
             "is_bot": bot}
@@ -181,6 +181,6 @@ def build() -> dict:
 
 
 if __name__ == "__main__":
-    target = Path(__file__).with_name("cold_connect.json")
+    target = Path(__file__).with_name("acme_team.json")
     target.write_text(json.dumps(build(), indent=1, sort_keys=True) + "\n")
     print(f"Wrote {target}")

@@ -34,7 +34,7 @@ def test_each_modules_part_is_merged_with_its_refs(stand_ins):
         asked.append((since, today))
         return {"today": [{"id": "a1", "title": "Ring the hut", "href": "#/ridge/a1", "what": "Due today", "tone": "sun",
                            "when": "2026-10-21", "minutes": 20}],
-                "moved": [{"id": "a2", "what": "Done", "who": "Mickey", "project": "Hut", "tone": "forest"}],
+                "moved": [{"id": "a2", "what": "Done", "who": "Sam", "project": "Hut", "tone": "forest"}],
                 "nonsense": [{"id": "x", "what": "Ignored"}]}
 
     stand_ins("ridge", brief, describe=lambda i: {"title": f"Thing {i}", "href": f"#/ridge/{i}"})
@@ -46,7 +46,7 @@ def test_each_modules_part_is_merged_with_its_refs(stand_ins):
                               "href": "#/ridge/a1", "what": "Due today", "who": None, "when": "2026-10-21",
                               "project": None, "kind": None, "tone": "sun", "minutes": 20, "url": None}]
     moved = mine["moved"][0]
-    assert (moved["title"], moved["href"], moved["who"], moved["project"]) == ("Thing a2", "#/ridge/a2", "Mickey", "Hut")
+    assert (moved["title"], moved["href"], moved["who"], moved["project"]) == ("Thing a2", "#/ridge/a2", "Sam", "Hut")
     assert mine["waiting"] == mine["ahead"] == []
     assert set(found["sections"]) == {"today", "waiting", "moved", "ahead"}
 

@@ -8,7 +8,7 @@ from core.server import ai, contracts, db, events, jobs, links
 from modules.tasks.server import drafts, items, projects
 from modules.tasks.server.drafts import Breakdown, StatusDraft, Step
 
-DRAFT = StatusDraft(body="We're close, but the enclosures are late.\n\n**Watch**\n- Order enclosures (Mickey) is late",
+DRAFT = StatusDraft(body="We're close, but the enclosures are late.\n\n**Watch**\n- Order enclosures (Sam) is late",
                     why="A task is late and the beta milestone was missed.", health="At risk")
 
 
@@ -16,9 +16,9 @@ def _project() -> tuple[str, dict]:
     pid = projects.create("Hardware launch", summary="Ship 50 units", due_on="2026-11-30")
     beta = projects.add_milestone(pid, "Beta units built", due_on="2026-10-16")        # missed: today is 2026-10-19
     t = {"late": items.create("Order enclosures", project_id=pid, milestone_id=beta["id"], due_on="2026-10-15",
-                              assignee_name="Mickey"),
+                              assignee_name="Sam"),
          "done": items.create("Finish the BOM", project_id=pid, status="done"),
-         "quote": items.create("Get the supplier quote", project_id=pid, status="waiting", assignee_name="Elijah"),
+         "quote": items.create("Get the supplier quote", project_id=pid, status="waiting", assignee_name="Alex"),
          "drops": items.create("Book the drop tests", project_id=pid, status="doing", due_on="2026-10-23")}
     items.block(t["drops"], t["quote"])
     projects.add_update(project_id=pid, kind="comment", body="Kicked off with the supplier.")
@@ -50,9 +50,9 @@ def test_a_status_draft_reads_the_project_and_says_who_wrote_it(client, fake_str
                  "PROGRESS: 1 of 4 tasks done (25% done); 1 doing, 1 waiting, 1 to do, 1 late",
                  "- Beta units built: missed: due 2026-10-16; 0 of 1 done, 1 late",
                  "DONE IN THE LAST TWO WEEKS:\n- Finish the BOM",
-                 "LATE:\n- Order enclosures (Mickey, due 2026-10-15)",
+                 "LATE:\n- Order enclosures (Sam, due 2026-10-15)",
                  "IN PROGRESS:\n- Book the drop tests (due 2026-10-23)",
-                 "- Book the drop tests: blocked by Get the supplier quote", "- Get the supplier quote: waiting on Elijah",
+                 "- Book the drop tests: blocked by Get the supplier quote", "- Get the supplier quote: waiting on Alex",
                  "Kicked off with the supplier."):
         assert fact in prompt, fact
     # Nothing is posted until you post it.

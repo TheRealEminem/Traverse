@@ -45,16 +45,16 @@ def test_the_next_morning(client, clock, fake_plane):
         # Overnight a teammate moves things in Plane, and a pull sees it.
         states = fake_plane.data[f"/api/v1/workspaces/{WS}/projects/{PROJECTS['SOFTWARE']}/states/"]["results"]
         fake_plane.edit("SOFTWARE-5", state=next(s["id"] for s in states if s["group"] == "started"),
-                        updated_by=MEMBERS["eli"])
-        fake_plane.edit("BD-14", assignees=[MEMBERS["mickey"]], updated_by=MEMBERS["mickey"])
+                        updated_by=MEMBERS["alex"])
+        fake_plane.edit("BD-14", assignees=[MEMBERS["sam"]], updated_by=MEMBERS["sam"])
         _pull()
 
         clock.day = TODAY
         assert client.get("/api/muster/start").json() == {"path": "muster"}
         view = client.post(f"/api/muster/days/{TODAY}/open").json()
         moved = {e["title"].split(" ")[0]: e["what"] for e in _section(view, "moved", "plane")}
-        assert moved["SOFTWARE-5"] == "Todo → In Progress · by Elijah Anderson-Justis"
-        assert moved["BD-14"] == "Now with Mickey (was you) · by Mickey"
+        assert moved["SOFTWARE-5"] == "Todo → In Progress · by Alex Rivera"
+        assert moved["BD-14"] == "Now with Sam (was you) · by Sam"
         assert ("Send the grant letter", "Due today") in [(e["title"], e["what"]) for e in _section(view, "today", "tasks")]
         assert _section(view, "today", "plane")                     # the team's past-due items
         assert [p["title"] for p in view["picks"]] == ["Draft the deck", "SOFTWARE-4 Populate the demo site with data"]
