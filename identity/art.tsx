@@ -1,6 +1,5 @@
 // Traverse's artwork, the identity's half of the family contract (core/web/components/illustrations.tsx re-exports
-// it): Logo (the brand mark), Scene (a trail across a mountainside), Ambient (the app's atmosphere, with cairns on
-// the horizon) and Badge (the empty-state mark). Every family app's identity/art.tsx exports these four.
+// it): Logo (the brand mark), Scene (a trail across a mountainside), Ambient (the app's atmosphere, with map lines) and Badge (the empty-state mark). Every family app's identity/art.tsx exports these four.
 // Colors here are artwork, so they stay out of the tokens (DESIGN.md §10).
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -159,15 +158,37 @@ export function Scene({ dusk = false, parallax = false, className = "" }: { dusk
   );
 }
 
-// ── The cairns ────────────────────────────────────────────────────────
+// ── The map ───────────────────────────────────────────────────────────
 
-// [x, y, scale] on the 1600×1000 backdrop: a few waymarkers standing where the eye drifts, biggest and clearest near
-// the sun's corner, fewer and smaller toward the lower left.
-const CAIRNS: [number, number, number][] = [
-  [1370, 168, 5.3], [1130, 262, 3.4], [1500, 410, 4.0], [905, 150, 2.4], [1290, 548, 2.7], [330, 880, 4.8], [560, 800, 2.6],
+// A survey grid on the 1600×1000 backdrop: two families of lines, turned a little and warped by a slow swell, so they
+// cross at slightly different angles like the graticule on a map. Every fourth line is an index line, drawn heavier.
+const warp = (x: number, y: number): [number, number] => [x + 44 * Math.sin(y / 240 + 0.7) + 14 * Math.sin(y / 90), y + 36 * Math.sin(x / 330 - 0.5)];
+const turn = (x: number, y: number, a: number): [number, number] => [
+  800 + (x - 800) * Math.cos(a) - (y - 500) * Math.sin(a),
+  500 + (x - 800) * Math.sin(a) + (y - 500) * Math.cos(a),
 ];
 
-/** The app's atmosphere: a soft gradient, golden light high on the right, and faint cairns on the horizon. */
+function gridLines() {
+  const out: { index: boolean; d: string }[] = [];
+  const line = (all: [number, number][], index: boolean) => {
+    const pts = all.filter(([x, y]) => x > -100 && x < 1700 && y > -100 && y < 1100);
+    if (pts.length > 1) out.push({ index, d: pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(0)} ${y.toFixed(0)}`).join("") });
+  };
+  for (let i = -9; i <= 9; i++) {
+    const pts: [number, number][] = [];
+    for (let t = -500; t <= 1500; t += 50) pts.push(warp(...turn(800 + i * 210, t, -0.2)));
+    line(pts, i % 4 === 0);
+  }
+  for (let j = -8; j <= 8; j++) {
+    const pts: [number, number][] = [];
+    for (let t = -900; t <= 2500; t += 50) pts.push(warp(...turn(t, 500 + j * 175, -0.13)));
+    line(pts, j % 4 === 0);
+  }
+  return out;
+}
+const GRID = gridLines();
+
+/** The app's atmosphere: a soft gradient, golden light high on the right, and faint map lines crossing the page. */
 export function Ambient() {
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
@@ -183,13 +204,9 @@ export function Ambient() {
           maskImage: "radial-gradient(95% 95% at 78% 18%, #000 30%, transparent 88%)",
         }}
       >
-        <g fill="var(--grain)">
-          {CAIRNS.map(([x, y, s]) => (
-            <g key={`${x}-${y}`} transform={`translate(${x} ${y}) scale(${s})`}>
-              {STONES.map(([cx, cy, rx, ry]) => (
-                <ellipse key={cy} cx={cx} cy={cy} rx={rx} ry={ry} />
-              ))}
-            </g>
+        <g fill="none" stroke="var(--grain)" strokeLinejoin="round">
+          {GRID.map((l, i) => (
+            <path key={i} d={l.d} strokeWidth={l.index ? 1.6 : 1} vectorEffect="non-scaling-stroke" />
           ))}
         </g>
       </svg>
