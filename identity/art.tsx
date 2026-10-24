@@ -1,6 +1,6 @@
 // Traverse's artwork, the identity's half of the family contract (core/web/components/illustrations.tsx re-exports
-// it): Logo (the brand mark), Scene (a trail across a mountainside), Ambient (the app's atmosphere, with a route
-// drawn on a map) and Badge (the empty-state mark). Every family app's identity/art.tsx exports these four.
+// it): Logo (the brand mark), Scene (a trail across a mountainside), Ambient (the app's atmosphere, with cairns on
+// the horizon) and Badge (the empty-state mark). Every family app's identity/art.tsx exports these four.
 // Colors here are artwork, so they stay out of the tokens (DESIGN.md §10).
 import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -8,19 +8,27 @@ import type { ReactNode } from "react";
 const reducedMotion = () =>
   typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
 
-/** Brand mark: the family's tile in sky, a low sun, and a trail crossing a slope to a small cairn. */
+/** Stones as [cx, cy, rx, ry] on a cairn that stands on (0, 0), about 21 high: the shape every cairn here shares. */
+const STONES: [number, number, number, number][] = [
+  [0, -4.1, 10, 4],
+  [0.5, -9.3, 8, 3.4],
+  [-0.2, -14.2, 5.8, 2.8],
+  [0.3, -18.2, 3.4, 2.1],
+];
+
+/** Brand mark: the family's tile in sunrise gold and orange, a pale sun, and a cairn of five balanced stones. */
 export function Logo({ size = 36 }: { size?: number }) {
   const id = useId();
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" className="shrink-0">
       <defs>
         <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#4F86A8" />
-          <stop offset="1" stopColor="#285B7A" />
+          <stop offset="0" stopColor="#FFD05A" />
+          <stop offset="1" stopColor="#F0702A" />
         </linearGradient>
         <linearGradient id={`${id}-sun`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#F8CB5A" />
-          <stop offset="1" stopColor="#EE8540" />
+          <stop offset="0" stopColor="#FFF6CF" />
+          <stop offset="1" stopColor="#FFE08A" />
         </linearGradient>
         <clipPath id={`${id}-clip`}>
           <rect width="64" height="64" rx="16" />
@@ -28,49 +36,53 @@ export function Logo({ size = 36 }: { size?: number }) {
       </defs>
       <g clipPath={`url(#${id}-clip)`}>
         <rect width="64" height="64" fill={`url(#${id}-bg)`} />
-        <path d="M0 52 C 18 46, 36 36, 64 22 V64 H0Z" fill="#fff" fillOpacity="0.08" />
-        <g fill="none" stroke="#F4EEDC" strokeLinecap="round" strokeWidth="1.3">
-          <path d="M-2 59 C 18 53, 38 43, 66 30" opacity="0.2" />
-          <path d="M-2 66 C 20 60, 40 51, 66 39" opacity="0.13" />
-        </g>
-        <circle cx="19" cy="19" r="6.5" fill={`url(#${id}-sun)`} />
-        <path d="M7 59 C 17 54, 26 49.5, 36 44.8" fill="none" stroke="#F6EBCF" strokeWidth="3.4" strokeLinecap="round" />
-        <g fill="#F6EBCF">
-          <ellipse cx="42.2" cy="42" rx="5" ry="2.5" />
-          <ellipse cx="41.9" cy="37.9" rx="3.6" ry="1.9" />
-          <ellipse cx="42.3" cy="34.6" rx="2.3" ry="1.5" />
-        </g>
+        <circle cx="47" cy="18" r="7.5" fill={`url(#${id}-sun)`} />
+        <path d="M0 49 C 16 45, 30 43, 44 45 C 52 46, 58 48, 64 51 V64 H0Z" fill="#B8420F" fillOpacity="0.26" />
+        <ellipse cx="30" cy="54" rx="17" ry="2.6" fill="#7A2C07" fillOpacity="0.3" />
+        <ellipse cx="30" cy="48.6" rx="15.5" ry="5.6" fill="#FFF3D9" />
+        {[
+          [30.6, 42.8, 12.4, 5],
+          [29.6, 35.4, 9.2, 4.3],
+          [30.8, 28.8, 6.4, 3.5],
+          [30, 22.7, 3.8, 2.6],
+        ].map(([cx, cy, rx, ry]) => (
+          <g key={cy}>
+            <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#C4781E" fillOpacity="0.38" />
+            <ellipse cx={cx + 0.2} cy={cy - 1.4} rx={rx} ry={ry} fill="#FFF3D9" />
+          </g>
+        ))}
       </g>
-      <rect x="0.5" y="0.5" width="63" height="63" rx="15.5" fill="none" stroke="#fff" strokeOpacity="0.16" />
+      <rect x="0.5" y="0.5" width="63" height="63" rx="15.5" fill="none" stroke="#fff" strokeOpacity="0.2" />
     </svg>
   );
 }
 
 // ── The traverse ──────────────────────────────────────────────────────
 
-// Day shows day and Dusk shows dusk (as Trailmix does). The far ridge has a saddle in the middle; the trail climbs
-// across the mountainside toward it, with a cairn at each turn, the nearest one large.
+// Day shows golden hour and Dusk shows sunset (as Trailmix does). The far ridge has a saddle in the middle; the trail
+// climbs across the mountainside toward it, with a cairn at each turn, the nearest one large.
 const DAY = {
-  skyTop: "#9CC3DA", skyBottom: "#EAF0EA", sun: "#F8CB5A", sunGlow: "#FBE7B0",
-  far: "#A9BCC6", snow: "#F7F4EC", mid: "#7F9C90", near: "#5F8171", front: "#4B6C5C",
-  trail: "#F4EEDC", stone: "#E9E0C9", stoneShade: "#C9BC9D",
+  skyTop: "#FFAE42", skyBottom: "#FFEBC2", sun: "#FFF8DE", sunGlow: "#FFE08A",
+  far: "#EDB07A", snow: "#FFFAEE", mid: "#CF7C43", near: "#A95A31", front: "#7E3F24",
+  trail: "#FFF1D2", stone: "#FFF3D9", stoneShade: "#C4781E",
 };
 const DUSK = {
-  skyTop: "#1C2B40", skyBottom: "#C98E72", sun: "#F2A65A", sunGlow: "#F0B07A",
-  far: "#43506A", snow: "#C9BFB4", mid: "#344A58", near: "#2A3E48", front: "#21323A",
-  trail: "#E2D2B2", stone: "#CDBD9C", stoneShade: "#9F9177",
+  skyTop: "#33202F", skyBottom: "#F28A44", sun: "#FFB84D", sunGlow: "#F7A455",
+  far: "#6A4047", snow: "#EBCBA9", mid: "#54343A", near: "#412A2E", front: "#301F20",
+  trail: "#F2D2A8", stone: "#F0D9B0", stoneShade: "#A97B4A",
 };
 
-/** A cairn of three stones standing on (x, y), at the given size. */
+/** A cairn of balanced stones standing on (x, y), at the given size. */
 function Cairn({ x, y, s, P }: { x: number; y: number; s: number; P: typeof DAY }) {
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`}>
-      <ellipse cx="0" cy="1.2" rx="11" ry="2.2" fill="#000" fillOpacity="0.12" />
-      <ellipse cx="0" cy="-3" rx="10" ry="4.4" fill={P.stone} />
-      <ellipse cx="1.2" cy="-1.6" rx="8" ry="2.6" fill={P.stoneShade} fillOpacity="0.55" />
-      <ellipse cx="-0.6" cy="-10.6" rx="7.4" ry="3.6" fill={P.stone} />
-      <ellipse cx="0.6" cy="-9.4" rx="5.6" ry="2" fill={P.stoneShade} fillOpacity="0.5" />
-      <ellipse cx="0.4" cy="-16.8" rx="4.6" ry="2.8" fill={P.stone} />
+      <ellipse cx="0" cy="1.2" rx="12" ry="2.2" fill="#000" fillOpacity="0.14" />
+      {STONES.map(([cx, cy, rx, ry]) => (
+        <g key={cy}>
+          <ellipse cx={cx + 0.6} cy={cy + 1.3} rx={rx} ry={ry} fill={P.stoneShade} fillOpacity="0.5" />
+          <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={P.stone} />
+        </g>
+      ))}
     </g>
   );
 }
@@ -147,13 +159,15 @@ export function Scene({ dusk = false, parallax = false, className = "" }: { dusk
   );
 }
 
-// ── The route ─────────────────────────────────────────────────────────
+// ── The cairns ────────────────────────────────────────────────────────
 
-const ROUTE = "M960 70 C 1040 130, 1120 30, 1210 96 S 1360 196, 1450 128 S 1560 50, 1660 96";
-const ROUTE_LOW = "M-40 900 C 60 860, 140 940, 240 888 S 380 820, 470 870";
-const WAYPOINTS: [number, number][] = [[960, 70], [1210, 96], [1450, 128], [240, 888]];
+// [x, y, scale] on the 1600×1000 backdrop: a few waymarkers standing where the eye drifts, biggest and clearest near
+// the sun's corner, fewer and smaller toward the lower left.
+const CAIRNS: [number, number, number][] = [
+  [1370, 168, 5.3], [1130, 262, 3.4], [1500, 410, 4.0], [905, 150, 2.4], [1290, 548, 2.7], [330, 880, 4.8], [560, 800, 2.6],
+];
 
-/** The app's atmosphere: a soft gradient, warm light high on the right, and a faint route on a map. */
+/** The app's atmosphere: a soft gradient, golden light high on the right, and faint cairns on the horizon. */
 export function Ambient() {
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
@@ -169,13 +183,13 @@ export function Ambient() {
           maskImage: "radial-gradient(95% 95% at 78% 18%, #000 30%, transparent 88%)",
         }}
       >
-        <g fill="none" stroke="var(--grain)" strokeWidth="1.6" strokeDasharray="7 9" strokeLinecap="round">
-          <path d={ROUTE} vectorEffect="non-scaling-stroke" />
-          <path d={ROUTE_LOW} vectorEffect="non-scaling-stroke" />
-        </g>
         <g fill="var(--grain)">
-          {WAYPOINTS.map(([x, y]) => (
-            <circle key={`${x}-${y}`} cx={x} cy={y} r="5" />
+          {CAIRNS.map(([x, y, s]) => (
+            <g key={`${x}-${y}`} transform={`translate(${x} ${y}) scale(${s})`}>
+              {STONES.map(([cx, cy, rx, ry]) => (
+                <ellipse key={cy} cx={cx} cy={cy} rx={rx} ry={ry} />
+              ))}
+            </g>
           ))}
         </g>
       </svg>
@@ -183,7 +197,7 @@ export function Ambient() {
   );
 }
 
-/** Empty-state mark: an icon in a forest well, ringed by a short dashed route with three waypoints. */
+/** Empty-state mark: an icon in a brand-colored well, ringed by a short dashed route with three waypoints. */
 export function Badge({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <div className={`relative mx-auto flex h-20 w-20 items-center justify-center ${className}`}>

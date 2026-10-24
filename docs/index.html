@@ -10,36 +10,38 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Geist:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
-    /* Traverse's palette, the family's (identity/tokens.css): Day here, Dusk when the Mac is in dark mode */
+    /* Traverse's palette (identity/tokens.css): golden-hour Day here, Dusk when the Mac is in dark mode */
     :root {
-      --bg: #f7f4ec; --bg-top: #fcfaf5; --surface: #fffdf8; --ink: #21271f; --soft: #666a5f; --line: rgba(56, 52, 36, 0.11);
-      --forest: #1f5e4b; --forest-hover: #174a3b; --forest-soft: #d9e8e0; --forest-ink: #174838; --sun: #f2b13c; --on-forest: #ffffff;
-      --contour: rgba(31, 94, 75, 0.09); --glow-green: rgba(31, 94, 75, 0.07); --glow-warm: rgba(245, 184, 58, 0.12); --glow-sky: rgba(69, 127, 156, 0.07);
-      --cta-shadow: rgba(31, 94, 75, 0.25);
+      --bg: #fdf6e3; --bg-top: #fffbf0; --surface: #fffcf5; --ink: #2b2014; --soft: #6b5b43; --line: rgba(92, 62, 20, 0.12);
+      --brand: #b94f08; --brand-hover: #9f4206; --brand-soft: #fadfc2; --brand-ink: #8a3c04; --sun: #f6b81e; --on-brand: #ffffff;
+      --mustard: #ddaa17; --mustard-soft: #f8ebbe; --mustard-ink: #6e5200;
+      --cairn: rgba(176, 98, 24, 0.16); --glow-orange: rgba(232, 118, 28, 0.09); --glow-gold: rgba(250, 190, 40, 0.28); --glow-ember: rgba(240, 130, 50, 0.1);
+      --cta-shadow: rgba(185, 79, 8, 0.3); --mark-shadow: rgba(240, 112, 42, 0.38);
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
-        --bg: #0e1416; --bg-top: #121a1d; --surface: #172023; --ink: #eceae3; --soft: #a9aaa1; --line: rgba(214, 228, 226, 0.08);
-        --forest: #52a487; --forest-hover: #66b699; --forest-soft: #19332f; --forest-ink: #96d5be; --sun: #f3b955; --on-forest: #0c1214;
-        --contour: rgba(150, 213, 190, 0.07); --glow-green: rgba(82, 164, 135, 0.08); --glow-warm: rgba(242, 190, 78, 0.04); --glow-sky: rgba(125, 179, 207, 0.07);
-        --cta-shadow: rgba(0, 0, 0, 0.35);
+        --bg: #17110b; --bg-top: #1f1710; --surface: #241b12; --ink: #f5ecdc; --soft: #bfb097; --line: rgba(255, 226, 180, 0.09);
+        --brand: #f5963a; --brand-hover: #ffa94f; --brand-soft: #3a2312; --brand-ink: #ffc48a; --sun: #f7c645; --on-brand: #1a1109;
+        --mustard: #e6b52c; --mustard-soft: #3a2e0c; --mustard-ink: #f0cf70;
+        --cairn: rgba(255, 196, 120, 0.11); --glow-orange: rgba(245, 150, 58, 0.07); --glow-gold: rgba(247, 198, 69, 0.08); --glow-ember: rgba(240, 120, 50, 0.1);
+        --cta-shadow: rgba(0, 0, 0, 0.4); --mark-shadow: rgba(245, 150, 58, 0.28);
       }
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 Geist, -apple-system, system-ui, sans-serif; }
-    a { color: var(--forest); }
+    a { color: var(--brand); }
     .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
     header { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
     .brand { display: flex; align-items: center; gap: 10px; font: 600 22px Fraunces, serif; color: var(--ink); text-decoration: none; }
     .brand img { width: 34px; height: 34px; }
     .gh { color: var(--soft); text-decoration: none; font-weight: 500; }
     .hero { padding: 48px 0 28px; text-align: center; }
-    .hero .mark { width: 96px; height: 96px; margin-bottom: 22px; filter: drop-shadow(0 14px 30px var(--cta-shadow)); }
+    .hero .mark { width: 96px; height: 96px; margin-bottom: 22px; filter: drop-shadow(0 14px 30px var(--mark-shadow)); }
     h1 { font: 600 clamp(38px, 6vw, 64px)/1.05 Fraunces, serif; letter-spacing: -0.02em; margin: 0 auto 18px; max-width: 14ch; }
     .lead { color: var(--soft); font-size: 19px; max-width: 40rem; margin: 0 auto 30px; }
-    .cta { display: inline-flex; align-items: center; gap: 10px; background: var(--forest); color: var(--on-forest); text-decoration: none; font-weight: 600;
+    .cta { display: inline-flex; align-items: center; gap: 10px; background: var(--brand); color: var(--on-brand); text-decoration: none; font-weight: 600;
       padding: 15px 26px; border-radius: 14px; font-size: 18px; box-shadow: 0 6px 20px var(--cta-shadow); }
-    .cta:hover { background: var(--forest-hover); }
+    .cta:hover { background: var(--brand-hover); }
     .cta svg { width: 20px; height: 20px; }
     .meta { color: var(--soft); font-size: 14px; margin-top: 12px; }
     section { padding: 56px 0 8px; }
@@ -48,28 +50,30 @@
     .steps { display: grid; gap: 16px; counter-reset: step; }
     .step { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 22px 24px 22px 74px; position: relative; }
     .step::before { counter-increment: step; content: counter(step); position: absolute; left: 22px; top: 20px; width: 34px; height: 34px;
-      border-radius: 50%; background: var(--forest-soft); color: var(--forest-ink); font-weight: 600; display: grid; place-items: center; }
+      border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink); font-weight: 600; display: grid; place-items: center; }
     .step h3 { margin: 0 0 6px; font-size: 18px; }
     .step p, .step ol { margin: 6px 0 0; color: var(--soft); }
     .step ol { padding-left: 20px; }
     .step li { margin: 3px 0; }
     b { color: var(--ink); font-weight: 600; }
-    code { font-size: 14px; background: var(--forest-soft); color: var(--forest-ink); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+    code { font-size: 14px; background: var(--brand-soft); color: var(--brand-ink); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
     .why { font-size: 14px; border-left: 3px solid var(--sun); padding-left: 12px; margin-top: 12px !important; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; }
     .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; }
+    .card.muster { border-top: 3px solid var(--mustard); }
+    .card.muster h3::after { content: "Muster"; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--mustard-soft); color: var(--mustard-ink); font: 600 12px Geist, sans-serif; vertical-align: 2px; }
     .card h3 { margin: 0 0 6px; font-size: 17px; }
     .card p { margin: 0; color: var(--soft); font-size: 15.5px; }
     details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; margin-bottom: 10px; }
     summary { cursor: pointer; font-weight: 600; }
     details p { color: var(--soft); margin: 10px 0 0; }
-    /* The app's backdrop: a soft gradient, a sun glow top right, and watermark-faint dashed routes between waypoints */
+    /* The app's backdrop: a soft gradient, a golden sun glow top right, and watermark-faint cairns standing on the page */
     .ambient { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
-      background: radial-gradient(34% 28% at 84% 2%, var(--glow-warm), transparent 72%),
-        radial-gradient(48% 44% at 20% 104%, var(--glow-sky), transparent 72%),
-        radial-gradient(55% 50% at 60% 62%, var(--glow-green), transparent 70%),
+      background: radial-gradient(34% 28% at 84% 2%, var(--glow-gold), transparent 72%),
+        radial-gradient(48% 44% at 18% 104%, var(--glow-ember), transparent 72%),
+        radial-gradient(55% 50% at 60% 62%, var(--glow-orange), transparent 70%),
         linear-gradient(180deg, var(--bg-top) 0%, var(--bg) 42%); }
-    .ambient svg { position: absolute; inset: 0; width: 100%; height: 100%;
+    .ambient svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--cairn);
       -webkit-mask-image: radial-gradient(95% 95% at 78% 18%, #000 30%, transparent 88%); mask-image: radial-gradient(95% 95% at 78% 18%, #000 30%, transparent 88%); }
     footer { color: var(--soft); font-size: 14px; padding: 56px 0 40px; text-align: center; }
     @media (max-width: 560px) { .step { padding-left: 22px; padding-top: 66px; } .hero { padding-top: 24px; } }
@@ -77,10 +81,22 @@
 </head>
 <body>
   <div class="ambient" aria-hidden="true">
-    <svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" fill="none" stroke="var(--contour)" stroke-width="2.4" stroke-linecap="round">
-      <path d="M-40 760 C 260 700, 420 560, 700 520 S 1160 380, 1660 150" stroke-dasharray="2 18"/>
-      <path d="M-40 900 C 300 840, 520 700, 820 660 S 1220 540, 1660 330" stroke-dasharray="2 18" opacity="0.6"/>
-      <g fill="var(--contour)" stroke="none"><circle cx="700" cy="520" r="7"/><circle cx="1160" cy="380" r="7"/><circle cx="420" cy="560" r="5"/></g>
+    <svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <g id="cairn">
+          <ellipse cx="0" cy="-4.1" rx="10" ry="4"/><ellipse cx="0.5" cy="-9.3" rx="8" ry="3.4"/>
+          <ellipse cx="-0.2" cy="-14.2" rx="5.8" ry="2.8"/><ellipse cx="0.3" cy="-18.2" rx="3.4" ry="2.1"/>
+        </g>
+      </defs>
+      <use href="#cairn" transform="translate(1370 168) scale(5.3)"/>
+      <use href="#cairn" transform="translate(1130 262) scale(3.4)"/>
+      <use href="#cairn" transform="translate(1500 410) scale(4.0)"/>
+      <use href="#cairn" transform="translate(905 150) scale(2.4)"/>
+      <use href="#cairn" transform="translate(1290 548) scale(2.7)"/>
+      <use href="#cairn" transform="translate(330 880) scale(4.8)"/>
+      <use href="#cairn" transform="translate(560 800) scale(2.6)"/>
+      <use href="#cairn" transform="translate(1010 740) scale(3.5)"/>
+      <use href="#cairn" transform="translate(150 300) scale(2.2)"/>
     </svg>
   </div>
   <div class="wrap">
@@ -132,7 +148,7 @@
       <p class="sub">A workspace for one person, built to sit beside the tool your team already uses.</p>
       <div class="grid">
         <div class="card"><h3>Tasks and projects</h3><p>My tasks by day and week, projects with milestones and progress, and a board you can drag across. Everything works with no account and no connection.</p></div>
-        <div class="card"><h3>A morning briefing</h3><p>Muster shows what moved since you last looked and suggests a plan for the day around your meetings. You accept, reorder or drop each pick.</p></div>
+        <div class="card muster"><h3>A morning briefing</h3><p>Muster shows what moved since you last looked and suggests a plan for the day around your meetings. You accept, reorder or drop each pick.</p></div>
         <div class="card"><h3>An inbox that does the typing</h3><p>Paste an email, a Slack thread or notes. AI proposes the tasks with owners and due dates, and you accept, edit or drop each one.</p></div>
         <div class="card"><h3>Plane, on your terms</h3><p>See your team's work in Traverse. Changes go to Plane only when you send them, after a field-by-field preview, and never overwrite a teammate's edit. Nothing is ever deleted there.</p></div>
         <div class="card"><h3>Works with Claude</h3><p>Claude Desktop and Claude Code can read your plate and file things in your inbox. Anything meant for Plane waits for your approval.</p></div>

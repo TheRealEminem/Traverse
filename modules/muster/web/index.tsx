@@ -12,7 +12,7 @@ const SunriseIcon = icon(Sunrise);
 const muster: ModuleWeb = {
   id: "muster",
   name: "Muster",
-  nav: [{ label: "Muster", icon: <SunriseIcon size={16} />, path: "muster" }],
+  nav: [{ label: "Muster", icon: <SunriseIcon size={16} className="text-[color:var(--mustard)]" />, path: "muster" }],
   routes: [{ path: "muster", view: MusterView, wide: true }],
   settings: MusterSettings,
   start: musterApi.start,
