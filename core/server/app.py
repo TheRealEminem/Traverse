@@ -51,8 +51,8 @@ def setup() -> list[module.Module]:
     settings.declare("core", CORE_SETTINGS, CORE_CHOICES)
     ai.declare()
     mcp.declare()
-    jobs.register("core", "backup", backup.handle_daily, lane="cloud")
-    schedule.register("core", "backup", 24 * 3600)
+    jobs.register("core", "backup", backup.handle_hourly, lane="cloud")
+    schedule.register("core", "backup", 3600)
     loaded = module.load(config.enabled_modules())
     backup.record_version()
     try:
