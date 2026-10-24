@@ -161,52 +161,53 @@ export function Scene({ dusk = false, parallax = false, className = "" }: { dusk
 
 // ── The map ───────────────────────────────────────────────────────────
 
-// The backdrop is a faint map on a 1600×1000 sheet (Trailmix has contours, The Lodge has rings). A survey grid, turned
-// a little and warped by a slow swell like a projection's graticule, with grid references along the top and right;
-// every fourth line is heavier. Over it, a river, three spot heights, and a dashed trail switchbacking up the slope:
-// a traverse. docs/index.html has a copy of the same map as plain SVG: change both together.
-const warp = (x: number, y: number): [number, number] => [x + 44 * Math.sin(y / 240 + 0.7) + 14 * Math.sin(y / 90), y + 36 * Math.sin(x / 330 - 0.5)];
-const turn = (x: number, y: number, a: number): [number, number] => [
-  800 + (x - 800) * Math.cos(a) - (y - 500) * Math.sin(a),
-  500 + (x - 800) * Math.sin(a) + (y - 500) * Math.cos(a),
-];
-const inView = ([x, y]: [number, number]) => x > -100 && x < 1700 && y > -100 && y < 1100;
-const nearest = (pts: [number, number][], axis: 0 | 1, v: number) =>
-  pts.reduce((best, p) => (Math.abs(p[axis] - v) < Math.abs(best[axis] - v) ? p : best));
+// The backdrop is a faint, abstract map on a 1600×1000 sheet (Trailmix has contours, The Lodge has rings): two main
+// roads and two lanes crossing, towns as clusters of blocks where they meet, a river with a bridge, a lake, spot
+// heights, a camp and a viewpoint, and a dashed trail switchbacking up the slope: a traverse. docs/index.html has a
+// copy of the same map as plain SVG: change both together.
+const MAP: {
+  trail: string;
+  river: string;
+  roads: [string, number][]; // [path, width]: main roads 4, lanes 2
+  houses: [number, number, number][];
+  lake: string;
+  peaks: [number, number, string][];
+  camp: [number, number];
+  view: [number, number];
+  bridge: [number, number];
+} = {
+  trail: "M-40 900 C 120 870, 260 800, 380 812 C 470 820, 520 780, 470 742 C 430 712, 520 668, 640 668 C 770 668, 860 620, 812 578 C 772 544, 860 500, 980 506 C 1100 512, 1180 470, 1130 424 C 1090 388, 1170 344, 1280 344 C 1390 344, 1450 300, 1404 258 C 1370 228, 1440 186, 1530 170 C 1580 162, 1620 140, 1660 120",
+  river: "M1660 600 C 1560 590, 1520 520, 1430 548 C 1340 576, 1330 650, 1230 660 C 1130 670, 1080 610, 990 640 C 900 670, 900 760, 820 800 C 740 840, 660 820, 600 880 C 560 920, 560 980, 520 1060",
+  roads: [
+    ["M-40 500 C 240 470, 420 520, 600 500 C 780 480, 900 440, 1100 420 C 1300 400, 1460 430, 1660 380", 4],
+    ["M990 -40 C 1030 120, 1080 280, 1100 420 C 1118 548, 1150 640, 1156 760 C 1162 880, 1140 960, 1150 1040", 4],
+    ["M1100 420 C 1190 360, 1300 300, 1410 262 C 1460 245, 1510 230, 1560 196 C 1600 170, 1630 130, 1660 110", 2],
+    ["M600 500 C 640 420, 700 360, 760 300 C 800 260, 820 200, 860 140 C 880 110, 900 60, 910 -40", 2],
+  ],
+  // [x, y, size]: houses, in clusters where roads meet
+  houses: [
+    [1062, 392, 16], [1084, 374, 12], [1128, 390, 14], [1152, 374, 11], [1066, 448, 14], [1090, 468, 11], [1130, 446, 16],
+    [1156, 462, 12], [1044, 418, 10], [1174, 410, 10],
+    [572, 474, 13], [594, 464, 10], [626, 480, 12], [578, 528, 12], [608, 526, 14], [636, 516, 9],
+    [1540, 178, 11], [1568, 224, 10], [1590, 168, 9], [1528, 214, 8],
+  ],
+  lake: "M1268 96 C 1280 66, 1344 54, 1388 72 C 1432 90, 1428 128, 1388 140 C 1344 152, 1258 128, 1268 96Z",
+  peaks: [[1206, 236, "2412"], [1478, 382, "2187"], [972, 300, "1964"]],
+  camp: [1020, 548],
+  view: [1430, 226],
+  bridge: [1150, 656],
+};
 
-function mapGrid() {
-  const lines: { index: boolean; d: string }[] = [];
-  const refs: { x: number; y: number; t: string }[] = [];
-  const add = (all: [number, number][], index: boolean) => {
-    const pts = all.filter(inView);
-    if (pts.length > 1) lines.push({ index, d: pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(0)} ${y.toFixed(0)}`).join("") });
-    return pts;
-  };
-  for (let i = -9; i <= 9; i++) {
-    const all: [number, number][] = [];
-    for (let t = -500; t <= 1500; t += 25) all.push(warp(...turn(800 + i * 210, t, -0.2)));
-    const pts = add(all, i % 4 === 0);
-    const [x, y] = pts.length > 1 ? nearest(pts, 1, 96) : [0, 0];
-    if (x > 560 && x < 1560) refs.push({ x: x + 7, y: y - 6, t: String(40 + i).padStart(2, "0") });
-  }
-  for (let j = -8; j <= 8; j++) {
-    const all: [number, number][] = [];
-    for (let t = -900; t <= 2500; t += 25) all.push(warp(...turn(t, 500 + j * 175, -0.13)));
-    const pts = add(all, j % 4 === 0);
-    const [x, y] = pts.length > 1 ? nearest(pts, 0, 1530) : [0, -1];
-    if (y > 60 && y < 640) refs.push({ x: x + 6, y: y - 6, t: String(62 - j) });
-  }
-  return { lines, refs };
-}
-const GRID = mapGrid();
-const TRAIL =
-  "M-40 900 C 120 870, 260 800, 380 812 C 470 820, 520 780, 470 742 C 430 712, 520 668, 640 668 C 770 668, 860 620, 812 578 C 772 544, 860 500, 980 506 C 1100 512, 1180 470, 1130 424 C 1090 388, 1170 344, 1280 344 C 1390 344, 1450 300, 1404 258 C 1370 228, 1440 186, 1530 170 C 1580 162, 1620 140, 1660 120";
-const RIVER =
-  "M1660 600 C 1560 590, 1520 520, 1430 548 C 1340 576, 1330 650, 1230 660 C 1130 670, 1080 610, 990 640 C 900 670, 900 760, 820 800 C 740 840, 660 820, 600 880 C 560 920, 560 980, 520 1060";
-const SUMMITS: [number, number, string][] = [[1206, 236, "2412"], [1478, 382, "2187"], [904, 300, "1964"]];
+const VIEW_RAYS = Array.from({ length: 8 }, (_, i) => {
+  const a = (i * Math.PI) / 4;
+  const [x, y] = MAP.view;
+  return `M${(x + 7 * Math.cos(a)).toFixed(1)} ${(y + 7 * Math.sin(a)).toFixed(1)}L${(x + 11 * Math.cos(a)).toFixed(1)} ${(y + 11 * Math.sin(a)).toFixed(1)}`;
+}).join("");
 
 /** The app's atmosphere: a soft gradient, golden light high on the right, and a faint map. */
 export function Ambient() {
+  const [bx, by] = MAP.bridge;
+  const [cx, cy] = MAP.camp;
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
       <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, var(--bg-top) 0%, var(--bg) 42%)" }} />
@@ -222,23 +223,28 @@ export function Ambient() {
         }}
       >
         <g fill="none" stroke="var(--grain)" strokeLinejoin="round" strokeLinecap="round">
-          <g opacity="0.75">
-            {GRID.lines.map((l, i) => (
-              <path key={i} d={l.d} strokeWidth={l.index ? 1.6 : 1} vectorEffect="non-scaling-stroke" />
-            ))}
+          <path d={MAP.lake} fill="var(--grain)" fillOpacity="0.5" strokeWidth="1.4" />
+          <path d={MAP.river} strokeWidth="2.2" />
+          {MAP.roads.map(([d, w]) => (
+            <path key={d} d={d} strokeWidth={w} />
+          ))}
+          <path d={MAP.trail} strokeWidth="2.4" strokeDasharray="9 8" />
+          <g strokeWidth="1.8">
+            <path d={`M${bx - 11} ${by - 12}Q${bx - 15} ${by} ${bx - 11} ${by + 12}M${bx + 11} ${by - 12}Q${bx + 15} ${by} ${bx + 11} ${by + 12}`} />
+            <path d={`M${cx - 8} ${cy + 6}L${cx} ${cy - 8}L${cx + 8} ${cy + 6}ZM${cx} ${cy - 8}L${cx} ${cy + 6}`} />
+            <circle cx={MAP.view[0]} cy={MAP.view[1]} r="4" />
+            <path d={VIEW_RAYS} />
           </g>
-          <path d={RIVER} strokeWidth="2.2" />
-          <path d={TRAIL} strokeWidth="2.4" strokeDasharray="9 8" />
         </g>
         <g fill="var(--grain)" style={{ font: "500 13px ui-monospace, Menlo, monospace", letterSpacing: "0.06em" }}>
-          {SUMMITS.map(([x, y, h]) => (
+          {MAP.houses.map(([x, y, s]) => (
+            <rect key={`${x}-${y}`} x={x - s / 2} y={y - s / 2} width={s} height={s} transform={`rotate(-8 ${x} ${y})`} />
+          ))}
+          {MAP.peaks.map(([x, y, h]) => (
             <g key={h}>
               <path d={`M${x - 6} ${y + 5}L${x} ${y - 6}L${x + 6} ${y + 5}Z`} />
               <text x={x + 10} y={y + 5}>{h}</text>
             </g>
-          ))}
-          {GRID.refs.map((r) => (
-            <text key={r.t} x={r.x.toFixed(0)} y={r.y.toFixed(0)}>{r.t}</text>
           ))}
         </g>
       </svg>
