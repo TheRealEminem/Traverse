@@ -66,9 +66,9 @@
   --shadow-panel: 0 1px 2px rgba(90, 56, 14, 0.05), 0 14px 40px rgba(110, 66, 14, 0.07);
   --shadow-chrome: 8px 0 40px -12px rgba(90, 56, 14, 0.08);
 
-  /* atmosphere: the map lines are drawn in --grain, with a golden sun glow top right and an ember glow low down.
+  /* atmosphere: the map is drawn in --grain, with a golden sun glow top right and an ember glow low down.
      (--glow-green keeps the family's name; here it is the orange wash behind the page.) */
-  --grain: rgba(176, 98, 24, 0.15);
+  --grain: rgba(176, 98, 24, 0.2);
   --glow-green: rgba(232, 118, 28, 0.09);
   --glow-warm: rgba(250, 190, 40, 0.26);
   --glow-hearth: rgba(240, 130, 50, 0.1);
@@ -128,7 +128,7 @@
   --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.28), 0 14px 40px rgba(0, 0, 0, 0.25);
   --shadow-chrome: 8px 0 40px -12px rgba(0, 0, 0, 0.45);
 
-  --grain: rgba(255, 196, 120, 0.1);
+  --grain: rgba(255, 196, 120, 0.12);
   --glow-green: rgba(245, 150, 58, 0.07);
   --glow-warm: rgba(247, 198, 69, 0.07);
   --glow-hearth: rgba(240, 120, 50, 0.09);
