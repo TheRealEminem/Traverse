@@ -33,15 +33,15 @@ use it; its sidebar icon is mustard everywhere.
 
 | | The Lodge | Traverse |
 | --- | --- | --- |
-| Mark | A low sun and a cream A-frame, on a forest tile | A cairn of five balanced cream stones and a pale sun on a sunrise tile (`#FFD05A → #F0702A`), over a soft darker hill. No trail, no contour lines: just the stack. Each stone has a shaded underside so the stack reads at 16px |
+| Mark | A low sun and a cream A-frame, on a forest tile | A cairn of six balanced cream stones and a pale sun on a sunrise tile (`#FFD05A → #F0702A`), over a soft darker hill. The stones are what make it a cairn rather than a pile: flat where they rest, uneven in width (a narrow stone holds a wider one), each tilted a little and set a little off the one below, with a contact shadow under each. No trail, no contour lines |
 | Hero art (`Scene`) | The lodge by the lake, keeping the clock | A trail traversing a mountainside toward a saddle in the far ridge, with a cairn at each turn, the nearest one large. Day is golden hour and Dusk is sunset. With `parallax`, the layers drift a few pixels with the pointer (never with reduced motion) |
 | `Ambient` | Growth rings in warm cedar | A faint, abstract map (Trailmix has contours, The Lodge has rings): two main roads and two lanes crossing, towns as small clusters of blocks where they meet, a river with a bridge, a lake, spot heights, a camp and a viewpoint, and a dashed trail switchbacking up the slope. All in `--grain`, fading out from a golden sun glow top right. The release page (`docs/index.html`) draws the same map |
 | Empty-state badge | Growth rings around the heart of a log | An icon in a brand-colored well, ringed by a short dashed route with three waypoints |
-| Menu bar | The A-frame and sun as line art | The sun and the cairn, filled |
+| Menu bar | The A-frame and sun as line art | The sun and the six-stone cairn, filled, each stone turned as on the mark |
 | Live action (orange) | Not used | Not used: `btn-record` stays Trailmix's |
 | Brand copy | "Come on in" | "Pick up the trail" |
 
-The cairn's shape (`STONES` in `art.tsx`) is shared by the scene's cairns. The map (`MAP` in `art.tsx`) is copied into the release page as plain SVG; change both together.
+The cairn is one set of stones: `MARK_STONES` in `art.tsx` for the mark (also in `public/favicon.svg` and `docs/assets/logo.svg`), and the same stones scaled as `STONES` for the scene's cairns. The map (`MAP` in `art.tsx`) is copied into the release page as plain SVG; change both together.
 
 ## Section icons
 
