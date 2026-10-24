@@ -7,8 +7,8 @@ leaning toward yellow and orange.
 
 **The idea:** *a traverse* is the stretch of trail that cuts across a slope instead of straight up it: the steady
 way to make progress on a mountain. Trailmix is out on the walk, The Lodge is where your people are, and Traverse is
-the route you're working through, cairn by cairn. The cairn is the one motif: it's the mark, it stands along the
-trail in the scene, and it's scattered faintly across the background.
+the route you're working through, cairn by cairn. The cairn is the motif of the mark and the scene; the background is
+the map the route is drawn on.
 
 ## Palette
 
@@ -35,13 +35,13 @@ use it; its sidebar icon is mustard everywhere.
 | --- | --- | --- |
 | Mark | A low sun and a cream A-frame, on a forest tile | A cairn of five balanced cream stones and a pale sun on a sunrise tile (`#FFD05A → #F0702A`), over a soft darker hill. No trail, no contour lines: just the stack. Each stone has a shaded underside so the stack reads at 16px |
 | Hero art (`Scene`) | The lodge by the lake, keeping the clock | A trail traversing a mountainside toward a saddle in the far ridge, with a cairn at each turn, the nearest one large. Day is golden hour and Dusk is sunset. With `parallax`, the layers drift a few pixels with the pointer (never with reduced motion) |
-| `Ambient` | Growth rings in warm cedar | Faint cairns standing across the page in `--grain`, biggest near the sun's corner, over a golden sun glow top right. The release page (`docs/index.html`) draws the same cairns |
+| `Ambient` | Growth rings in warm cedar | A survey grid: two families of faint lines, turned a little and warped by a slow swell, so they cross at slightly different angles like a map's graticule (Trailmix has contours, The Lodge has rings). Every fourth line is heavier, in `--grain`, fading out from a golden sun glow top right. The release page (`docs/index.html`) draws the same lines |
 | Empty-state badge | Growth rings around the heart of a log | An icon in a brand-colored well, ringed by a short dashed route with three waypoints |
 | Menu bar | The A-frame and sun as line art | The sun and the cairn, filled |
 | Live action (orange) | Not used | Not used: `btn-record` stays Trailmix's |
 | Brand copy | "Come on in" | "Pick up the trail" |
 
-The cairn's shape (`STONES` in `art.tsx`) is shared by the scene and the background so every cairn is the same cairn.
+The cairn's shape (`STONES` in `art.tsx`) is shared by the scene's cairns. The grid's geometry (`gridLines` in `art.tsx`) is copied into the release page's SVG; change both together.
 
 ## Section icons
 

@@ -15,7 +15,7 @@
       --bg: #fdf6e3; --bg-top: #fffbf0; --surface: #fffcf5; --ink: #2b2014; --soft: #6b5b43; --line: rgba(92, 62, 20, 0.12);
       --brand: #b94f08; --brand-hover: #9f4206; --brand-soft: #fadfc2; --brand-ink: #8a3c04; --sun: #f6b81e; --on-brand: #ffffff;
       --mustard: #ddaa17; --mustard-soft: #f8ebbe; --mustard-ink: #6e5200;
-      --cairn: rgba(176, 98, 24, 0.16); --glow-orange: rgba(232, 118, 28, 0.09); --glow-gold: rgba(250, 190, 40, 0.28); --glow-ember: rgba(240, 130, 50, 0.1);
+      --lines: rgba(176, 98, 24, 0.16); --glow-orange: rgba(232, 118, 28, 0.09); --glow-gold: rgba(250, 190, 40, 0.28); --glow-ember: rgba(240, 130, 50, 0.1);
       --cta-shadow: rgba(185, 79, 8, 0.3); --mark-shadow: rgba(240, 112, 42, 0.38);
     }
     @media (prefers-color-scheme: dark) {
@@ -23,7 +23,7 @@
         --bg: #17110b; --bg-top: #1f1710; --surface: #241b12; --ink: #f5ecdc; --soft: #bfb097; --line: rgba(255, 226, 180, 0.09);
         --brand: #f5963a; --brand-hover: #ffa94f; --brand-soft: #3a2312; --brand-ink: #ffc48a; --sun: #f7c645; --on-brand: #1a1109;
         --mustard: #e6b52c; --mustard-soft: #3a2e0c; --mustard-ink: #f0cf70;
-        --cairn: rgba(255, 196, 120, 0.11); --glow-orange: rgba(245, 150, 58, 0.07); --glow-gold: rgba(247, 198, 69, 0.08); --glow-ember: rgba(240, 120, 50, 0.1);
+        --lines: rgba(255, 196, 120, 0.11); --glow-orange: rgba(245, 150, 58, 0.07); --glow-gold: rgba(247, 198, 69, 0.08); --glow-ember: rgba(240, 120, 50, 0.1);
         --cta-shadow: rgba(0, 0, 0, 0.4); --mark-shadow: rgba(245, 150, 58, 0.28);
       }
     }
@@ -67,14 +67,16 @@
     details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; margin-bottom: 10px; }
     summary { cursor: pointer; font-weight: 600; }
     details p { color: var(--soft); margin: 10px 0 0; }
-    /* The app's backdrop: a soft gradient, a golden sun glow top right, and watermark-faint cairns standing on the page */
+    /* The app's backdrop: a soft gradient, a golden sun glow top right, and watermark-faint map lines crossing the page */
     .ambient { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
       background: radial-gradient(34% 28% at 84% 2%, var(--glow-gold), transparent 72%),
         radial-gradient(48% 44% at 18% 104%, var(--glow-ember), transparent 72%),
         radial-gradient(55% 50% at 60% 62%, var(--glow-orange), transparent 70%),
         linear-gradient(180deg, var(--bg-top) 0%, var(--bg) 42%); }
-    .ambient svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--cairn);
+    .ambient svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: var(--lines); stroke-width: 1; stroke-linejoin: round;
       -webkit-mask-image: radial-gradient(95% 95% at 78% 18%, #000 30%, transparent 88%); mask-image: radial-gradient(95% 95% at 78% 18%, #000 30%, transparent 88%); }
+    .ambient path { vector-effect: non-scaling-stroke; }
+    .ambient path.i { stroke-width: 1.6; }
     footer { color: var(--soft); font-size: 14px; padding: 56px 0 40px; text-align: center; }
     @media (max-width: 560px) { .step { padding-left: 22px; padding-top: 66px; } .hero { padding-top: 24px; } }
   </style>
@@ -82,21 +84,23 @@
 <body>
   <div class="ambient" aria-hidden="true">
     <svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
-      <defs>
-        <g id="cairn">
-          <ellipse cx="0" cy="-4.1" rx="10" ry="4"/><ellipse cx="0.5" cy="-9.3" rx="8" ry="3.4"/>
-          <ellipse cx="-0.2" cy="-14.2" rx="5.8" ry="2.8"/><ellipse cx="0.3" cy="-18.2" rx="3.4" ry="2.1"/>
-        </g>
-      </defs>
-      <use href="#cairn" transform="translate(1370 168) scale(5.3)"/>
-      <use href="#cairn" transform="translate(1130 262) scale(3.4)"/>
-      <use href="#cairn" transform="translate(1500 410) scale(4.0)"/>
-      <use href="#cairn" transform="translate(905 150) scale(2.4)"/>
-      <use href="#cairn" transform="translate(1290 548) scale(2.7)"/>
-      <use href="#cairn" transform="translate(330 880) scale(4.8)"/>
-      <use href="#cairn" transform="translate(560 800) scale(2.6)"/>
-      <use href="#cairn" transform="translate(1010 740) scale(3.5)"/>
-      <use href="#cairn" transform="translate(150 300) scale(2.2)"/>
+      <path d="M-94 50L-77 100L-66 149L-60 199L-59 249L-60 299L-61 348L-59 398L-55 448L-48 498L-39 548L-31 598L-25 647L-22 697L-22 747L-24 797L-26 847L-26 897L-21 947L-11 997L6 1047L26 1097" class="i"/>
+      <path d="M54 -74L78 -24L102 26L123 76L139 126L149 176L154 226L155 276L154 327L154 377L156 427L160 477L168 527L176 577L184 627L190 677L192 727L192 777L190 827L188 877L189 928L194 978L206 1028L223 1078"/>
+      <path d="M248 -94L272 -43L296 7L320 57L340 107L355 157L365 207L369 257L369 307L368 357L368 406L370 456L376 506L383 556L392 606L399 656L405 706L407 755L406 805L404 855L402 905L404 954L410 1004L422 1054"/>
+      <path d="M466 -67L489 -17L514 32L537 82L557 132L571 181L580 231L583 280L583 330L582 379L583 428L585 478L591 527L599 576L607 626L615 675L619 724L621 773L620 822L618 872L617 921L619 970L626 1019L639 1068"/>
+      <path d="M684 -52L707 -3L732 46L755 95L774 144L787 193L795 241L798 290L798 339L797 388L797 436L800 485L806 534L814 582L823 631L830 680L834 728L835 777L834 825L832 873L831 922L834 970L842 1019L856 1067" class="i"/>
+      <path d="M901 -52L925 -4L950 45L972 93L990 141L1003 189L1010 238L1012 286L1012 334L1011 382L1012 430L1015 478L1021 527L1030 575L1038 623L1045 671L1049 719L1050 767L1048 815L1046 863L1045 911L1049 959L1058 1007L1072 1055"/>
+      <path d="M1119 -64L1143 -16L1168 32L1189 80L1207 128L1219 176L1225 224L1226 272L1226 320L1225 368L1226 415L1230 463L1237 511L1245 559L1253 607L1260 655L1263 703L1264 751L1262 799L1260 847L1260 895L1264 943L1274 991L1289 1039L1310 1087"/>
+      <path d="M1337 -80L1361 -32L1385 16L1407 64L1423 112L1434 161L1440 209L1441 257L1440 305L1439 353L1441 401L1445 449L1452 497L1461 546L1469 594L1475 642L1478 690L1478 739L1476 787L1474 835L1474 884L1479 932L1490 981L1506 1029L1527 1078"/>
+      <path d="M1555 -90L1579 -41L1603 7L1624 56L1640 104L1650 153L1654 201L1655 250L1654 299L1654 347L1656 396L1660 445L1668 494L1676 543L1684 591L1690 640L1692 689L1692 738L1690 787L1688 836L1689 885L1695 934" class="i"/>
+      <path d="M-60 63L-12 60L36 58L85 57L133 55L181 54L229 53L277 52L325 51L373 49L420 47L468 45L516 41L564 38L611 33L659 28L707 22L754 15L802 7L849 -1L897 -10L945 -20L992 -31L1040 -42L1088 -53L1136 -65L1183 -76L1231 -88"/>
+      <path d="M-93 241L-42 238L9 236L59 234L110 232L161 231L211 230L262 229L312 228L362 226L413 225L463 222L513 220L563 216L613 212L663 207L712 202L762 195L811 188L861 180L910 171L959 162L1008 152L1057 141L1106 130L1155 118L1204 107L1252 95L1301 83L1349 71L1397 60L1446 48L1494 38L1542 28L1590 18L1638 9L1686 1"/>
+      <path d="M-54 414L-3 411L47 410L98 408L148 407L199 406L250 405L300 404L351 402L402 400L453 398L504 395L555 391L606 387L657 381L708 375L759 369L810 361L861 353L912 344L963 334L1014 323L1065 312L1116 301L1167 289L1218 278L1268 266L1319 254L1370 242L1421 231L1472 220L1522 209L1573 200L1623 190L1674 182"/>
+      <path d="M-90 591L-41 589L9 587L59 586L109 584L159 583L208 582L258 581L308 580L358 578L407 576L457 573L507 570L557 566L607 561L656 555L706 549L756 542L806 534L856 525L906 516L956 506L1006 495L1056 484L1107 472L1157 461L1207 449L1257 437L1308 425L1358 414L1409 402L1459 392L1510 381L1560 372L1611 363L1662 355" class="i"/>
+      <path d="M-94 767L-43 765L8 763L59 761L110 760L161 759L212 758L263 757L314 755L365 753L416 751L466 748L517 744L568 740L618 735L669 729L719 722L770 715L820 706L870 697L921 688L971 677L1021 666L1071 655L1121 643L1171 632L1221 620L1271 608L1321 596L1371 585L1420 574L1470 563L1520 553L1570 544L1620 536L1669 528"/>
+      <path d="M-55 940L-5 939L46 937L96 936L146 935L196 934L247 933L297 931L348 929L399 926L450 923L500 919L551 914L602 909L653 902L704 895L755 887L807 879L858 869L909 859L960 849L1011 838L1063 826L1114 815L1165 803L1216 791L1267 779L1318 767L1370 756L1421 745L1472 735L1523 726L1574 717L1625 708L1676 701"/>
+      <path d="M472 1098L520 1093L569 1088L617 1082L666 1076L714 1068L763 1060L812 1051L861 1041L910 1031L959 1020L1009 1009L1058 997L1108 986L1157 974L1207 962L1257 950L1307 939L1357 928L1407 917L1457 907L1508 898L1558 889L1608 881L1659 874"/>
+      <path d="M1400 1099L1448 1089L1496 1079L1544 1070L1592 1062L1640 1055L1688 1048" class="i"/>
     </svg>
   </div>
   <div class="wrap">
