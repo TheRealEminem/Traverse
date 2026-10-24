@@ -44,20 +44,20 @@ export default function MusterView() {
 
   if (error && !day) {
     return (
-      <>
+      <div className="accent-mustard">
         <PageHeader title="Muster" />
         <div className="rounded-lg border border-trail/20 bg-trail-soft/70 p-4 text-label text-trail-deep">
           <div className="font-semibold">Muster didn't load</div>
           <div className="mt-0.5 opacity-90">{error}</div>
         </div>
-      </>
+      </div>
     );
   }
   if (!day) return <Loading />;
 
   const evening = new Date().getHours() * 60 + new Date().getMinutes() >= hourMinutes(day.hours.end) - 60;
   return (
-    <>
+    <div className="accent-mustard">
       <Header day={day} />
       {day.briefing.failed.length > 0 && (
         <p className="-mt-4 mb-6 px-1 text-hint text-ink-soft">
@@ -75,7 +75,7 @@ export default function MusterView() {
           <WrapUp day={day} className="order-5" primary={!!day.kicked_off_at || evening} />
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

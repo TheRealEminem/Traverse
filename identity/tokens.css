@@ -1,8 +1,12 @@
 /* ── Traverse's tokens ─────────────────────────────────────────────────
-   The Lodge's palette, unchanged (the project app's blueprint, §5), so the
-   two apps look like one family and could share a window one day. Traverse
-   sets itself apart only through its name, mark, scene and motif. Values
-   and why: the Lodge guide (_reference/Lodge Family Design Guide).
+   Traverse's own palette: the family's roles and token names, in the warm end
+   of the range. Day is golden-hour: buttery cream, burnt-orange actions,
+   sunflower for "needs you". Dusk is the same light after sunset: warm
+   charcoal-brown, with the accents lifted. The token names are the family's
+   (`forest` is the primary action and the brand, whatever its hue), so the
+   shared components work unchanged; here the primary is orange, the "trail"
+   slot is a clear vermilion for errors and destructive actions (so it never
+   reads as the brand), and Muster has a mustard of its own (--mustard).
 
    This is the identity's half of the tokens: every color, shadow and the
    atmosphere, for Day (:root) and Dusk. The family's shared half (type
@@ -10,117 +14,137 @@
    first, by core/web/main.tsx.                                           */
 :root {
   /* surfaces */
-  --bg: #f7f4ec;
-  --bg-top: #fcfaf5;
-  --surface: rgba(255, 253, 248, 0.72);
-  --surface-solid: #fffdf8;
-  --surface-subtle: #f2eee4;
-  --sidebar-bg: rgba(250, 247, 240, 0.8);
-  --scrim: rgba(34, 36, 26, 0.26);
+  --bg: #fdf6e3;
+  --bg-top: #fffbf0;
+  --surface: rgba(255, 252, 244, 0.74);
+  --surface-solid: #fffcf5;
+  --surface-subtle: #f8eed8;
+  --sidebar-bg: rgba(255, 247, 228, 0.82);
+  --scrim: rgba(43, 32, 20, 0.28);
 
   /* text */
-  --text-primary: #21271f;
-  --text-secondary: #666a5f;
-  --text-tertiary: #979a8f; /* icons, placeholders and decoration only: too light for body text */
+  --text-primary: #2b2014;
+  --text-secondary: #6b5b43;
+  --text-tertiary: #9e9078; /* icons, placeholders and decoration only: too light for body text */
 
-  /* brand */
-  --forest: #1f5e4b;
-  --forest-hover: #174a3b;
-  --forest-soft: #d9e8e0;
-  --forest-ink: #174838; /* text on forest-soft */
-  --trail-orange: #de5f31;
-  --trail-orange-hover: #c94f24;
-  --trail-orange-soft: #fadfd2;
-  --trail-orange-ink: #9e3a16;
-  --yellow: #f2b13c;
-  --yellow-soft: #fbeccb;
-  --yellow-ink: #764c06;
-  --sky: #457f9c;
-  --sky-soft: #dfecf1;
-  --sky-ink: #22566e;
-  --berry: #9a4f6b;
-  --berry-soft: #f3e2e8;
-  --berry-ink: #76304d;
+  /* brand: `forest` is the primary action, and here it is burnt orange (5.0:1 under white) */
+  --forest: #b94f08;
+  --forest-hover: #9f4206;
+  --forest-soft: #fadfc2;
+  --forest-ink: #8a3c04; /* text on forest-soft */
+  --trail-orange: #c8321f; /* vermilion: errors and destructive actions, never the brand */
+  --trail-orange-hover: #aa2615;
+  --trail-orange-soft: #fbdcd3;
+  --trail-orange-ink: #9e2a18;
+  --yellow: #f6b81e; /* sunflower: "needs you" */
+  --yellow-soft: #fcefb8;
+  --yellow-ink: #6e4a00;
+  --sky: #3f82a6;
+  --sky-soft: #dcebf2;
+  --sky-ink: #1d5f80;
+  --berry: #a8486a;
+  --berry-soft: #f6e0e7;
+  --berry-ink: #7d2f4d;
+  --mustard: #ddaa17; /* Muster's own: see .accent-mustard */
+  --mustard-hover: #c79510;
+  --mustard-soft: #f8ebbe;
+  --mustard-ink: #6e5200;
   --on-accent: #ffffff;
 
   /* lines */
-  --border: rgba(56, 52, 36, 0.11);
-  --border-strong: rgba(56, 52, 36, 0.17);
-  --switch-off: rgba(56, 52, 36, 0.17);
-  --highlight: rgba(255, 255, 255, 0.75);
-  --art-edge: rgba(255, 255, 255, 0.6);
-  --art-hairline: rgba(56, 52, 36, 0.05);
+  --border: rgba(92, 62, 20, 0.12);
+  --border-strong: rgba(92, 62, 20, 0.19);
+  --switch-off: rgba(92, 62, 20, 0.2);
+  --highlight: rgba(255, 255, 255, 0.8);
+  --art-edge: rgba(255, 255, 255, 0.65);
+  --art-hairline: rgba(92, 62, 20, 0.06);
 
-  /* depth: warm olive-tinted, never black */
-  --shadow-sm: 0 1px 2px rgba(40, 36, 22, 0.05);
-  --shadow-md: 0 8px 24px rgba(40, 36, 22, 0.07);
-  --shadow-lg: 0 18px 60px rgba(40, 36, 22, 0.09);
-  --shadow-panel: 0 1px 2px rgba(40, 36, 22, 0.04), 0 14px 40px rgba(46, 44, 30, 0.05);
-  --shadow-chrome: 8px 0 40px -12px rgba(40, 36, 22, 0.06);
+  /* depth: warm amber-brown, never black */
+  --shadow-sm: 0 1px 2px rgba(90, 56, 14, 0.06);
+  --shadow-md: 0 8px 24px rgba(90, 56, 14, 0.09);
+  --shadow-lg: 0 18px 60px rgba(90, 56, 14, 0.12);
+  --shadow-panel: 0 1px 2px rgba(90, 56, 14, 0.05), 0 14px 40px rgba(110, 66, 14, 0.07);
+  --shadow-chrome: 8px 0 40px -12px rgba(90, 56, 14, 0.08);
 
-  /* atmosphere: the route motif is drawn in --grain; the glows are The Lodge's */
-  --grain: rgba(120, 86, 46, 0.06);
-  --glow-green: rgba(31, 94, 75, 0.07);
-  --glow-warm: rgba(245, 184, 58, 0.12);
-  --glow-hearth: rgba(240, 166, 64, 0.09);
-  --skeleton-a: #eeeae0;
-  --skeleton-b: #f7f4ec;
-  --tooltip-bg: rgba(33, 39, 31, 0.94);
-  --tooltip-fg: #f7f4ec;
+  /* atmosphere: cairns drawn in --grain, with a golden sun glow top right and an ember glow low down.
+     (--glow-green keeps the family's name; here it is the orange wash behind the page.) */
+  --grain: rgba(176, 98, 24, 0.15);
+  --glow-green: rgba(232, 118, 28, 0.09);
+  --glow-warm: rgba(250, 190, 40, 0.26);
+  --glow-hearth: rgba(240, 130, 50, 0.1);
+  --skeleton-a: #f4e9d0;
+  --skeleton-b: #fdf6e3;
+  --tooltip-bg: rgba(43, 32, 20, 0.95);
+  --tooltip-fg: #fdf6e3;
 }
 
-/* Dusk: accents lighten, text on them goes dark. */
+/* Dusk: the same light after sunset. Accents lift, and text on them goes dark. */
 :root[data-theme="dusk"] {
-  --bg: #0e1416;
-  --bg-top: #121a1d;
-  --surface: rgba(27, 37, 40, 0.62);
-  --surface-solid: #172023;
-  --surface-subtle: #131b1d;
-  --sidebar-bg: rgba(16, 23, 25, 0.78);
-  --scrim: rgba(0, 0, 0, 0.5);
+  --bg: #17110b;
+  --bg-top: #1f1710;
+  --surface: rgba(42, 31, 20, 0.64);
+  --surface-solid: #241b12;
+  --surface-subtle: #1b140d;
+  --sidebar-bg: rgba(25, 18, 11, 0.8);
+  --scrim: rgba(0, 0, 0, 0.55);
 
-  --text-primary: #eceae3;
-  --text-secondary: #a9aaa1;
-  --text-tertiary: #72776f;
+  --text-primary: #f5ecdc;
+  --text-secondary: #bfb097;
+  --text-tertiary: #84775f;
 
-  --forest: #52a487;
-  --forest-hover: #66b699;
-  --forest-soft: #19332f;
-  --forest-ink: #96d5be;
-  --trail-orange: #ec7347;
-  --trail-orange-hover: #f2875d;
-  --trail-orange-soft: #3a2219;
-  --trail-orange-ink: #f4a784;
-  --yellow: #f3b955;
-  --yellow-soft: #352b16;
-  --yellow-ink: #f3d08c;
-  --sky: #7db3cf;
-  --sky-soft: #172a34;
-  --sky-ink: #a8d0e4;
-  --berry: #cc85a0;
-  --berry-soft: #321f28;
-  --berry-ink: #e5b0c4;
-  --on-accent: #0c1214;
+  --forest: #f5963a;
+  --forest-hover: #ffa94f;
+  --forest-soft: #3a2312;
+  --forest-ink: #ffc48a;
+  --trail-orange: #f0674e;
+  --trail-orange-hover: #f68068;
+  --trail-orange-soft: #3b1d17;
+  --trail-orange-ink: #ffa898;
+  --yellow: #f7c645;
+  --yellow-soft: #3a2d0f;
+  --yellow-ink: #fadb88;
+  --sky: #6fb1d4;
+  --sky-soft: #1a2830;
+  --sky-ink: #a8d3e8;
+  --berry: #d88aa6;
+  --berry-soft: #35212a;
+  --berry-ink: #ebb3c6;
+  --mustard: #e6b52c;
+  --mustard-hover: #f1c443;
+  --mustard-soft: #3a2e0c;
+  --mustard-ink: #f0cf70;
+  --on-accent: #1a1109;
 
-  --border: rgba(214, 228, 226, 0.08);
-  --border-strong: rgba(214, 228, 226, 0.14);
-  --switch-off: rgba(214, 228, 226, 0.16);
-  --highlight: rgba(255, 255, 255, 0.04);
-  --art-edge: rgba(255, 255, 255, 0.07);
-  --art-hairline: rgba(0, 0, 0, 0.2);
+  --border: rgba(255, 226, 180, 0.09);
+  --border-strong: rgba(255, 226, 180, 0.16);
+  --switch-off: rgba(255, 226, 180, 0.18);
+  --highlight: rgba(255, 236, 200, 0.05);
+  --art-edge: rgba(255, 236, 200, 0.08);
+  --art-hairline: rgba(0, 0, 0, 0.25);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.45);
-  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.25), 0 14px 40px rgba(0, 0, 0, 0.22);
-  --shadow-chrome: 8px 0 40px -12px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.38);
+  --shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.48);
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.28), 0 14px 40px rgba(0, 0, 0, 0.25);
+  --shadow-chrome: 8px 0 40px -12px rgba(0, 0, 0, 0.45);
 
-  --grain: rgba(236, 220, 190, 0.04);
-  --glow-green: rgba(82, 164, 135, 0.08);
-  --glow-warm: rgba(242, 190, 78, 0.04);
-  --glow-hearth: rgba(240, 140, 60, 0.08);
-  --skeleton-a: #162022;
-  --skeleton-b: #1d282b;
-  --tooltip-bg: rgba(236, 234, 227, 0.96);
-  --tooltip-fg: #0e1416;
+  --grain: rgba(255, 196, 120, 0.1);
+  --glow-green: rgba(245, 150, 58, 0.07);
+  --glow-warm: rgba(247, 198, 69, 0.07);
+  --glow-hearth: rgba(240, 120, 50, 0.09);
+  --skeleton-a: #1d150e;
+  --skeleton-b: #271d13;
+  --tooltip-bg: rgba(245, 236, 220, 0.96);
+  --tooltip-fg: #17110b;
+}
+
+/* Muster's own accent. Wrap a view in `accent-mustard` and everything in it that is "the brand" (the primary button,
+   the focus ring, selection, checks) turns mustard instead of orange. Text on mustard is dark in both themes: bright
+   mustard can't carry white. */
+.accent-mustard {
+  --forest: var(--mustard);
+  --forest-hover: var(--mustard-hover);
+  --forest-soft: var(--mustard-soft);
+  --forest-ink: var(--mustard-ink);
+  --on-accent: #2a2108;
 }

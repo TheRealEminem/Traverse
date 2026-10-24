@@ -18,21 +18,23 @@ export function MusterSettings() {
   const options = (after?: string) =>
     HOURS.filter((h) => !after || hourMinutes(h) > hourMinutes(after)).map((h) => ({ value: h, label: hourWords(h) }));
   return (
-    <Section icon={<SunIcon size={16} />} title="Muster" blurb="The day's kick-off.">
-      <SwitchRow
-        icon={<SunIcon size={16} />}
-        label="Open Muster first"
-        hint="The first time you open Traverse each day, it starts on Muster. Off: it opens at Home."
-        checked={get<boolean>("muster.open_first") !== false}
-        onChange={(v) => void save({ "muster.open_first": v })}
-      />
-      <ControlRow icon={<ClockIcon size={16} />} label="Working hours" hint="What “Plan the day” measures your picks against." wrap>
-        <div className="flex items-center gap-2">
-          <Select label="Day starts" size="sm" value={start} options={options()} onChange={(v) => void save({ "muster.day_starts": v })} />
-          <span className="text-ui text-ink-soft">to</span>
-          <Select label="Day ends" size="sm" value={end} options={options(start)} onChange={(v) => void save({ "muster.day_ends": v })} />
-        </div>
-      </ControlRow>
-    </Section>
+    <div className="accent-mustard">
+      <Section icon={<SunIcon size={16} />} title="Muster" blurb="The day's kick-off.">
+        <SwitchRow
+          icon={<SunIcon size={16} />}
+          label="Open Muster first"
+          hint="The first time you open Traverse each day, it starts on Muster. Off: it opens at Home."
+          checked={get<boolean>("muster.open_first") !== false}
+          onChange={(v) => void save({ "muster.open_first": v })}
+        />
+        <ControlRow icon={<ClockIcon size={16} />} label="Working hours" hint="What “Plan the day” measures your picks against." wrap>
+          <div className="flex items-center gap-2">
+            <Select label="Day starts" size="sm" value={start} options={options()} onChange={(v) => void save({ "muster.day_starts": v })} />
+            <span className="text-ui text-ink-soft">to</span>
+            <Select label="Day ends" size="sm" value={end} options={options(start)} onChange={(v) => void save({ "muster.day_ends": v })} />
+          </div>
+        </ControlRow>
+      </Section>
+    </div>
   );
 }
