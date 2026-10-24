@@ -8,18 +8,17 @@ import type { ReactNode } from "react";
 const reducedMotion = () =>
   typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
 
-// A cairn as a trail has them: six stones, flat where they rest, uneven in width (a narrow one can hold a wider one),
-// each tilted a little and set a little off the one below. Each is [shadow, stone]: the shadow is the same stone
-// nudged down and right, so every stone sits on the one below it. Drawn by pebble() in a 64-unit tile (the mark), and
-// the same stones scaled to stand about 21 high on (0, 0) (the scene's cairns).
-const MARK_STONES: [string, string][] = [
-  ["M18.0 50.4C18.5 45.7 34.1 44.1 41.9 46.8C43.8 49.1 41.9 52.3 31.9 53.0C21.3 53.2 17.5 52.1 18.0 50.4Z", "M17.5 49.1C18.0 44.4 33.6 42.8 41.4 45.5C43.3 47.8 41.4 51.0 31.4 51.7C20.8 51.9 17.0 50.8 17.5 49.1Z"],
-  ["M20.5 42.5C21.2 39.3 32.6 39.1 41.3 41.7C42.7 43.4 40.9 45.6 32.2 45.4C23.1 44.8 19.9 43.7 20.5 42.5Z", "M20.0 41.2C20.7 38.0 32.1 37.8 40.8 40.4C42.2 42.1 40.4 44.3 31.7 44.1C22.6 43.5 19.4 42.4 20.0 41.2Z"],
-  ["M22.6 37.8C22.6 33.8 32.7 31.9 36.9 34.0C38.1 35.8 37.2 38.6 31.2 39.6C24.8 40.1 22.4 39.3 22.6 37.8Z", "M22.1 36.5C22.1 32.5 32.2 30.6 36.4 32.7C37.6 34.5 36.7 37.3 30.7 38.3C24.3 38.8 21.9 38.0 22.1 36.5Z"],
-  ["M22.3 29.6C23.0 26.6 32.9 26.8 40.4 29.4C41.6 31.0 39.9 33.0 32.4 32.6C24.5 31.8 21.7 30.7 22.3 29.6Z", "M21.8 28.3C22.5 25.3 32.4 25.5 39.9 28.1C41.1 29.7 39.4 31.7 31.9 31.3C24.0 30.5 21.2 29.4 21.8 28.3Z"],
-  ["M25.9 24.8C26.0 21.5 32.0 20.4 35.4 22.3C36.2 23.9 35.5 26.2 31.5 26.7C27.3 26.8 25.8 26.0 25.9 24.8Z", "M25.4 23.5C25.5 20.2 31.5 19.1 34.9 21.0C35.7 22.6 35.0 24.9 31.0 25.4C26.8 25.5 25.3 24.7 25.4 23.5Z"],
-  ["M28.6 18.9C29.0 16.8 32.3 16.8 34.1 18.4C34.3 19.5 33.7 20.8 31.4 20.7C29.1 20.3 28.3 19.6 28.6 18.9Z", "M28.1 17.6C28.5 15.5 31.8 15.5 33.6 17.1C33.8 18.2 33.2 19.5 30.9 19.4C28.6 19.0 27.8 18.3 28.1 17.6Z"],
+// The mark's cairn, as the family draws its marks: four flat cream stones on a 64-unit tile, widest at the bottom,
+// each [cx, cy, rx, ry, tilt in degrees]. Kept plain so it reads at 16px beside The Lodge's and Trailmix's.
+const MARK_STONES: [number, number, number, number, number][] = [
+  [27.5, 48.6, 12.5, 3.7, 0],
+  [28.6, 41.2, 8.8, 3, -4],
+  [27.6, 35, 6.6, 2.6, 5],
+  [28.5, 29.6, 4.2, 2.2, -7],
 ];
+// The scene's cairns, which have room for more: six stones, flat where they rest, uneven in width (a narrow one can
+// hold a wider one), each tilted a little and set a little off the one below, standing about 21 high on (0, 0). Each
+// is [shadow, stone]: the shadow is the same stone nudged down and right, so every stone sits on the one below it.
 const STONES: [string, string][] = [
   ["M-6.9 -0.9C-6.6 -3.6 2.4 -4.5 6.9 -3.0C7.9 -1.7 6.8 0.2 1.1 0.6C-5.0 0.7 -7.2 0.0 -6.9 -0.9Z", "M-7.2 -1.7C-6.9 -4.4 2.1 -5.3 6.6 -3.7C7.6 -2.4 6.5 -0.6 0.8 -0.1C-5.3 -0.1 -7.5 -0.7 -7.2 -1.7Z"],
   ["M-5.5 -5.4C-5.0 -7.3 1.5 -7.4 6.5 -5.9C7.3 -4.9 6.3 -3.7 1.3 -3.8C-4.0 -4.1 -5.8 -4.8 -5.5 -5.4Z", "M-5.8 -6.2C-5.3 -8.1 1.2 -8.2 6.2 -6.7C7.0 -5.7 6.0 -4.4 1.0 -4.5C-4.3 -4.9 -6.1 -5.5 -5.8 -6.2Z"],
@@ -29,19 +28,19 @@ const STONES: [string, string][] = [
   ["M-0.8 -19.0C-0.6 -20.2 1.3 -20.2 2.4 -19.3C2.5 -18.7 2.1 -17.9 0.8 -18.0C-0.5 -18.2 -0.9 -18.6 -0.8 -19.0Z", "M-1.1 -19.8C-0.9 -21.0 1.0 -21.0 2.1 -20.1C2.2 -19.4 1.8 -18.7 0.5 -18.7C-0.8 -19.0 -1.2 -19.4 -1.1 -19.8Z"],
 ];
 
-/** Brand mark: the family's tile in sunrise gold and orange, a pale sun, and a cairn of six balanced stones. */
+/** Brand mark: the family's tile in rust, its low sun and ground lines, and a cairn of four flat stones. */
 export function Logo({ size = 36 }: { size?: number }) {
   const id = useId();
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" className="shrink-0">
       <defs>
         <linearGradient id={`${id}-bg`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FFD05A" />
-          <stop offset="1" stopColor="#F0702A" />
+          <stop offset="0" stopColor="#CC6626" />
+          <stop offset="1" stopColor="#8E3616" />
         </linearGradient>
         <linearGradient id={`${id}-sun`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FFF6CF" />
-          <stop offset="1" stopColor="#FFE08A" />
+          <stop offset="0" stopColor="#FBD66A" />
+          <stop offset="1" stopColor="#F49A48" />
         </linearGradient>
         <clipPath id={`${id}-clip`}>
           <rect width="64" height="64" rx="16" />
@@ -49,17 +48,19 @@ export function Logo({ size = 36 }: { size?: number }) {
       </defs>
       <g clipPath={`url(#${id}-clip)`}>
         <rect width="64" height="64" fill={`url(#${id}-bg)`} />
-        <circle cx="47" cy="18" r="7.5" fill={`url(#${id}-sun)`} />
-        <path d="M0 49 C 16 45, 30 43, 44 45 C 52 46, 58 48, 64 51 V64 H0Z" fill="#B8420F" fillOpacity="0.26" />
-        <ellipse cx="30" cy="53" rx="16" ry="2.4" fill="#7A2C07" fillOpacity="0.3" />
-        {MARK_STONES.map(([shadow, stone]) => (
-          <g key={stone}>
-            <path d={shadow} fill="#C4781E" fillOpacity="0.4" />
-            <path d={stone} fill="#FFF3D9" />
-          </g>
-        ))}
+        <path d="M0 42 C 13 34, 26 34, 38 39 S 56 38, 64 34 V64 H0Z" fill="#fff" fillOpacity="0.07" />
+        <g fill="none" stroke="#F4EEDC" strokeLinecap="round" strokeWidth="1.3">
+          <path d="M-2 49 C 12 43, 26 44, 38 48 S 56 47, 66 43" opacity="0.2" />
+          <path d="M-2 56 C 14 51, 28 52, 40 55 S 56 54, 66 51" opacity="0.13" />
+        </g>
+        <circle cx="45" cy="19" r="7.5" fill={`url(#${id}-sun)`} />
+        <g fill="#F6EBCF">
+          {MARK_STONES.map(([cx, cy, rx, ry, tilt]) => (
+            <ellipse key={cy} cx={cx} cy={cy} rx={rx} ry={ry} transform={`rotate(${tilt} ${cx} ${cy})`} />
+          ))}
+        </g>
       </g>
-      <rect x="0.5" y="0.5" width="63" height="63" rx="15.5" fill="none" stroke="#fff" strokeOpacity="0.2" />
+      <rect x="0.5" y="0.5" width="63" height="63" rx="15.5" fill="none" stroke="#fff" strokeOpacity="0.16" />
     </svg>
   );
 }

@@ -1,6 +1,6 @@
 import AppKit
 
-/// The menu bar icon: the app's mark as a silhouette (a low sun, and a cairn of balanced stones).
+/// The menu bar icon: the app's mark as a silhouette (a low sun, and a cairn of four flat stones).
 /// It matches the app icon and the logo in the sidebar (identity/art.tsx).
 enum Mark {
     static let menuIcon = icon(dimmed: false)
@@ -10,16 +10,14 @@ enum Mark {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
             NSColor.black.setStroke()
             NSColor.black.setFill()
-            NSBezierPath(ovalIn: NSRect(x: 12.2, y: 11.4, width: 4.6, height: 4.6)).fill()  // sun
+            NSBezierPath(ovalIn: NSRect(x: 12.6, y: 12.2, width: 4.6, height: 4.6)).fill()  // sun
 
-            // the cairn: six stones, flat slabs of uneven width, each turned a little, as on the mark
+            // the cairn: four flat stones, widest at the bottom, each turned a little, as on the mark
             let stones: [(x: CGFloat, y: CGFloat, w: CGFloat, h: CGFloat, tilt: CGFloat)] = [
-                (x: 8.00, y: 3.10, w: 9.14, h: 3.07, tilt: 2),
-                (x: 8.29, y: 5.51, w: 7.90, h: 2.19, tilt: -3),
-                (x: 7.85, y: 7.78, w: 5.56, h: 2.63, tilt: 6),
-                (x: 8.44, y: 10.12, w: 6.87, h: 2.05, tilt: -5),
-                (x: 8.15, y: 12.31, w: 3.66, h: 2.19, tilt: 3),
-                (x: 8.33, y: 14.14, w: 2.05, h: 1.39, tilt: -8),
+                (x: 8.05, y: 3.40, w: 12.4, h: 3.6, tilt: 0),
+                (x: 8.60, y: 7.50, w: 8.8, h: 3.0, tilt: 4),
+                (x: 8.10, y: 11.10, w: 6.6, h: 2.6, tilt: -5),
+                (x: 8.55, y: 14.30, w: 4.2, h: 2.2, tilt: 7),
             ]
             for s in stones {
                 let stone = NSBezierPath(ovalIn: NSRect(x: -s.w / 2, y: -s.h / 2, width: s.w, height: s.h))
