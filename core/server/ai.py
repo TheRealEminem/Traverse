@@ -16,6 +16,7 @@ refused, ran out of output, or answered in the wrong shape) is about this text o
 """
 import os
 import re
+import threading
 import time
 from urllib.parse import urlparse
 
@@ -271,13 +272,30 @@ def generate(pid: str, cfg: dict, prompt: str, system: str | None = None, keep_a
     return text
 
 
-def _ollama_tags(cfg: dict) -> list[dict]:
+TAGS_SECONDS = 10           # how long one answer from Ollama's model list stands in for the next
+_tags: dict[str, tuple[float, list[dict]]] = {}   # Ollama address -> (when asked, its models); a miss is kept too
+_tags_lock = threading.Lock()
+
+
+def _ollama_tags(cfg: dict, fresh: bool = False) -> list[dict]:
+    """Ollama's installed models. Asked for by every readiness check, which the web app makes on every change it
+    hears of, so one answer (or one failure to answer, which can take the whole timeout when the address is a machine
+    that's off) stands for TAGS_SECONDS. fresh: ask now whatever was kept (a button someone just pressed)."""
+    url = cfg["ollama_url"]
+    now = time.monotonic()
+    with _tags_lock:
+        kept = _tags.get(url)
+        if kept and not fresh and now - kept[0] < TAGS_SECONDS:
+            return kept[1]
     try:
-        r = httpx.get(f"{cfg['ollama_url']}/api/tags", timeout=2)
+        r = httpx.get(f"{url}/api/tags", timeout=2)
         r.raise_for_status()
-        return r.json().get("models", [])
+        models = r.json().get("models", [])
     except (httpx.HTTPError, ValueError):
-        return []
+        models = []
+    with _tags_lock:
+        _tags[url] = (now, models)
+    return models
 
 
 def _ollama(cfg: dict, prompt: str, system: str | None, keep_alive: str, meter: pricing.Meter) -> str:
@@ -457,7 +475,7 @@ def list_models(pid: str) -> list[str]:
     if locked_out(pid, cfg):
         raise Locked(LOCKED_OUT, provider_down=True)
     if pid == "ollama":
-        tags = _ollama_tags(cfg)
+        tags = _ollama_tags(cfg, fresh=True)
         if not tags:
             raise AIError(f"Ollama isn't reachable at {cfg['ollama_url']}", provider_down=True)
         return [m["name"] for m in tags if "embed" not in m["name"].lower()]

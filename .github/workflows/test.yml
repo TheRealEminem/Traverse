@@ -1,4 +1,4 @@
-# Runs on every push and pull request: server tests, type checks, the web build and the style rules.
+# Runs on every push and pull request: Python style, server tests, type checks, the web build and the style rules.
 name: Tests
 
 on:
@@ -10,15 +10,15 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
-      - run: pip install -r requirements.txt pytest
+      - run: pip install -r requirements.txt pytest ruff
       - run: npm ci
       - run: scripts/check
