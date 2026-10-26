@@ -163,6 +163,7 @@ Dockerfile                the server for Linux
   "envPrefix": "STARTER",          // environment overrides: STARTER_DATA_DIR, STARTER_AI_PROVIDER…
   "port": 8790,                    // must differ between family apps that might run at the same time
   "updateRepo": "",                // "owner/repo" on GitHub for self-updates; empty = no updates
+  "calendarUse": "",               // optional: why the Mac app reads your calendar, as macOS asks; absent = it never does
   "modules": ["notes", "tasks"]    // in sidebar order
 }
 ```
@@ -202,7 +203,7 @@ the 8780–8799 range, and keep a list here:
 | `offers` | `{"people.search": handler(args)}`: questions other family apps on this Mac may ask it (§8, the family link). A handler gets a dict and returns plain data. |
 | `people` | `(q, limit) -> [{id, name, email?, detail?, is_self?}]`: its part of the people directory (`core/server/people.py`, `GET /api/people`, `PersonPicker`). Refs come back as `<id>:<person id>`; `is_self` comes back as `core:me`. |
 | `tools` | `[mcp.Tool(name, title, description, handler, params, required, writes)]`: what Claude may do here, through the host's MCP server (§8). Claude sees `<id>_<name>`. A handler gets the arguments as a dict and returns plain data, or raises `ValueError` with a sentence. |
-| `brief` | `(since, today) -> {"today"\|"waiting"\|"moved"\|"ahead": [entries]}`: its part of the day's briefing (`core/server/briefing.py`, `GET /api/briefing`). An entry is `{id, what, title?, href?, who?, when?, project?, kind?, tone?, minutes?, url?}`; the host makes its ref and fills a missing title and href from `describe`. "moved" is what happened since `since` (a moment); a module that fails is left out. A page that starts the day (Traverse's Muster) reads every module through it. |
+| `brief` | `(since, today) -> {"today"\|"waiting"\|"moved"\|"ahead": [entries]}`: its part of the day's briefing (`core/server/briefing.py`, `GET /api/briefing`). An entry is `{id, what, title?, href?, who?, when?, project?, kind?, tone?, minutes?, url?}`; the host makes its ref and fills a missing title and href from `describe`. "moved" is what happened since `since` (a moment); a module that fails is left out. A page that starts the day (Traverse's Muster) reads every module through it. A meeting is `kind` "meeting" with `when` (its start, this computer's time) and `minutes` (its length); "event" is one that doesn't take your time (all day: `when` is a day; or shown as free). Traverse's calendar module gives them, so a page can plan around meetings without knowing where they're kept. |
 
 ### Web half: `modules/<id>/web/index.tsx` default-exports a `ModuleWeb`
 
@@ -215,6 +216,7 @@ the 8780–8799 range, and keep a list here:
 | `home` | A card on Home. In the unified app, Home is where every module shows what's new. |
 | `settings` | A section on the Settings page (use `Section` and `useSettings()`). |
 | `start` | `() => Promise<path \| null>`: the first page of the day. Asked when the app opens at Home (and when its window comes back on a new day); the first module with a path wins. Traverse's Muster answers until you've looked at it today. |
+| `background` | A component the host keeps mounted while the app is open, on every screen, rendering nothing: work a module does in the page, such as Traverse's calendar sending what the Mac app's window can read to its server. The module must work without it (a server install nobody has open). |
 
 Modules import the host's web code as `@core/...` (`@core/components/ui`, `@core/live`, `@core/shell`…), never
 another module's.
@@ -322,6 +324,17 @@ other for data, while each stays its own app:
 - `BundledServer.swift`: runs `python -m uvicorn core.server.app:app` from `Resources/app` with `<PREFIX>_DATA_DIR`,
   `_UI_DIR` and `_PARENT_PID` set, restarts it up to three times in two minutes, then explains the failure in the menu.
 - `MainWindow.swift`: the WebKit window, the `app` bridge, the Edit/View/Window menus, and external links opening in the browser.
+- `CalendarBridge.swift`: your Mac's Calendar for the page, read-only, through a second bridge, `calendar`, which
+  answers (`window.webkit.messageHandlers.calendar.postMessage({ask})` returns a promise; `macCalendar` in
+  `core/web/api.ts`): whether it may read it, asking macOS once, a span's events (every account the Calendar app has,
+  without declined or cancelled ones), and opening System Settings' Calendars pane. Only the window's own page may
+  ask, and nothing is kept. An app whose `app.json` has no `calendarUse` gets no reason in its Info.plist, so the
+  bridge answers "unavailable" and never touches EventKit (asking without a reason would end the app). It's a script
+  message handler rather than a local endpoint: macOS asks when you choose to add the calendar, not at a launch at
+  login, and there's no port another process or a web page could reach. A module that wants the events on its server
+  has its page send them: Traverse's calendar module keeps "This Mac's Calendar" as one source among others (a
+  calendar's private iCal address, which its server reads itself, works on any computer), and its `background`
+  component sends the next week's events while the window is open.
 - `Updater.swift`: GitHub releases → checksum check → same bundle ID and valid signature → swap in place, keeping
   the old version for Go back → relaunch; beta updates and skipping a version. Its decisions are in `UpdateRules/` (§11).
 - `Mark.swift`: the menu bar icon. Each app draws its own motif there.
