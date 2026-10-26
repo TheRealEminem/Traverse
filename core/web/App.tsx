@@ -20,6 +20,7 @@ import { LockdownSign } from "./views/Lockdown";
 import Login from "./views/Login";
 import NotFound from "./views/NotFound";
 import Settings from "./views/Settings";
+import Welcome from "./views/Welcome";
 import type { ComponentType } from "react";
 
 /** True when the sidebar sits beside the content rather than in a drawer. */
@@ -141,7 +142,11 @@ export default function App() {
   useEffect(() => setDrawer(false), [path]);
 
   const toastFn = useCallback((text: string, tone: "success" | "error" = "success") => setToast({ text, tone }), []);
-  const shell: Shell | null = useMemo(() => (info ? { app: info, toast: toastFn, confirm, theme } : null), [info, toastFn, confirm, theme]);
+  const reopenSetup = useCallback(async () => {
+    await api.setupReopen();
+    setInfo((i) => (i ? { ...i, setup_done: false } : i));
+  }, []);
+  const shell: Shell | null = useMemo(() => (info ? { app: info, toast: toastFn, confirm, theme, reopenSetup } : null), [info, toastFn, confirm, theme, reopenSetup]);
 
   if (auth === "needed") return <Login onDone={() => setAuth("ok")} dusk={theme.dusk} />;
   if (!shell) {
@@ -153,6 +158,16 @@ export default function App() {
         </div>
         {down && <p className="relative text-ui text-ink-soft">Waiting for the server to start…</p>}
       </div>
+    );
+  }
+
+  if (!info!.setup_done) {
+    return (
+      <ShellProvider value={shell}>
+        <Welcome dusk={theme.dusk} onDone={() => setInfo({ ...info!, setup_done: true })} />
+        <TooltipLayer />
+        <Toast toast={toast} onClose={() => setToast(null)} />
+      </ShellProvider>
     );
   }
 
