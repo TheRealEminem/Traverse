@@ -16,7 +16,7 @@ TITLE_CHARS = 80
 
 
 def _first_line(text: str) -> str:
-    line = next((l.strip(" #*->\t") for l in text.splitlines() if l.strip(" #*->\t")), "")
+    line = next((ln.strip(" #*->\t") for ln in text.splitlines() if ln.strip(" #*->\t")), "")
     return line if len(line) <= TITLE_CHARS else line[: TITLE_CHARS - 1].rstrip() + "…"
 
 

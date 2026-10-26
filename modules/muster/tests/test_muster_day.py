@@ -7,7 +7,6 @@ from datetime import timedelta
 import pytest
 
 from core.server import config, db, jobs
-from modules.muster.server import days
 from modules.muster.tests.conftest import TODAY
 from modules.tasks.server import items
 

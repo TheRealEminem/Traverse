@@ -267,7 +267,7 @@ def set_map(project_id: str, changes: dict) -> dict:
     if unknown:
         raise ValueError(f"Can't map {', '.join(sorted(unknown))}: statuses are {', '.join(STATUSES)}")
     there = {s["id"]: s for s in states(project_id)}
-    for status, state_id in changes.items():
+    for state_id in changes.values():
         if state_id not in there:
             raise ValueError(f"That isn't one of {project['name']}'s states")
     chosen = {**json.loads(row["state_map"]), **changes}

@@ -209,5 +209,5 @@ def _openai_compatible(base: str, key: str, model: str, system: str, prompt: str
             r = _chat(base, key, repair)
             if r.status_code >= 400:
                 text = _error_text(r)
-                raise AIError(f"{who} error {r.status_code}: {text}", provider_down=not too_long(text))
+                raise AIError(f"{who} error {r.status_code}: {text}", provider_down=not too_long(text)) from e
     raise AIError("unreachable")
