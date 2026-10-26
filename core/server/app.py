@@ -17,7 +17,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ai, auth, backup, briefing, config, db, events, family, jobs, links, lockdown, mcp, module, people, schedule, search, settings
+from . import ai, auth, backup, briefing, config, db, events, family, jobs, links, lockdown, mcp, module, ollama_setup, people, resources, schedule, search, settings
+from . import setup as first_run
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("core")
@@ -25,7 +26,7 @@ log = logging.getLogger("core")
 # Shared by every module. your_name: "You" in anything that names people. appearance: Day, Dusk or the system's.
 # share_with_family: whether this app shares keys and preferences with the other family apps on this Mac (family.py).
 # lockdown: nothing leaves this Mac (lockdown.py); shared with the family.
-CORE_SETTINGS = {"your_name": "", "appearance": "system", "share_with_family": True, "lockdown": False}
+CORE_SETTINGS = {"your_name": "", "appearance": "system", "share_with_family": True, "lockdown": False, "setup_done": False}
 CORE_CHOICES = {"appearance": ("system", "light", "dusk")}
 
 
@@ -50,6 +51,7 @@ def setup() -> list[module.Module]:
     db.init()
     settings.declare("core", CORE_SETTINGS, CORE_CHOICES)
     ai.declare()
+    first_run.mark_existing()                   # once, before anything else is saved: was this app in use before first-run setup?
     mcp.declare()
     jobs.register("core", "backup", backup.handle_hourly, lane="cloud")
     schedule.register("core", "backup", 3600)
@@ -147,7 +149,7 @@ def app_info():
     """Who this app is and what it's made of; the web app builds its navigation from this."""
     return {"id": config.APP_ID, "name": config.NAME, "tagline": config.IDENTITY.get("tagline", ""),
             "version": config.VERSION, "modules": [{"id": m.id, "name": m.name} for m in module.all_modules()],
-            "auth_required": auth.required()}
+            "auth_required": auth.required(), "lockdown": lockdown.on(), "setup_done": first_run.done()}
 
 
 @core_router.get("/auth")
@@ -274,6 +276,75 @@ async def ai_test(pid: str):
 @core_router.get("/ai/usage")
 def ai_usage():
     return ai.usage()
+
+
+class PathBody(BaseModel):
+    path: str
+    cloud: str = ""
+
+
+@core_router.get("/setup")
+async def setup_state():
+    """The first-run screens' data: this Mac, the recommended path, every module's AI jobs and where they'd run."""
+    return await run_in_threadpool(first_run.state)
+
+
+@core_router.put("/setup/path")
+async def setup_path(body: PathBody):
+    try:
+        out = await run_in_threadpool(first_run.choose, body.path, body.cloud)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    events.publish("core.settings.changed", {"keys": ["ai.path", "ai.provider", "ai.heavy_provider"]})
+    return out
+
+
+@core_router.post("/setup/done")
+def setup_done():
+    first_run.finish()
+    events.publish("core.settings.changed", {"keys": [first_run.DONE]})
+    return {"ok": True}
+
+
+@core_router.post("/setup/reopen")
+def setup_reopen():
+    first_run.reopen()
+    events.publish("core.settings.changed", {"keys": [first_run.DONE]})
+    return {"ok": True}
+
+
+class PullBody(BaseModel):
+    model: str = ""
+
+
+@core_router.get("/ollama")
+async def ollama_state():
+    """Is Ollama installed and running here, which models it has, and the one this Mac should get."""
+    return await run_in_threadpool(ollama_setup.status)
+
+
+@core_router.post("/ollama/install", status_code=202)
+def ollama_install():
+    try:
+        started = ollama_setup.start_install()
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    return {"started": started}
+
+
+@core_router.post("/ollama/pull", status_code=202)
+def ollama_pull(body: PullBody):
+    try:
+        started = ollama_setup.start_pull(body.model.strip() or ollama_setup.recommended())
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    return {"started": started}
+
+
+@core_router.get("/system")
+async def system():
+    """What this Mac can do, for setup and Settings: its memory, disk and chip, and the advice drawn from them."""
+    return await run_in_threadpool(lambda: {"snapshot": resources.snapshot(), "advice": resources.device_advice()})
 
 
 @core_router.get("/search")

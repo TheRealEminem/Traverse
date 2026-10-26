@@ -35,6 +35,10 @@ export interface AppInfo {
   version: string;
   modules: { id: string; name: string }[];
   auth_required: boolean;
+  /** Lockdown is on: nothing leaves this computer (core/server/lockdown.py). */
+  lockdown: boolean;
+  /** False until the first-run screens have been finished (or skipped); an install that was already in use starts true. */
+  setup_done: boolean;
 }
 
 /** A thing's latest background job, as the server reports it next to the thing. */
@@ -207,11 +211,67 @@ export interface McpSetup {
   claude_desktop: string;
 }
 
-export interface BackupItem {
+/** What this Mac can do (core/server/resources.py): its memory, disk and chip, and the path that suits it. */
+export interface SystemInfo {
+  snapshot: { chip: string; ram_total_gb: number; ram_available_gb: number; disk_free_gb: number; memory_pressure: number };
+  advice: { verdict: "local" | "mixed" | "cloud"; chip: string; ram_gb: number; disk_free_gb: number; notes: string[] };
+}
+
+/** Ollama on this Mac (core/server/ollama_setup.py). */
+export interface OllamaStatus {
+  can_install: boolean;
+  installed: boolean;
+  reachable: boolean;
+  models: string[];
+  using: string;
+  recommended: string;
+  locked: boolean;
+  install: { active: boolean; status: string; progress: number | null; error: string | null } | null;
+  pull: { model: string; active: boolean; status: string; progress: number | null; error: string | null } | null;
+}
+
+/** The first-run screens' data (core/server/setup.py). */
+export interface SetupJob {
+  module: string;
+  job: string;
+  label: string;
+  hint: string;
+  weight: "light" | "heavy";
+  provider: string;
+  provider_label: string;
+  model: string;
+  ready: boolean;
+  reason: string;
+  local: boolean;
+}
+export type AiPath = "local" | "mixed" | "cloud";
+export interface SetupState {
+  done: boolean;
+  path: AiPath | "";
+  recommended: AiPath;
+  snapshot: SystemInfo["snapshot"];
+  advice: SystemInfo["advice"];
+  jobs: SetupJob[];
+  providers: ProviderInfo[];
+}
+
+export type BackupKind = "auto" | "manual" | "before-restore" | "before-update";
+export type BackupSlot = "latest" | "hour" | "day" | "week";
+
+/** One copy on disk. `kind` is its main label; `kinds` all it holds, since the same data is never copied twice. */
+export interface BackupFile {
   name: string;
-  kind: "auto" | "manual" | "before-restore" | "before-update";
+  kind: BackupKind;
+  kinds: BackupKind[];
   created_at: string;
   bytes: number;
+  update?: string;
+}
+
+/** As the list gives it: what it holds, and which restore choices it fills. */
+export interface BackupItem extends BackupFile {
+  counts: Record<string, number>;
+  slots: BackupSlot[];
 }
 
 export const api = {
@@ -222,8 +282,8 @@ export const api = {
   shutdown: () => request<{ ok: true }>("/shutdown", json("POST")),
   changes: (since: number) => request<{ seq: number; names: string[] }>(`/changes?since=${since}`),
 
-  backups: () => request<{ items: BackupItem[]; folder: string }>("/backups"),
-  backUpNow: () => request<BackupItem>("/backups", json("POST")),
+  backups: () => request<{ items: BackupItem[]; slots: Record<BackupSlot, string | null>; folder: string }>("/backups"),
+  backUpNow: () => request<BackupFile>("/backups", json("POST")),
   restoreBackup: (name: string) => request<{ restored: string; kept: string; counts: Record<string, number> }>(`/backups/${name}/restore`, json("POST")),
   deleteBackup: (name: string) => request<void>(`/backups/${name}`, { method: "DELETE" }),
   exportAll: () => request<{ name: string; folder: string; bytes: number; counts: Record<string, Record<string, number>> }>("/export", json("POST")),
@@ -239,6 +299,15 @@ export const api = {
   providerTest: (id: ProviderId) => request<{ message: string }>(`/ai/providers/${id}/test`, json("POST")),
   aiUsage: () => request<AIUsage>("/ai/usage"),
   lockdown: () => request<LockdownStatus>("/lockdown"),
+
+  setup: () => request<SetupState>("/setup"),
+  setupPath: (path: AiPath, cloud = "") => request<SetupState>("/setup/path", json("PUT", { path, cloud })),
+  setupDone: () => request<{ ok: true }>("/setup/done", json("POST")),
+  setupReopen: () => request<{ ok: true }>("/setup/reopen", json("POST")),
+  system: () => request<SystemInfo>("/system"),
+  ollama: () => request<OllamaStatus>("/ollama"),
+  ollamaInstall: () => request<{ started: boolean }>("/ollama/install", json("POST")),
+  ollamaPull: (model = "") => request<{ started: boolean }>("/ollama/pull", json("POST", { model })),
 
   search: (q: string) => request<SearchGroup[]>(`/search?q=${encodeURIComponent(q)}`),
   people: (q: string, limit = 8) => request<PeopleResult>(`/people?q=${encodeURIComponent(q)}&limit=${limit}`),
