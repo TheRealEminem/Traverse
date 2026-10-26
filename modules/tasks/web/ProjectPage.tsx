@@ -4,14 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { LinkedList } from "@core/components/blocks";
+import { LinkedList, PersonPicker } from "@core/components/blocks";
 import { BackIcon, NetworkIcon, PencilIcon, PlusIcon, TrashIcon } from "@core/components/icons";
 import { ControlRow, Segmented, Select, Skeleton, StatusChip, useConfirm } from "@core/components/ui";
 import { formatDate, relativeTime } from "@core/format";
 import { useLive } from "@core/live";
 import type { RouteProps } from "@core/registry";
 import { navigate, useQueryParams } from "@core/router";
-import { useShell } from "@core/shell";
+import { useSettings, useShell } from "@core/shell";
 import { tasksApi } from "./api";
 import type { Draft, Health, Meta, Milestone, ProjectChanges, ProjectDetail, Task } from "./api";
 import { HealthChip, Progress } from "./bits";
@@ -21,6 +21,7 @@ import { DraftStatusButton, OfferUpdate, StatusDraftPanel, commentTargets, whoWr
 import { Field } from "./Field";
 import { BoardIcon, ListIcon, MilestoneIcon, MountainIcon } from "./icons";
 import { dueWords } from "./Projects";
+import { personChoice } from "./TaskPage";
 import { Check, TaskList } from "./TaskRow";
 
 type View = "overview" | "list" | "board";
@@ -268,6 +269,7 @@ function Overview({
   reload: () => void;
 }) {
   const { toast } = useShell();
+  const yourName = (useSettings().get<string>("core.your_name") ?? "").trim();
   const { data: draft, reload: reloadDraft } = useLive(() => tasksApi.projectDraft(project.id), [project.id]);
   const changed = () => {
     reload();
@@ -294,8 +296,15 @@ function Overview({
             onChange={(v) => void save({ status: v })}
           />
         </ControlRow>
-        <ControlRow label="Owner" hint="Who answers for it. Empty: nobody yet.">
-          <Field label="Owner" className="w-full sm:w-56" placeholder="Nobody yet" value={project.owner_name ?? ""} onSave={(v) => void save({ owner_ref: null, owner_name: v.trim() || null })} />
+        <ControlRow label="Owner" hint="Who answers for it. Nobody yet, until you choose someone.">
+          <PersonPicker
+            label="Owner"
+            className="w-full sm:w-56"
+            placeholder="Nobody yet"
+            noneLabel="Nobody"
+            value={personChoice(project.owner_ref, project.owner_name, yourName)}
+            onChange={(who) => void save(who ? { owner_ref: who.ref, owner_name: who.ref === "core:me" ? null : who.name } : { owner_ref: null, owner_name: null })}
+          />
         </ControlRow>
         <ControlRow label="Start">
           <Field type="date" label="Start" className="w-full sm:w-56" value={project.start_on ?? ""} onSave={(v) => void save({ start_on: v || null })} />

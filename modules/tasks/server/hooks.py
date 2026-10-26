@@ -8,23 +8,36 @@ from . import items, store, vocab
 
 
 def take_actions(payload: dict) -> None:
-    """contracts.ACTIONS_FOUND: a source (a note, a meeting) found action items. They replace that source's earlier
-    ones you haven't touched; anything you changed, ticked or moved stays. An item is text, or {"text", "due_on"?,
+    """contracts.ACTIONS_FOUND: a source (a note, a meeting) found action items. Each is matched to that source's
+    earlier items by its text: one that's here already stays, with its id (so a day's plan or a link that points at it
+    keeps working); a new one is made; and an earlier one the source no longer announces is let go, unless you've
+    touched it (changed, ticked or moved it), in which case it stays. An item is text, or {"text", "due_on"?,
     "assignee_ref"?, "assignee_name"?, "priority"?}. New items go into the project the source is linked to, when
-    it's linked to exactly one; otherwise they wait, in no project."""
+    it's linked to exactly one; otherwise they wait, in no project, and follow the source into a project chosen later
+    as long as you haven't touched them."""
     source = payload["source_ref"]
-    untouched = db.query(
-        "SELECT id FROM tasks_items WHERE source_ref = ? AND status = 'todo' AND updated_at = created_at "
-        "AND project_id IS NULL AND notes = '' AND parent_id IS NULL", (source,))
-    for row in untouched:
-        items.delete(row["id"])
-    kept = {r["text"] for r in db.query("SELECT text FROM tasks_items WHERE source_ref = ?", (source,))}
-    projects = [ref for ref in _linked_projects(source)]
-    project_id = projects[0] if len(projects) == 1 else None
+    wanted: list[dict] = []
     for raw in payload.get("items", []):
         found = {"text": raw} if isinstance(raw, str) else dict(raw)
         text = (found.get("text") or "").strip()
-        if not text or text in kept:
+        if text and text not in {w["text"] for w in wanted}:
+            wanted.append({**found, "text": text})
+    announced = {w["text"] for w in wanted}
+    untouched = db.query(
+        "SELECT id, text FROM tasks_items WHERE source_ref = ? AND status = 'todo' AND updated_at = created_at "
+        "AND project_id IS NULL AND notes = '' AND parent_id IS NULL", (source,))
+    projects = [ref for ref in _linked_projects(source)]
+    project_id = projects[0] if len(projects) == 1 else None
+    for row in untouched:
+        if row["text"] not in announced:
+            items.delete(row["id"])
+        elif project_id:                     # waiting in no project: it follows the source into its project
+            db.execute("UPDATE tasks_items SET project_id = ?, sort = ? WHERE id = ?",
+                       (project_id, store.sort_last("tasks_items", *items._scope(project_id, None, None)), row["id"]))
+    kept = {r["text"] for r in db.query("SELECT text FROM tasks_items WHERE source_ref = ?", (source,))}
+    for found in wanted:
+        text = found["text"]
+        if text in kept:
             continue
         try:
             items.create(text, project_id=project_id, source="action-item", source_ref=source,
