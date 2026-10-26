@@ -38,14 +38,14 @@ module.register(module.Module(id="probe3", name="Probe three",
 # ── Shared keys and preferences ───────────────────────────────────────
 
 def test_a_key_saved_here_is_there_for_every_family_app():
-    settings.update({"ai.anthropic_api_key": " sk-ant-shared-123456 ", "core.your_name": "Dale"})
-    assert family.values() == {"ai.anthropic_api_key": "sk-ant-shared-123456", "core.your_name": "Dale"}
+    settings.update({"ai.anthropic_api_key": " sk-ant-shared-123456 ", "core.your_name": "Sam"})
+    assert family.values() == {"ai.anthropic_api_key": "sk-ant-shared-123456", "core.your_name": "Sam"}
 
 
 def test_a_preference_saved_in_another_app_shows_here(client):
-    another_app_saves({"core.your_name": "Dale", "core.appearance": "dusk", "ai.provider": "anthropic"})
+    another_app_saves({"core.your_name": "Sam", "core.appearance": "dusk", "ai.provider": "anthropic"})
     values = client.get("/api/settings").json()["values"]
-    assert (values["core.your_name"], values["core.appearance"], values["ai.provider"]) == ("Dale", "dusk", "anthropic")
+    assert (values["core.your_name"], values["core.appearance"], values["ai.provider"]) == ("Sam", "dusk", "anthropic")
 
 
 def test_keys_stay_write_only_even_when_shared(client):
@@ -62,11 +62,11 @@ def test_only_the_listed_settings_are_shared():
 
 
 def test_an_app_that_stops_sharing_keeps_its_own():
-    settings.update({"core.your_name": "Dale"})
+    settings.update({"core.your_name": "Sam"})
     settings.update({"core.share_with_family": False})
     another_app_saves({"core.your_name": "Someone else"})
-    assert settings.get_all()["core.your_name"] == "Dale"
-    settings.update({"core.your_name": "Dale M"})
+    assert settings.get_all()["core.your_name"] == "Sam"
+    settings.update({"core.your_name": "Sam M"})
     assert family.values()["core.your_name"] == "Someone else"            # nothing it saves leaves it either
     settings.update({"core.share_with_family": True})
     assert settings.get_all()["core.your_name"] == "Someone else"         # back on: the family's value again

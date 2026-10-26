@@ -10,7 +10,8 @@ it, else "default".
 
   queued -> running -> done
                     -> error    (POST /api/jobs/<id>/retry puts it back in the queue)
-                    -> waiting  (the handler raised Wait: e.g. not enough free memory; "go" with force)
+                    -> waiting  (the handler raised Wait: e.g. not enough free memory; "go" with force; a job
+                                 waiting for memory goes again by itself once there's room: resume_when_room)
   waiting <- enqueue(..., approve=True): parked until you press the button ("Needs you"; POST /api/jobs/<id>/go)
   waiting -> queued by itself (release) when what it waited for has passed: Lockdown turned off (lockdown.py)
 
@@ -24,7 +25,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Callable
 
-from . import db, events
+from . import db, events, resources
 
 log = logging.getLogger("core.jobs")
 UNFINISHED = ("queued", "running", "waiting")
@@ -97,6 +98,19 @@ def go(job_id: str, force: bool = False) -> None:
     if changed:
         _notify(job_id)
         _submit(job_id)
+
+
+def resume_when_room() -> list[str]:
+    """Puts back in the queue the jobs parked for lack of memory, once the local model has room. The scheduler calls this."""
+    rows = db.query("SELECT id FROM core_jobs WHERE status = 'waiting' AND wait_reason LIKE ?", ("%" + resources.WAIT + "%",))
+    if not rows:
+        return []
+    from . import ai                       # late: ai reads settings, which the jobs table doesn't need
+    if not ai.memory_ready():
+        return []
+    for row in rows:
+        go(row["id"])
+    return [r["id"] for r in rows]
 
 
 def retry(job_id: str) -> None:
@@ -220,7 +234,11 @@ def _run(job_id: str) -> None:
     _set(job_id, status="running", stage=None, error=None)
     running = _current.set(job)
     try:
-        handler(job)
+        if job.forced:                      # "Proceed anyway": the memory gate stands aside for this one
+            with resources.proceed_anyway():
+                handler(job)
+        else:
+            handler(job)
     except Wait as why:
         _set(job_id, status="waiting", wait_reason=str(why), stage=None)
     except Exception as e:  # noqa: BLE001 - any failure is shown on the item, with Retry

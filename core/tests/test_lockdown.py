@@ -13,7 +13,7 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from core.server import ai, ai_adapters, config, db, family, jobs, lockdown, settings
+from core.server import ai, ai_adapters, config, db, family, jobs, lockdown, ollama_setup, settings
 
 ROOT = Path(__file__).resolve().parents[2]
 CLOUD = "https://api.example.com/v1"
@@ -164,6 +164,24 @@ def test_modules_ask_before_reaching_out(lockdown_on):
     lockdown.check("http://127.0.0.1:8765")
     settings.update({lockdown.KEY: False})
     assert lockdown.may_reach() and lockdown.may_reach("https://api.plane.so")
+
+
+def test_the_familys_question_says_why_in_words(lockdown_on):
+    """blocked(), as the family's shared code asks it: for work that is simply off while Lockdown is on."""
+    assert lockdown.blocked("Syncing the Sheet") == "Syncing the Sheet is off while Lockdown is on (Settings → Lockdown)."
+    assert lockdown.WHY.startswith(lockdown.REASON) and lockdown.on_this_computer("http://localhost:11434")
+    settings.update({lockdown.KEY: False})
+    assert lockdown.blocked("Syncing the Sheet") is None
+
+
+def test_ollama_and_its_models_are_not_downloaded(lockdown_on, client, monkeypatch):
+    monkeypatch.setattr(ollama_setup, "app_path", lambda: None)
+    r = client.post("/api/ollama/install")
+    assert r.status_code == 403 and "Lockdown" in r.text
+    r = client.post("/api/ollama/pull", json={"model": "qwen2.5:7b"})
+    assert r.status_code == 403 and "Lockdown" in r.text
+    assert client.get("/api/ollama").json()["locked"] is True
+    assert not ollama_setup._pull and not ollama_setup._install
 
 
 # ── Parked work goes again when it's off ─────────────────────────────

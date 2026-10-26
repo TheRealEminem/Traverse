@@ -42,9 +42,12 @@ If a family app keeps these, Trailmix can talk to it now and merge with it later
 8. **Local first.** It works offline. Cloud services are optional and chosen in Settings. Local models unload after
    use (`OLLAMA_KEEP_ALIVE=0`), and heavy local work waits until there's memory for it.
 9. **Lockdown** (§8) means nothing leaves the computer: no stats, no update checks, no downloads, only AI that
-   runs here. Every app should have it and honour it in the same places. (The family host doesn't have it yet.)
-10. **Money is never a surprise.** Any paid AI action shows its estimated cost before it runs, bulk runs go a few
-    items at a time, and what was spent is tallied in Settings.
+   runs here. Every app has it (`core/server/lockdown.py`) and honours it in the same places: `ai.configured()`, the
+   updater, Ollama downloads, and each module's own outward features, which ask `lockdown.blocked(what)` first.
+10. **Money is never a surprise, and never in the way.** Every AI call is tallied (tokens as the provider reported them,
+    dollars estimated at list price) and the running count sits a few clicks into Settings → AI → Usage. Nothing
+    nags: only a job estimated over the owner's limit (`ai.warn_over`, $1 by default) shows its cost first, such as
+    a big batch of research or redoing every meeting. Bulk runs still go a few items at a time.
 11. **State lives in the database, and slow work is resumable.** A restart at any moment loses nothing, and the
     work picks up where it was.
 12. **Nothing is written inside the app bundle at runtime** (it breaks the signature). Everything goes in the data folder.
@@ -53,6 +56,10 @@ If a family app keeps these, Trailmix can talk to it now and merge with it later
 14. **The same release path:** a version tag builds the Mac app, a smoke test runs, it goes out as a beta
     (pre-release), and it reaches everyone after 3 days unless someone reports a blocker. The updater offers beta
     updates, Skip this version and Go back.
+15. **Backups roll over.** A copy each hour if something changed, thinned like Time Machine's to the newest in each of
+    the last 3 hours, 9 days and 4 weeks; a copy before an update and before a restore that survive roll-over; never two
+    copies of the same data; at most 20 files; and a simple menu of four choices (the newest, an hour ago, yesterday,
+    last week) with Advanced collapsed. The full rule is in `ARCHITECTURE.md` §7. A backup list that grows is a bug.
 
 ---
 
@@ -179,7 +186,7 @@ exactly, so it is also the format for moving a meeting between apps:
 ```json
 {"format": "trailmix-meeting", "version": 1, "uid": "…", "title": "…", "title_auto": false,
  "created_at": "2026-10-20T15:00:00.000Z", "duration_sec": 1830, "source": "trailmix", "has_system": true,
- "speakers": {"You": "Dale", "Them": "Dana"}, "summary": "## Overview…", "summary_provider": "…", "summary_model": "…",
+ "speakers": {"You": "Sam", "Them": "Dana"}, "summary": "## Overview…", "summary_provider": "…", "summary_model": "…",
  "transcribed_with": "whisper-large-v3-turbo, while recording",
  "tasks": [{"text": "Dana: send the deck (Friday)", "done": false}],
  "bookmarks": [{"t": 312.5, "note": "…"}], "my_notes": [{"t": null, "text": "…"}], "qa": [{"q": "…", "a": "…"}],
@@ -228,7 +235,7 @@ were the source for the family's, so the mapping is nearly one to one:
 | `your_name` | `core.your_name` | |
 | theme in the browser's `localStorage` (`trailmix.theme` = `system`, `light`, `dusk`) | `core.appearance` | Trailmix keeps it per browser, not as a setting |
 | everything else | `meetings.<name>` | **Proposed**, for the port |
-| `lockdown` | `core.lockdown` | **Proposed**; not in the family yet |
+| `lockdown` | `core.lockdown` | shared by the family apps on a Mac, like the AI settings |
 
 **Keep these names.** If a family app adds a provider, a model setting or a key, use the same pattern
 (`<provider>_model`, `<provider>_api_key`) so both sides can read it.
@@ -285,7 +292,7 @@ pre-flight "choose which AI" sheet yet.
 | **Recording laws** | A short entry per US state and country in setup and Settings → Privacy. Information only: an entry can suggest a shorter retention, and you choose whether to apply it. Shipped in `assets/`, refreshed daily from the Trailmix site. | `backend/recording_laws.py` |
 | **Audio retention** | 30 days by default (7, until transcribed, or forever), "Keep forever" per meeting, "Delete audio now". | `backend/audio_store.py` |
 | **A receipt for every change** | `history` records what changed, from what, to what, when and why. | `backend/database.py` |
-| **Costs first** | Every paid action shows its estimate first; bulk runs go a few at a time (3 by default); Settings tallies spend. | `backend/pricing.py` |
+| **Usage, not nagging** | Every paid call is tallied (Settings → AI → Usage); only a job estimated over a limit (default $1) shows its cost first; bulk runs go a few at a time (3 by default). | `backend/pricing.py` |
 | **Sign-in for server installs** | Off locally. With `TRAILMIX_ACCESS_TOKEN` set, every API call (except `/api/auth`, `/api/login`, `/api/logout`), the WebSocket and audio playback need it: an HttpOnly `trailmix_session` cookie (HMAC of the token, 30 days, `SameSite=Strict`), or `Authorization: Bearer <token>`. Wrong guesses wait 0.6 s. | `backend/auth.py` |
 
 **For a family app:** don't reuse Trailmix's PostHog key or privacy page; each app that sends stats needs its own
@@ -454,9 +461,9 @@ So other apps copy the family's way, not Trailmix's, where they differ.
 | Search | one FTS table | `Module.search` merged across modules | Trailmix |
 | Routes | `#meeting-12` | `#/meetings/<uid>` | Trailmix |
 | Window bridge | `messageHandlers.trailmix` | `messageHandlers.app` | Trailmix |
-| Database backups | once per new version, newest 3, no restore screen | daily (14 kept), before an update, "Back up now", restore | Trailmix |
+| Database backups | once per new version, newest 3, no restore screen | hourly if changed, thinned to 3 hours, 9 days and 4 weeks (at most 20 files); copies before an update and a restore; "Back up now"; restore from four choices | Family (`core/server/backup.py`, rule 15) |
 | Release blocker | issue title `[Beta X.Y.Z] [blocks me]` | issue label `blocks release` | pick one family-wide (**Proposed**: the label, plus the title form for reports made from the app) |
-| Lockdown | yes | no | Family (`core.lockdown`, gated in `ai.configured()` and the updater) |
+| Lockdown | yes | yes | Family (`core.lockdown`, gated in `ai.configured()` and the updater) |
 | Paid-AI pricing and usage | yes | no | Family, when a second module spends money |
 | Structured AI output | no (parses Markdown) | yes | Trailmix, when it moves |
 | Anonymous stats, problem reports | yes | no | Family, later, with a per-app key and privacy page |

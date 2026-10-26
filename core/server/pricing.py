@@ -14,6 +14,8 @@ it anyway (a refusal, running out of output, the wrong shape) was billed, so it'
 (lockdown.py) never left the Mac: it's logged as *stopped*, failed with Lockdown's reason, at a cost of 0, and
 counted apart from failures.
 """
+import contextlib
+import contextvars
 import logging
 import re
 from dataclasses import dataclass
@@ -22,6 +24,23 @@ from datetime import datetime, timedelta, timezone
 from . import db, jobs, lockdown
 
 log = logging.getLogger("core.ai")
+
+_purpose: contextvars.ContextVar[str] = contextvars.ContextVar("ai_purpose", default="")
+
+
+@contextlib.contextmanager
+def purpose(name: str | None):
+    """Calls made inside are logged under this name (as the job) when no job is running: ai.complete(purpose=...),
+    the family's way for a module to say what a call was for. Nesting keeps the outermost name."""
+    if not name or _purpose.get():
+        yield
+        return
+    token = _purpose.set(name)
+    try:
+        yield
+    finally:
+        _purpose.reset(token)
+
 
 CHECKED = "2026-10-21"   # when the tables below were last read from the providers' pages
 
@@ -218,7 +237,7 @@ class Meter:
         try:
             when = datetime.now(timezone.utc)
             job = jobs.current()
-            module, kind = self.asker or ((job.module, job.kind) if job else ("", ""))
+            module, kind = self.asker or ((job.module, job.kind) if job else ("", _purpose.get()))
             inp, cached, out = self.tokens()
             spent = 0.0 if stopped else None if error and not self.requests else self.cost(when)
             model = next((r.model for r in reversed(self.requests) if r.model), self.model)
