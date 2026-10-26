@@ -6,10 +6,12 @@
   "envPrefix": "TRAVERSE",
   "port": 8793,
   "updateRepo": "TheRealEminem/Traverse",
+  "calendarUse": "Traverse shows today’s and this week’s meetings in Muster and plans your day around them. It only reads your calendar.",
   "modules": [
     "muster",
     "tasks",
     "plane",
-    "inbox"
+    "inbox",
+    "calendar"
   ]
 }

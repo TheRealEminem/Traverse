@@ -1,4 +1,5 @@
 import { json, request } from "@core/api";
+import type { Job } from "@core/api";
 import type { Tone } from "@core/components/ui";
 
 export type SectionName = "today" | "waiting" | "moved" | "ahead";
@@ -50,6 +51,42 @@ export interface Pick {
   let_go: boolean;
 }
 
+/** The morning summary (summary.py): written by an AI, which `by` names. */
+export interface Summary {
+  text: string | null;
+  by: string | null;
+  at: string | null;
+  /** How many lines of "what moved" it covered. */
+  moved: number | null;
+  job: Job | null;
+}
+
+/** One pick the AI suggests (suggest.py). */
+export interface Proposal {
+  id: string;
+  ref: string;
+  title: string;
+  href: string | null;
+  module: string;
+  minutes: number | null;
+  reason: string;
+  state: "proposed" | "accepted" | "dropped";
+  /** The day's pick it became. */
+  pick_id: string | null;
+}
+
+export interface SuggestedPlan {
+  status: "suggesting" | "ready";
+  asked_at: string;
+  written_by: string | null;
+  made_at: string | null;
+  note: string | null;
+  meetings: number;
+  free_minutes: number | null;
+  proposals: Proposal[];
+  job: Job | null;
+}
+
 export interface Day {
   day: string;
   today: string;
@@ -66,6 +103,10 @@ export interface Day {
   picks: Pick[];
   hours: { start: string; end: string };
   briefing: Briefing;
+  /** AI in Muster (Settings → Muster). */
+  ai: boolean;
+  summary: Summary;
+  plan: SuggestedPlan | null;
 }
 
 export interface WrappedUp {
@@ -90,4 +131,12 @@ export const musterApi = {
     request<Pick>(`${day(d)}/picks/${id}`, json("PATCH", changes)),
   movePick: (d: string, id: string, after: string | null) => request<Pick[]>(`${day(d)}/picks/${id}/move`, json("POST", { after })),
   removePick: (d: string, id: string) => request<void>(`${day(d)}/picks/${id}`, { method: "DELETE" }),
+  writeSummary: (d: string) => request<Summary>(`${day(d)}/summary`, json("POST")),
+  suggestPlan: (d: string) => request<SuggestedPlan>(`${day(d)}/plan`, json("POST")),
+  discardPlan: (d: string) => request<void>(`${day(d)}/plan`, { method: "DELETE" }),
+  acceptAll: (d: string) => request<{ accepted: number }>(`${day(d)}/plan/accept`, json("POST")),
+  acceptProposal: (d: string, id: string) => request<Proposal>(`${day(d)}/plan/${id}/accept`, json("POST")),
+  patchProposal: (d: string, id: string, changes: { state?: "proposed" | "dropped"; minutes?: number | null }) =>
+    request<Proposal>(`${day(d)}/plan/${id}`, json("PATCH", changes)),
+  moveProposal: (d: string, id: string, after: string | null) => request<Proposal[]>(`${day(d)}/plan/${id}/move`, json("POST", { after })),
 };

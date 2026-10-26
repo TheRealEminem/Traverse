@@ -1,6 +1,8 @@
 // #/muster: the day's kick-off. What's on today and what waits on you, what moved since your last Muster (in
 // Traverse and in Plane), the plan for the day, what's ahead, and the evening's wrap-up. Everything but the plan is
-// the host's briefing (every module's part of it); the first look each day lands here (index.tsx's start).
+// the host's briefing (every module's part of it); the first look each day lands here (index.tsx's start). With AI
+// on, a summary of what moved and a suggested plan (Ai.tsx); the day's meetings come through the briefing too
+// (Meetings.tsx; calendars are added in Settings → Calendar).
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { CompassIcon, FlagIcon, SunIcon, icon } from "@core/components/icons";
@@ -10,8 +12,11 @@ import { useShell } from "@core/shell";
 import { History } from "lucide-react";
 import { musterApi } from "./api";
 import type { Day, Entry } from "./api";
+import { MorningSummary, SuggestButton, SuggestedPlan } from "./Ai";
 import { Entries, Part, Sub, clock, dayName, hourMinutes, momentWords } from "./bits";
-import { PlanTheDay, WrapUp, inPlan } from "./Plan";
+import { TodayMeetings, WeekMeetings } from "./Meetings";
+import { isScheduled } from "./time";
+import { PlanTheDay, WrapUp, inPlan, useNow } from "./Plan";
 
 const MovedIcon = icon(History);
 
@@ -35,6 +40,7 @@ function usePicking(day: Day) {
 
 export default function MusterView() {
   const { data: day, error } = useLive(musterApi.today);
+  const now = useNow();
   const opened = useRef(false);
   useEffect(() => {
     if (opened.current) return;
@@ -59,6 +65,7 @@ export default function MusterView() {
   return (
     <div className="accent-mustard">
       <Header day={day} />
+      <MorningSummary day={day} />
       {day.briefing.failed.length > 0 && (
         <p className="-mt-4 mb-6 px-1 text-hint text-ink-soft">
           {day.briefing.failed.join(" and ")} couldn't say {day.briefing.failed.length === 1 ? "its" : "their"} part just now; the rest is here.
@@ -66,11 +73,17 @@ export default function MusterView() {
       )}
       <div className="flex flex-col gap-10 xl:grid xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] xl:items-start xl:gap-x-8">
         <div className="contents xl:flex xl:flex-col xl:gap-10">
-          <KickOff day={day} className="order-1" />
+          <KickOff day={day} now={now} className="order-1" />
           <Moved day={day} className="order-3" />
         </div>
         <div className="contents xl:flex xl:flex-col xl:gap-10">
-          <PlanTheDay day={day} className="relative z-20 order-2" delay={120} />
+          <PlanTheDay
+            day={day}
+            className="relative z-20 order-2"
+            delay={120}
+            aside={<SuggestButton day={day} />}
+            suggestion={<SuggestedPlan day={day} now={now} />}
+          />
           <Ahead day={day} className="order-4" />
           <WrapUp day={day} className="order-5" primary={!!day.kicked_off_at || evening} />
         </div>
@@ -169,17 +182,23 @@ function Intention({ day }: { day: Day }) {
 
 // ── Kick-off: today, and what waits on you ─────────────────────────────
 
-function KickOff({ day, className }: { day: Day; className?: string }) {
+function KickOff({ day, now, className }: { day: Day; now: Date; className?: string }) {
   const pick = usePicking(day);
   const today = day.briefing.sections.today;
-  const meetings = today.filter((e) => e.kind === "meeting");
+  const booked = today.filter(isScheduled);
+  const recorded = today.filter((e) => e.kind === "meeting" && !isScheduled(e));    // Trailmix's, after the fact
   const team = today.filter((e) => e.kind === "past_due");
-  const yours = today.filter((e) => e.kind !== "meeting" && e.kind !== "past_due");
+  const yours = today.filter((e) => e.kind !== "meeting" && e.kind !== "event" && e.kind !== "past_due");
   const waiting = day.briefing.sections.waiting;
   return (
     <Part icon={<SunIcon size={16} />} title="Today" blurb="Your meetings, what's due and in progress, and what waits on you." className={className} delay={60}>
-      <Sub count={meetings.length}>Meetings</Sub>
-      <Entries entries={meetings} empty="Meetings Trailmix records today show here." {...pick} onPick={undefined} />
+      <Sub count={booked.length + recorded.length}>Meetings</Sub>
+      <TodayMeetings entries={booked} now={now} />
+      {recorded.length > 0 && (
+        <div className="mt-2">
+          <Entries entries={recorded} empty="" {...pick} onPick={undefined} />
+        </div>
+      )}
       <Sub count={yours.length}>Due and in progress</Sub>
       <Entries entries={yours} empty="Nothing due today, late or in progress." {...pick} />
       <Sub count={waiting.length}>Waiting on you</Sub>
@@ -255,10 +274,17 @@ function Ahead({ day, className }: { day: Day; className?: string }) {
   const pick = usePicking(day);
   const ahead = [...day.briefing.sections.ahead].sort((a, b) => (a.kind === "at_risk" ? 1 : 0) - (b.kind === "at_risk" ? 1 : 0) || (a.when ?? "9999").localeCompare(b.when ?? "9999"));
   const risky = ahead.filter((e) => e.kind === "at_risk");
-  const dated = ahead.filter((e) => e.kind !== "at_risk");
+  const week = ahead.filter(isScheduled);
+  const dated = ahead.filter((e) => e.kind !== "at_risk" && !isScheduled(e));
   return (
-    <Part icon={<CompassIcon size={16} />} title="Look ahead" blurb="This week's due dates, milestones and cycles ending, and projects at risk." className={className} delay={240}>
+    <Part icon={<CompassIcon size={16} />} title="Look ahead" blurb="This week's due dates, milestones and cycles ending, meetings, and projects at risk." className={className} delay={240}>
       <Entries entries={dated} empty="Nothing due in the next seven days." {...pick} />
+      {week.length > 0 && (
+        <>
+          <Sub count={week.length}>Meetings this week</Sub>
+          <WeekMeetings entries={week} />
+        </>
+      )}
       {risky.length > 0 && (
         <>
           <Sub count={risky.length}>Projects at risk</Sub>
