@@ -1,7 +1,7 @@
-// Muster's section on the Settings page: whether the first look each day lands on it, and the working hours its plan
-// is measured against.
+// Muster's section on the Settings page: whether the first look each day lands on it, the working hours its plan is
+// measured against, and whether its AI writes a summary and suggests plans.
 import { Section } from "@core/components/blocks";
-import { ClockIcon, SunIcon } from "@core/components/icons";
+import { ClockIcon, SparkleIcon, SunIcon } from "@core/components/icons";
 import { ControlRow, Select, SwitchRow } from "@core/components/ui";
 import { useSettings } from "@core/shell";
 import { hourMinutes, hourWords } from "./bits";
@@ -26,6 +26,13 @@ export function MusterSettings() {
           hint="The first time you open Traverse each day, it starts on Muster. Off: it opens at Home."
           checked={get<boolean>("muster.open_first") !== false}
           onChange={(v) => void save({ "muster.open_first": v })}
+        />
+        <SwitchRow
+          icon={<SparkleIcon size={16} />}
+          label="AI in Muster"
+          hint="The AI in Settings → AI sums up what moved when you first open Muster each day, and suggests a plan when you ask, sending it today’s meeting times and titles. Off: Muster asks no AI."
+          checked={get<boolean>("muster.ai") !== false}
+          onChange={(v) => void save({ "muster.ai": v })}
         />
         <ControlRow icon={<ClockIcon size={16} />} label="Working hours" hint="What “Plan the day” measures your picks against." wrap>
           <div className="flex items-center gap-2">
