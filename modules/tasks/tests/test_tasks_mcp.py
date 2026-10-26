@@ -59,7 +59,7 @@ def test_find_by_words_and_by_project_name(client):
 def test_add_a_task_in_a_project_for_you_or_someone(client):
     settings.update({"core.your_name": "Dale Morgan"})
     try:
-        acme = projects.create("Acme launch")
+        projects.create("Acme launch")
         added = call("add", text="  Send   the deck ", project="Acme", due_on="2026-10-22", priority="high",
                      assignee="me", notes="With the **new** pricing")
         task = added["added"]
