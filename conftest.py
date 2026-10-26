@@ -80,7 +80,7 @@ def fake_ai(monkeypatch):
         prompts: list[str] = []
         tokens = (1200, 300)
 
-        def __call__(self, prompt, system=None, choice="auto"):
+        def __call__(self, prompt, system=None, choice="auto", purpose=None):
             self.prompts.append(prompt)
 
             def answer(pid, meter):
@@ -106,7 +106,7 @@ def fake_structured(monkeypatch):
         def __init__(self):
             self.calls: list[dict] = []
 
-        def __call__(self, prompt, system, schema, choice="auto", max_tokens=None):
+        def __call__(self, prompt, system, schema, choice="auto", max_tokens=None, purpose=None):
             self.calls.append({"prompt": prompt, "system": system, "schema": schema, "choice": choice})
 
             def answer(pid, meter):
