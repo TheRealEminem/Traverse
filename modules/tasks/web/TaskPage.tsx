@@ -2,14 +2,15 @@
 // Every field saves as you leave it.
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { LinkedList } from "@core/components/blocks";
+import { LinkedList, PersonPicker } from "@core/components/blocks";
+import type { PersonChoice } from "@core/api";
 import { BackIcon, ChatIcon, SparkleIcon, TrashIcon } from "@core/components/icons";
 import { ControlRow, Segmented, Select, Skeleton, StatusChip, useConfirm } from "@core/components/ui";
 import { formatDate, relativeTime } from "@core/format";
 import { useLive } from "@core/live";
 import type { RouteProps } from "@core/registry";
 import { navigate } from "@core/router";
-import { useShell } from "@core/shell";
+import { useSettings, useShell } from "@core/shell";
 import { tasksApi } from "./api";
 import type { Status, Task, TaskDetail } from "./api";
 import { formatMinutes, parseMinutes } from "./dates";
@@ -30,9 +31,23 @@ function Block({ title, children, action }: { title: string; children: ReactNode
   );
 }
 
+/** A stored ref and name as the picker shows them: you by your name (or "You"), someone else by theirs. */
+export function personChoice(ref: string | null, name: string | null, yourName: string): PersonChoice | null {
+  if (ref === "core:me") return { ref, name: yourName || "You" };
+  if (ref || name) return { ref, name: name || "Someone" };
+  return null;
+}
+
+/** What the picker chose, as the task's fields: your own name isn't stored (you're "core:me" wherever you're named). */
+function assigneeFields(who: PersonChoice | null): Partial<Task> {
+  if (!who) return { assignee_ref: null, assignee_name: null };
+  return { assignee_ref: who.ref, assignee_name: who.ref === "core:me" ? null : who.name };
+}
+
 export default function TaskPage({ params }: RouteProps) {
   const id = params.id;
   const { toast } = useShell();
+  const yourName = (useSettings().get<string>("core.your_name") ?? "").trim();
   const [confirm, dialog] = useConfirm();
   const { data: task, reload, error } = useLive<TaskDetail>(() => tasksApi.get(id), [id]);
   const { data: meta } = useLive(tasksApi.meta);
@@ -167,13 +182,14 @@ export default function TaskPage({ params }: RouteProps) {
             />
           </ControlRow>
         )}
-        <ControlRow label="Assignee" hint="Empty: it's yours. A name: it's theirs, and shows under Waiting on others.">
-          <Field
+        <ControlRow label="Assignee" hint="No one named: it's yours. Someone else: it's theirs, and shows under Waiting on others.">
+          <PersonPicker
             label="Assignee"
             className="w-full sm:w-56"
             placeholder="You"
-            value={task.assignee_ref === "core:me" ? "" : task.assignee_name ?? ""}
-            onSave={(v) => void save({ assignee_ref: null, assignee_name: v.trim() || null })}
+            noneLabel="No one named (yours)"
+            value={personChoice(task.assignee_ref, task.assignee_name, yourName)}
+            onChange={(who) => void save(assigneeFields(who))}
           />
         </ControlRow>
         <ControlRow label="Due">

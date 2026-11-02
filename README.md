@@ -9,7 +9,7 @@ briefing (Muster), and an inbox where AI turns meetings and threads into tasks y
 Traverse is a [Trailmix-family](TRAILMIX.md) app, a sibling of [Trailmix](https://github.com/TheRealEminem/trailmix) and
 [The Lodge](https://github.com/TheRealEminem/TheLodge): the same host (server, database, settings, jobs, AI providers, the
 web shell and the Mac app) with its own modules (`muster`, `tasks`, `plane`, `inbox`). Read **[ARCHITECTURE.md](ARCHITECTURE.md)**
-for how it fits together, **[DESIGN.md](DESIGN.md)** for how it looks, and **[PLAN.md](PLAN.md)** for what's built and what's next.
+for how it fits together and **[DESIGN.md](DESIGN.md)** for how it looks.
 
 ## Try it from source
 
