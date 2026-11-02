@@ -9,6 +9,9 @@ A day's picks are a JSON list in your order. A pick is
     done       ticked here (it also shows done when its own module says so: describe's "done")
     first_day  the day it was first picked, so a pick carried over says how long it's been around
     rolled_to  on the day it left: the day it was carried to; let_go: wrapped up without it, and not carried
+
+The AI's part of a day (chunk 15b): the morning summary and who wrote it (summary.py), and the suggested plan (plan,
+JSON; suggest.py).
 """
 import json
 import re
@@ -34,18 +37,31 @@ MIGRATIONS = [
         updated_at     TEXT NOT NULL
     );
     """,
+    # 15b: the morning summary's moment and how much it covered, and the suggested plan.
+    """
+    ALTER TABLE muster_days ADD COLUMN summary_at TEXT;          -- when the summary was written
+    ALTER TABLE muster_days ADD COLUMN summary_moved INTEGER;    -- …and how many lines of "what moved" it covered
+    ALTER TABLE muster_days ADD COLUMN plan TEXT;                -- JSON: the suggested plan (suggest.py), or NULL
+    """,
 ]
 
+MAX_MINUTES = 24 * 60
 _REF = re.compile(r"^[a-z][a-z0-9_-]*:[A-Za-z0-9_.-]+$")
 COLUMNS = ("picks", "intention", "tomorrow_note", "since", "opened_at", "seen_at", "kicked_off_at", "wrapped_up_at",
-           "summary", "summary_by")
+           "summary", "summary_by", "summary_at", "summary_moved", "plan")
+JSON_COLUMNS = ("plan",)
+
+
+def _read(found: dict) -> dict:
+    found["picks"] = json.loads(found["picks"])
+    for col in JSON_COLUMNS:
+        found[col] = json.loads(found[col]) if found.get(col) else None
+    return found
 
 
 def row(day: str) -> dict | None:
     found = db.one("SELECT * FROM muster_days WHERE day = ?", (day,))
-    if found:
-        found["picks"] = json.loads(found["picks"])
-    return found
+    return _read(found) if found else None
 
 
 def make(day: str) -> dict:
@@ -62,6 +78,9 @@ def save(day: str, conn=None, **cols) -> None:
         raise ValueError(f"Can't change {', '.join(sorted(unknown))}")
     if "picks" in cols:
         cols["picks"] = json.dumps(cols["picks"])
+    for col in JSON_COLUMNS:
+        if col in cols and cols[col] is not None:
+            cols[col] = json.dumps(cols[col])
     cols["updated_at"] = db.now()
     sql = f"UPDATE muster_days SET {', '.join(f'{k} = ?' for k in cols)} WHERE day = ?"
     if conn is not None:
@@ -72,10 +91,17 @@ def save(day: str, conn=None, **cols) -> None:
 
 def earlier(day: str, limit: int = 60) -> list[dict]:
     """The days before `day` that have a row, newest first."""
-    found = db.query("SELECT * FROM muster_days WHERE day < ? ORDER BY day DESC LIMIT ?", (day, limit))
-    for r in found:
-        r["picks"] = json.loads(r["picks"])
-    return found
+    return [_read(r) for r in db.query("SELECT * FROM muster_days WHERE day < ? ORDER BY day DESC LIMIT ?", (day, limit))]
+
+
+
+def minutes(value) -> int | None:
+    """An estimate: a whole number of minutes up to a day's worth, or None."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_MINUTES:
+        raise ValueError("Minutes are a whole number, up to a day's worth")
+    return value
 
 
 def is_ref(value) -> bool:
@@ -88,7 +114,7 @@ def describe(row_id: str) -> dict | None:
 
 
 def export() -> dict:
-    return {"days": [{**r, "picks": json.loads(r["picks"])} for r in db.query("SELECT * FROM muster_days ORDER BY day")]}
+    return {"days": [_read(r) for r in db.query("SELECT * FROM muster_days ORDER BY day")]}
 
 
 def count(conn) -> dict:

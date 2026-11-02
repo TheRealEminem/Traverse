@@ -1,11 +1,11 @@
 """The muster API, mounted at /api/muster. Errors are a sentence a person can read: 400 for a value that isn't right,
-404 for a pick that isn't in the day's plan."""
+404 for a pick (or a suggestion) that isn't in the day's plan."""
 from contextlib import contextmanager
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from . import days
+from . import days, suggest
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ def answers():
     try:
         yield
     except KeyError as e:
-        raise HTTPException(404, "That pick isn't in the day's plan.") from e
+        raise HTTPException(404, "That isn't in the day's plan any more.") from e
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 
@@ -52,6 +52,11 @@ class MoveIn(BaseModel):
 class WrapUpIn(BaseModel):
     let_go: list[str] = []
     note: str | None = None
+
+
+class ProposalPatch(BaseModel):
+    state: str | None = None
+    minutes: int | None = None
 
 
 @router.get("/start")
@@ -122,3 +127,49 @@ def move_pick(day: str, pick_id: str, body: MoveIn):
 def remove_pick(day: str, pick_id: str):
     with answers():
         days.remove_pick(_day(day), pick_id)
+
+
+# ── The AI's part (chunk 15b) ─────────────────────────────────────────
+
+@router.post("/days/{day}/summary", status_code=202)
+def write_summary(day: str):
+    """Writes the morning summary again, in a job."""
+    with answers():
+        return days.write_summary(_day(day))
+
+
+@router.post("/days/{day}/plan", status_code=202)
+def suggest_plan(day: str):
+    """"Suggest a plan": the AI's suggestion for the day, in a job, fitted around the day's meetings."""
+    with answers():
+        return days.suggest_plan(_day(day))
+
+
+@router.delete("/days/{day}/plan", status_code=204)
+def discard_plan(day: str):
+    suggest.discard(_day(day))
+
+
+@router.post("/days/{day}/plan/accept")
+def accept_plan(day: str):
+    """Every suggestion still waiting, into the day's plan."""
+    with answers():
+        return {"accepted": suggest.accept_all(_day(day))}
+
+
+@router.post("/days/{day}/plan/{proposal_id}/accept")
+def accept_proposal(day: str, proposal_id: str):
+    with answers():
+        return suggest.accept(_day(day), proposal_id)
+
+
+@router.patch("/days/{day}/plan/{proposal_id}")
+def patch_proposal(day: str, proposal_id: str, body: ProposalPatch):
+    with answers():
+        return suggest.change(_day(day), proposal_id, body.model_dump(exclude_unset=True))
+
+
+@router.post("/days/{day}/plan/{proposal_id}/move")
+def move_proposal(day: str, proposal_id: str, body: MoveIn):
+    with answers():
+        return suggest.move(_day(day), proposal_id, body.after)
