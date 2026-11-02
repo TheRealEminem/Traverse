@@ -59,8 +59,8 @@ def accept(capture_id: str, proposal_ids: list[str]) -> int:
     fresh = [pid for pid in proposal_ids if pid in waiting]
     if not fresh:
         return 0
-    filed_before = {l["title"] for l in links.linked(ref(capture_id))
-                    if l["module"] == "tasks" and l["kind"] == "action-item"}
+    filed_before = {link["title"] for link in links.linked(ref(capture_id))
+                    if link["module"] == "tasks" and link["kind"] == "action-item"}
     for pid in fresh:
         store.update_proposal(pid, status="accepted", decided_at=db.now())
     your_name = settings.section("core")["your_name"].strip()
