@@ -239,10 +239,62 @@ another module's.
 | Let Claude use it | `Module.tools` (`core/server/mcp.py`) | Tools add and propose; they never approve. While one runs, `jobs.go` and `jobs.retry` refuse, and `mcp.calling()` lets your own code refuse too. |
 | Ask another family app | `family.call("people.search", q="ana")` | Its own modules first, then a running family app that offers it. Raises `family.Unavailable` with a sentence for the screen ("Open The Lodge to see this here"). Only from server code, and never as a substitute for events between modules in one app. |
 
-Backups (`core/server/backup.py`) are the host's: a daily SQLite online backup in `<data folder>/backups/` (kept 14),
-"Back up now", and restore, which makes a backup of what it replaces, copies the chosen one over the live database,
-brings an older one up to date with the current migrations and publishes `core.restored` (a module that caches
-anything built from its tables listens and drops it; the CRM does).
+Backups (`core/server/backup.py`) are the host's: SQLite online backups in `<data folder>/backups/` that **roll over**
+(below), "Back up now", and restore, which makes a backup of what it replaces, copies the chosen one over the live
+database, brings an older one up to date with the current migrations and publishes `core.restored` (a module that
+caches anything built from its tables listens and drops it; the CRM does).
+
+**Backups roll over; they are never a list that grows.** They exist so a person can undo a bad hour, a bad day or a bad
+week, and so an update or a restore can itself be undone. They are not an archive. (The bug this spec answers, seen in
+The Lodge on 2026-10-24 and in Traverse on 2026-10-23: 15 copies across four days in Settings, each kind capped on its
+own so the folder never settled, and three copies made in one minute by the install script, the daily job and the
+pre-update safety copy.)
+
+1. **One rolling rule for every backup,** whoever asked for it. The kind (`auto`, `manual`, `before-update`,
+   `before-restore`) is a label, plus the protections in 5 to 7.
+2. **Taken every hour while the app is open, if the data changed** since the newest backup: a fingerprint of every
+   row of every table (bookkeeping such as `core_jobs`, which the backup job itself writes, aside) is kept with each copy
+   and compared. A quiet app makes none. There is no "once a day, skipped if one is recent" rule: the hourly copy is what
+   makes "an hour ago" real.
+3. **Never twice for the same data.** Back up now, a copy before an update, before a restore, or the install script's
+   request, when nothing has changed since the newest backup, does not copy again: it adds its kind to the existing copy
+   and returns it. (The kind it was made as is in the file's name; kinds added later, when each was added, its
+   fingerprint and what it holds go in a sidecar, `<name>.json`, so a copy can be both "automatic" and "before an
+   update".)
+4. **The rolling set thins out like Time Machine's:** the newest copy in each of the last **3 hours**, **9 days** and
+   **4 weeks** (Monday to Sunday) that have one stays, counted on this Mac's clock; a period with no copy doesn't use up
+   a place, so a week the app wasn't opened costs nothing. One file can fill a place in all three (a fresh install has
+   one file). 3 hours always hold a copy at least an hour old, and 9 days one at least 7 days old (8 would only promise
+   6). Recompute after every backup and every hour, and delete every copy that has no place and no protection below.
+   (Keeping only the copies that are *now* the newest at least an hour, a day or a week old does not work: every hourly
+   copy is gone at two hours old, so nothing ever becomes a day old.) The four **restore choices** are picked from what
+   stays (below).
+5. **Made by you** (Back up now): the newest 3 are also kept for 24 hours whatever 4 says, so "back up, do something
+   risky, put it back" always works within a day; after that they fall under 4 like the rest.
+6. **Before an update:** the newest 2 are kept (named for the versions they sit between). The updater's Go back and a
+   failed migration rely on one. Roll-over never deletes them, and they are not one of the simple menu's choices.
+7. **Before a restore:** the newest 1 is kept for 7 days, so a restore can be undone.
+8. **Bound:** the rotation holds at most 3 + 9 + 4 − 2 = 14 files (the newest fills a place in all three), so at most
+   14 + 3 + 2 + 1 = 20 files at any moment; typically 12 to 14 for an app used every day, far fewer for a quiet one. If
+   `backups/` passes 2 GB (a very large book), copies go, oldest first, until it fits: the 24-hour pins, then the
+   rotation's copies that aren't a restore choice, then the older pre-update copy and the pre-restore copy. The four
+   restore choices and the newest pre-update copy never do.
+
+The API tells the page what each file is for, so the page never re-derives the rule: `GET /api/backups` returns
+`{"items": [{name, kind, kinds, created_at, bytes, counts, slots, update?}], "slots": {"latest": name, "hour": name |
+null, "day": name | null, "week": name | null}, "folder": path}`. The choices, picked from the copies that stay, are the
+newest, the newest at least 1 hour old, the newest from before today's midnight (on this Mac's clock), and the newest at
+least 7 days old. A file's `slots` lists the choices it fills, `kind` is its main label and `kinds` all of them, and
+`update` ("0.2.5 → 0.2.6") is on a copy from before an update. Tests (each app keeps the host's, in
+`core/tests/test_backup.py`) run on a fake clock: each choice, one file filling several, the newest of each hour, day and
+week staying and the rest going, 60 days of hourly copies staying within 14 files with "an hour ago", "yesterday" and
+"last week" always there, the same data not copied twice, a quiet app making none, the 24-hour pin, the pre-update
+copies and the newest pre-restore copy surviving, the size ceiling.
+
+Settings, Your data shows this simply (`DESIGN.md` §7): **Back up now**, and up to four restore choices, "A few minutes
+ago", "An hour ago", "Yesterday", "Last week", each with its real date and time and what it holds ("129 people"), and
+Restore. Under a collapsed **Advanced**: every file on disk (when, kind, size, what it holds, Restore, Delete), the
+folder and Show in Finder, the rule in one sentence, and the JSON export. Advanced is closed on every visit.
 
 ## 8. How modules work together: a walkthrough
 
