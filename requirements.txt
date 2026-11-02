@@ -1,5 +1,6 @@
-# The server: enough for the Mac app and for a Linux server / Docker install.
-fastapi>=0.115
-uvicorn[standard]>=0.30
-httpx>=0.27
-anthropic>=1.0
+# The server: enough for the Mac app and for a Linux server / Docker install. Pinned, so a build on any day installs
+# the versions the tests ran against; move them on purpose (bump, run scripts/check, build the app).
+fastapi==0.146.0
+uvicorn[standard]==0.54.0
+httpx==0.28.1
+anthropic==1.15.0
