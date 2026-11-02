@@ -16,18 +16,21 @@ refused, ran out of output, or answered in the wrong shape) is about this text o
 """
 import os
 import re
+import threading
 import time
 from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel
 
-from . import lockdown, module, pricing, settings
+from . import lockdown, module, pricing, resources, settings
 
 OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "0")  # "0" = unload right after the last call
 TIMEOUT = httpx.Timeout(600, connect=8)
 MAX_TOKENS = 16000
 OLLAMA_NUM_CTX = 16384
+OLLAMA_NUM_PREDICT = 4096         # a local model that never stops writing costs a few minutes, not half an hour
+OLLAMA_TIMEOUT = httpx.Timeout(900, connect=8)
 
 PROVIDERS = {
     "ollama": {"label": "Ollama", "kind": "local"},
@@ -43,6 +46,9 @@ _CLAUDE_FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1
 DEFAULTS = {
     "provider": "ollama",
     "fallback": "none",
+    "warn_over": 1,              # dollars: a job estimated to cost this much or more asks first (0 = never ask)
+    "path": "",                  # where AI runs, from setup: "" (not chosen), "local", "mixed" or "cloud"
+    "heavy_provider": "auto",    # for the jobs modules call heavy (reading a long document): "auto" = the same as provider
     "ollama_url": os.getenv("OLLAMA_URL", "http://localhost:11434"),
     "ollama_model": os.getenv("OLLAMA_MODEL", ""),  # empty = the best installed one
     "anthropic_model": "claude-opus-5-5",
@@ -58,7 +64,9 @@ DEFAULTS = {
     "custom_model": "",
     "custom_api_key": "",
 }
-CHOICES = {"provider": tuple(PROVIDERS), "fallback": ("none", *PROVIDERS)}
+PATHS = ("local", "mixed", "cloud")
+CHOICES = {"provider": tuple(PROVIDERS), "fallback": ("none", *PROVIDERS), "path": ("", *PATHS),
+           "heavy_provider": ("auto", *PROVIDERS)}
 ENV = {"anthropic_api_key": "ANTHROPIC_API_KEY", "openai_api_key": "OPENAI_API_KEY",
        "gemini_api_key": "GEMINI_API_KEY", "deepseek_api_key": "DEEPSEEK_API_KEY"}
 
@@ -85,22 +93,55 @@ LOCKED_OUT = f"{lockdown.REASON}, so only AI on this Mac is used"
 
 # ── For modules ────────────────────────────────────────────────────────
 
-def complete(prompt: str, system: str | None = None, choice: str = "auto") -> tuple[str, str]:
-    """(text, provider id). Tries your provider, then your fallback. Raises AIError with every reason."""
+def complete(prompt: str, system: str | None = None, choice: str = "auto", purpose: str | None = None) -> tuple[str, str]:
+    """(text, provider id). Tries your provider, then your fallback. Raises AIError with every reason.
+    purpose: what this is for in a few words, so Settings → AI → Usage can say where the spending went."""
     cfg = settings.section("ai")
-    return run_chain(choice, cfg, "complete", lambda pid, meter: generate(pid, cfg, prompt, system, meter=meter))
+    with pricing.purpose(purpose):
+        return run_chain(choice, cfg, "complete", lambda pid, meter: generate(pid, cfg, prompt, system, meter=meter))
 
 
 def structured(prompt: str, system: str | None, schema: type[BaseModel], choice: str = "auto",
-               max_tokens: int | None = None) -> tuple[BaseModel, str]:
+               max_tokens: int | None = None, purpose: str | None = None) -> tuple[BaseModel, str]:
     """(an instance of schema, provider id). The reply is constrained to the schema where the provider can do
     that, and checked either way. Optional fields may come back as None. max_tokens: the output budget
-    (default 32000 for Claude, 16000 elsewhere). Raises AIError; check .provider_down."""
+    (default 32000 for Claude, 16000 elsewhere). purpose: as for complete(). Raises AIError; check .provider_down."""
     from . import ai_adapters
 
     cfg = settings.section("ai")
-    return run_chain(choice, cfg, "structured",
-                     lambda pid, meter: ai_adapters.generate_structured(pid, cfg, prompt, system, schema, max_tokens, meter))
+    with pricing.purpose(purpose):
+        return run_chain(choice, cfg, "structured",
+                         lambda pid, meter: ai_adapters.generate_structured(pid, cfg, prompt, system, schema, max_tokens, meter))
+
+
+def resolve(choice: str, weight: str = "light") -> str:
+    """What "auto" means for a job of this weight. Light jobs follow the app-wide provider. A heavy job follows it too,
+    unless setup put heavy jobs on a cloud AI ("mixed"): then that one. Anything else is returned as it is."""
+    if choice == "auto" and weight == "heavy":
+        heavy = settings.section("ai")["heavy_provider"]
+        if heavy != "auto":
+            return heavy
+    return choice
+
+
+def apply_path(path: str, cloud: str = "") -> None:
+    """Setup's choice. local: everything on Ollama. mixed: light jobs on Ollama, heavy ones on `cloud`. cloud: everything
+    on `cloud`. The cloud provider needs its key (saved separately); Lockdown is off for the last two, since they
+    leave this computer."""
+    if path not in PATHS:
+        raise ValueError("Choose local, mixed or cloud")
+    if path != "local" and (cloud not in PROVIDERS or PROVIDERS[cloud]["kind"] == "local"):
+        raise ValueError("Choose which cloud AI to use")
+    changes: dict = {"ai.path": path, "ai.fallback": "none"}
+    if path == "local":
+        changes.update({"ai.provider": "ollama", "ai.heavy_provider": "auto"})
+    elif path == "mixed":
+        changes.update({"ai.provider": "ollama", "ai.heavy_provider": cloud})
+    else:
+        changes.update({"ai.provider": cloud, "ai.heavy_provider": "auto"})
+    if path != "local":
+        changes[lockdown.KEY] = False
+    settings.update(changes)
 
 
 def describe(choice: str = "auto") -> dict:
@@ -174,9 +215,11 @@ def require(pid: str, cfg: dict) -> None:
 
 
 def model_for(pid: str, cfg: dict) -> str:
+    """The model a provider uses. An empty setting (a cleared field in Settings) means the default, never a
+    request for a model named "" (Gemini answers that with a 404)."""
     if pid == "ollama":
         return cfg["ollama_model"] or preferred_ollama_model(_ollama_tags(cfg))
-    return cfg[f"{pid}_model"]
+    return (cfg.get(f"{pid}_model") or "").strip() or DEFAULTS.get(f"{pid}_model", "")
 
 
 _PREFERRED_FAMILIES = ("qwen3", "qwen2.5", "gemma3", "llama3.1", "llama3.2", "mistral", "phi4", "llama3")
@@ -254,16 +297,17 @@ def generate(pid: str, cfg: dict, prompt: str, system: str | None = None, keep_a
     meter = meter or pricing.Meter(pid)
     require(pid, cfg)
     if pid == "ollama":
+        wait_for_memory(cfg)
         text = _ollama(cfg, prompt, system, keep_alive or OLLAMA_KEEP_ALIVE, meter)
     elif pid == "anthropic":
         text = _anthropic(cfg, prompt, system, meter)
     elif pid == "gemini":
         text = _gemini(cfg, prompt, system, meter)
     elif pid == "custom":
-        text = _openai_compatible(cfg["custom_base_url"], cfg["custom_api_key"], cfg["custom_model"], prompt, system, pid,
+        text = _openai_compatible(cfg["custom_base_url"], cfg["custom_api_key"], model_for(pid, cfg), prompt, system, pid,
                                   meter)
     else:
-        text = _openai_compatible(PROVIDERS[pid]["base"], cfg[f"{pid}_api_key"], cfg[f"{pid}_model"], prompt, system, pid,
+        text = _openai_compatible(PROVIDERS[pid]["base"], cfg[f"{pid}_api_key"], model_for(pid, cfg), prompt, system, pid,
                                   meter)
     text = text.strip()
     if not text:
@@ -271,13 +315,71 @@ def generate(pid: str, cfg: dict, prompt: str, system: str | None = None, keep_a
     return text
 
 
-def _ollama_tags(cfg: dict) -> list[dict]:
+TAGS_SECONDS = 10           # how long one answer from Ollama's model list stands in for the next
+_tags: dict[str, tuple[float, list[dict]]] = {}   # Ollama address -> (when asked, its models); a miss is kept too
+_tags_lock = threading.Lock()
+
+
+def _ollama_tags(cfg: dict, fresh: bool = False) -> list[dict]:
+    """Ollama's installed models. Asked for by every readiness check, which the web app makes on every change it
+    hears of, so one answer (or one failure to answer, which can take the whole timeout when the address is a machine
+    that's off) stands for TAGS_SECONDS. fresh: ask now whatever was kept (a button someone just pressed)."""
+    url = cfg["ollama_url"]
+    now = time.monotonic()
+    with _tags_lock:
+        kept = _tags.get(url)
+        if kept and not fresh and now - kept[0] < TAGS_SECONDS:
+            return kept[1]
     try:
-        r = httpx.get(f"{cfg['ollama_url']}/api/tags", timeout=2)
+        r = httpx.get(f"{url}/api/tags", timeout=2)
         r.raise_for_status()
-        return r.json().get("models", [])
+        models = r.json().get("models", [])
     except (httpx.HTTPError, ValueError):
-        return []
+        models = []
+    with _tags_lock:
+        _tags[url] = (now, models)
+    return models
+
+
+def ollama_size_gb(cfg: dict, model: str) -> float:
+    """What a model weighs on disk, which is close to what it takes in memory (0 if Ollama doesn't list it)."""
+    for m in _ollama_tags(cfg):
+        if m["name"] == model:
+            return float(m.get("size") or 0) / resources.GB
+    return 0.0
+
+
+def _ollama_loaded(cfg: dict, model: str) -> bool:
+    """Is the model already in memory (Ollama keeps one for a few minutes after a call)? Then it costs nothing more."""
+    try:
+        r = httpx.get(f"{cfg['ollama_url']}/api/ps", timeout=2)
+        r.raise_for_status()
+        return any(m.get("name") == model or m.get("model") == model for m in r.json().get("models", []))
+    except (httpx.HTTPError, ValueError):
+        return False
+
+
+def memory_reason(cfg: dict) -> str | None:
+    """Why the local model can't be started now, or None. Only a model on this Mac needs room; another machine's does not."""
+    if not is_local("ollama", cfg):
+        return None
+    model = model_for("ollama", cfg)
+    size = ollama_size_gb(cfg, model) if model else 0.0
+    if not size or _ollama_loaded(cfg, model):
+        return None
+    return resources.check(size * 1.15 + 0.5, f"The model {model}")    # the weights, plus its working memory
+
+
+def wait_for_memory(cfg: dict) -> None:
+    """Raises a provider-down AIError (so jobs park, saying why) when this Mac hasn't room for the local model."""
+    why = memory_reason(cfg)
+    if why:
+        raise AIError(why, provider_down=True)
+
+
+def memory_ready() -> bool:
+    """For the scheduler: is there room for the local model now? (Also true when no local model is set up.)"""
+    return memory_reason(settings.section("ai")) is None
 
 
 def _ollama(cfg: dict, prompt: str, system: str | None, keep_alive: str, meter: pricing.Meter) -> str:
@@ -285,10 +387,10 @@ def _ollama(cfg: dict, prompt: str, system: str | None, keep_alive: str, meter: 
     if not model:
         raise AIError(f"Ollama isn't reachable at {cfg['ollama_url']} (or has no models installed)", provider_down=True)
     body = {"model": model, "prompt": prompt, "stream": False, "keep_alive": keep_alive,
-            "options": {"num_ctx": OLLAMA_NUM_CTX, "temperature": 0.2}}
+            "options": {"num_ctx": OLLAMA_NUM_CTX, "num_predict": OLLAMA_NUM_PREDICT, "temperature": 0.2}}
     if system:
         body["system"] = system
-    data = _post(f"{cfg['ollama_url']}/api/generate", json=body).json()
+    data = _post(f"{cfg['ollama_url']}/api/generate", json=body, timeout=OLLAMA_TIMEOUT).json()
     ollama_usage(data, meter)
     return data.get("response") or ""
 
@@ -328,9 +430,9 @@ def claude_usage(message, meter: pricing.Meter) -> None:
         meter.add(None if inp is None else inp + cached + written, _n(getattr(it, "output_tokens", None)), cached, model=ran)
 
 
-def _post(url: str, **kw) -> httpx.Response:
+def _post(url: str, timeout: httpx.Timeout = TIMEOUT, **kw) -> httpx.Response:
     try:
-        r = httpx.post(url, timeout=TIMEOUT, **kw)
+        r = httpx.post(url, timeout=timeout, **kw)
     except httpx.HTTPError as e:
         raise AIError(f"Couldn't reach {urlparse(url).netloc}: {e}", provider_down=True) from e
     if r.status_code >= 400:
@@ -378,7 +480,7 @@ def _anthropic(cfg: dict, prompt: str, system: str | None, meter: pricing.Meter)
     import anthropic
 
     client = anthropic.Anthropic(api_key=cfg["anthropic_api_key"], timeout=600, max_retries=2)
-    model = meter.model = cfg["anthropic_model"]
+    model = meter.model = model_for("anthropic", cfg)
     params = {"model": model, "max_tokens": MAX_TOKENS, "messages": [{"role": "user", "content": prompt}]}
     if system:
         params["system"] = system
@@ -420,7 +522,8 @@ def _gemini(cfg: dict, prompt: str, system: str | None, meter: pricing.Meter) ->
     body: dict = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
     if system:
         body["systemInstruction"] = {"parts": [{"text": system}]}
-    r = _post(f"https://generativelanguage.googleapis.com/v1beta/models/{cfg['gemini_model']}:generateContent",
+    model = model_for("gemini", cfg)
+    r = _post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
               json=body, headers={"x-goog-api-key": cfg["gemini_api_key"]})
     try:
         data = r.json()
@@ -457,7 +560,7 @@ def list_models(pid: str) -> list[str]:
     if locked_out(pid, cfg):
         raise Locked(LOCKED_OUT, provider_down=True)
     if pid == "ollama":
-        tags = _ollama_tags(cfg)
+        tags = _ollama_tags(cfg, fresh=True)
         if not tags:
             raise AIError(f"Ollama isn't reachable at {cfg['ollama_url']}", provider_down=True)
         return [m["name"] for m in tags if "embed" not in m["name"].lower()]

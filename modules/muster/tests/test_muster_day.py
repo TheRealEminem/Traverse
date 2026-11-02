@@ -7,7 +7,6 @@ from datetime import timedelta
 import pytest
 
 from core.server import config, db, jobs
-from modules.muster.server import days
 from modules.muster.tests.conftest import TODAY
 from modules.tasks.server import items
 
@@ -53,8 +52,8 @@ def test_the_next_morning(client, clock, fake_plane):
         assert client.get("/api/muster/start").json() == {"path": "muster"}
         view = client.post(f"/api/muster/days/{TODAY}/open").json()
         moved = {e["title"].split(" ")[0]: e["what"] for e in _section(view, "moved", "plane")}
-        assert moved["SOFTWARE-5"] == "Todo → In Progress · by Alex Rivera"
-        assert moved["BD-14"] == "Now with Sam (was you) · by Sam"
+        assert moved["SOFTWARE-5"] == "Todo → In Progress"              # Alex has it: the line says so, not "by Alex" too
+        assert moved["BD-14"] == "Now with Sam (was you)"
         assert ("Send the grant letter", "Due today") in [(e["title"], e["what"]) for e in _section(view, "today", "tasks")]
         assert _section(view, "today", "plane")                     # the team's past-due items
         assert [p["title"] for p in view["picks"]] == ["Draft the deck", "SOFTWARE-4 Populate the demo site with data"]

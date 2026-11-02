@@ -40,6 +40,8 @@ export interface ModuleWeb {
    * working without it, as it doesn't run in a server install nobody has open.
    */
   background?: ComponentType;
+  /** One screen of the first run, after the host's own ("Bring your people in"). Call next() to go on; it can be skipped. */
+  setupStep?: { title: string; view: ComponentType<{ next: () => void }> };
 }
 
 const found = import.meta.glob<{ default: ModuleWeb }>("../../modules/*/web/index.tsx", { eager: true });

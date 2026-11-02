@@ -39,6 +39,7 @@ class Module:
     people: Callable[[str, int], list[dict]] | None = None         # (q, limit) -> [{id, name, email?, detail?, is_self?}]: its part of the people directory (people.py)
     tools: list = field(default_factory=list)                      # [mcp.Tool]: what Claude may do here, through the host's MCP server (mcp.py)
     brief: Callable[[str, date], dict] | None = None               # (since, today) -> {"today"|"waiting"|"moved"|"ahead": [entries]}: its part of the day's briefing (briefing.py)
+    ai_jobs: dict[str, dict] = field(default_factory=dict)         # job -> {"label", "hint", "weight": "light" | "heavy", "choice": () -> "auto" | provider | "rules"}: the AI work it does, so setup can place it (setup.py)
     startup: Callable[[], None] | None = None
 
 
