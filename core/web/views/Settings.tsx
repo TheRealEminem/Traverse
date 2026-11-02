@@ -2,9 +2,11 @@
 // then your data and the app.
 import { useEffect, useState } from "react";
 import { api, inApp, quitApp, sendUpdates } from "../api";
-import type { FamilyStatus, ProviderId, ProviderInfo, UpdateReport } from "../api";
+import type { FamilyStatus, ProviderId, ProviderInfo, SystemInfo, UpdateReport } from "../api";
 import { Section, SecretSetting, TextSetting } from "../components/blocks";
-import { CheckIcon, AlertIcon, BackIcon, DownloadIcon, MonitorIcon, MoonIcon, NetworkIcon, PowerIcon, RefreshIcon, SparkleIcon, SunIcon, UsersIcon, LeafIcon } from "../components/icons";
+import { ChooseAi } from "../components/ChooseAi";
+import { OllamaSetup } from "../components/OllamaSetup";
+import { CheckIcon, AlertIcon, BackIcon, DownloadIcon, LaptopIcon, MonitorIcon, MoonIcon, NetworkIcon, PowerIcon, RefreshIcon, SparkleIcon, SunIcon, UsersIcon, LeafIcon } from "../components/icons";
 import { ControlRow, PageHeader, Segmented, Select, Spinner, StatusChip, SwitchRow } from "../components/ui";
 import { useLive } from "../live";
 import { modulesFor } from "../registry";
@@ -89,6 +91,45 @@ function ProviderFields({ id, values, hints, save }: { id: ProviderId; values: R
         )}
       </div>
     </>
+  );
+}
+
+/** "Apple M4 · 16 GB memory · 20 GB free", for setup and Settings. */
+export function macLine(info: SystemInfo): string {
+  const a = info.advice;
+  return [a.chip, `${a.ram_gb} GB memory`, `${a.disk_free_gb} GB free`].filter(Boolean).join(" · ");
+}
+
+/** What this Mac can do, and getting a model onto it. */
+function OnThisMac() {
+  const { data: info } = useLive<SystemInfo>(api.system);
+  return (
+    <Section
+      icon={<LaptopIcon size={16} />}
+      title="On this Mac"
+      blurb="A model that runs here is free and private: nothing you write is sent anywhere."
+      delay={30}
+    >
+      {info && (
+        <div className="py-3.5">
+          <div className="text-label font-medium">{macLine(info)}</div>
+          {info.advice.notes.map((n) => <p key={n} className="mt-1 text-hint text-ink-soft">{n}</p>)}
+        </div>
+      )}
+      <OllamaSetup />
+    </Section>
+  );
+}
+
+/** For an install that was already in use before setup existed: the one question it was never asked. */
+function ChooseWhereAiRuns() {
+  const [open, setOpen] = useState(false);
+  return (
+    <Section icon={<LaptopIcon size={16} />} title="You can now run everything on this Mac" blurb="Choose where AI runs: on this Mac, in the cloud, or a mix. Nothing changes until you choose." delay={20}>
+      {open ? <div className="py-3.5"><ChooseAi onChosen={() => setOpen(false)} skippable={() => setOpen(false)} /></div> : (
+        <div className="py-3.5"><button className="btn btn-sm btn-soft" onClick={() => setOpen(true)}>Choose where AI runs</button></div>
+      )}
+    </Section>
   );
 }
 
@@ -234,7 +275,7 @@ function Updates() {
 }
 
 export default function Settings() {
-  const { app, theme } = useShell();
+  const { app, theme, toast, reopenSetup } = useShell();
   const { values, hints, save } = useSettings();
   const { data: providers } = useLive<ProviderInfo[]>(api.providers);
   const { data: family } = useLive<FamilyStatus>(api.family);
@@ -270,6 +311,10 @@ export default function Settings() {
       </Section>
 
       <Lockdown shared={!!family?.sharing} />
+
+      {!values["ai.path"] && <ChooseWhereAiRuns />}
+
+      <OnThisMac />
 
       <Section
         icon={<SparkleIcon size={16} />}
@@ -312,6 +357,12 @@ export default function Settings() {
       <Updates />
 
       <Section icon={<LeafIcon size={16} />} title={app.name} blurb={`Version ${app.version}`}>
+        <ControlRow label="Setup" hint="The first-run questions again, one at a time. Nothing you have is changed unless you change it.">
+          <button className="btn btn-sm btn-soft" onClick={() => void reopenSetup().catch((e: Error) => toast(e.message, "error"))}>
+            <RefreshIcon size={16} />
+            Run setup again
+          </button>
+        </ControlRow>
         <ControlRow label={`Quit ${app.name}`} hint={inApp ? "Closes the window and the menu bar app." : "Stops the server; open the app again to come back."}>
           <button className="btn btn-sm btn-danger-ghost" onClick={() => (inApp ? quitApp() : void api.shutdown())}>
             <PowerIcon size={16} />

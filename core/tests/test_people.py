@@ -11,7 +11,7 @@ def provider(*rows):
 
 CREW = provider(
     {"id": "c1", "name": "Ana Ruiz", "email": "ana@example.org", "detail": "Crew"},
-    {"id": "c2", "name": "Dale Morgan", "email": "dale@example.org", "is_self": True},
+    {"id": "c2", "name": "Alex Rivera", "email": "sam@example.org", "is_self": True},
     {"id": "c3", "name": "Dana Banana", "email": None},
 )
 GUILD = provider(
@@ -54,10 +54,10 @@ def test_names_that_start_with_the_search_come_first(directory):
 
 
 def test_you_are_core_me_once_first_and_named_from_settings(directory):
-    settings.update({"core.your_name": "Dale"})
+    settings.update({"core.your_name": "Sam"})
     found = people.find("m")
     assert refs(found)[0] == "core:me" and refs(found).count("core:me") == 1
-    assert found["people"][0] == {"ref": "core:me", "name": "Dale", "email": "dale@example.org", "detail": "You",
+    assert found["people"][0] == {"ref": "core:me", "name": "Sam", "email": "sam@example.org", "detail": "You",
                                   "module": "core"}
     assert "crew:c2" not in refs(found) and "guild:g3" not in refs(found)    # never a module's own record of you
 
