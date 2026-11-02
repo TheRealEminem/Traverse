@@ -111,3 +111,21 @@ def watch() -> None:
 def status() -> dict:
     """For the app's chrome, Settings and the Mac app's updater (GET /api/lockdown)."""
     return {"on": on(), "parked": len(parked())}
+
+
+# ── The family's names for the same questions ─────────────────────────
+# Shared code written against the family's lockdown.py (ollama_setup.py, and the other family apps' modules) asks
+# these; here they answer from the same switch.
+
+WHY = SENTENCE
+
+
+def blocked(what: str) -> str | None:
+    """Why `what` can't happen now, in words for a person, or None when it may. For work that is simply switched
+    off while Lockdown is on (a download, a sync started by hand); a job that should wait for it uses check()."""
+    return f"{what} is off while Lockdown is on (Settings → Lockdown)." if on() else None
+
+
+def on_this_computer(url: str) -> bool:
+    """The family's name for local()."""
+    return local(url)

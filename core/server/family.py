@@ -125,7 +125,7 @@ def sharing(local: dict) -> bool:
 
 
 def values() -> dict[str, Any]:
-    """Every shared setting the family holds: {"ai.anthropic_api_key": "…", "core.your_name": "Dale", …}."""
+    """Every shared setting the family holds: {"ai.anthropic_api_key": "…", "core.your_name": "Sam", …}."""
     if not enabled():
         return {}
     with _connect() as conn:

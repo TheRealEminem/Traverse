@@ -102,13 +102,13 @@ def test_what_moved_reads_as_one_line_per_item(fake_plane):
     moved = {e["title"].split(" ")[0]: e for e in briefing.brief(since, TODAY)["moved"]}
     assert set(moved) == {"SOFTWARE-5", "BD-14", "OPERATIONS-2"}
     software = moved["SOFTWARE-5"]
-    assert software["what"] == "Todo → Done · by Alex Rivera"
+    assert software["what"] == "Todo → Done"                        # Alex has it: "who" says so, not "by Alex" too
     assert (software["kind"], software["tone"], software["who"]) == ("done", "forest", "Alex Rivera")
     bd = moved["BD-14"]
     assert (bd["what"], bd["kind"], bd["tone"], bd["who"]) == ("Now with Sam (was you) · by you", "assigned", "neutral",
                                                                "Sam")
     ops = moved["OPERATIONS-2"]
-    assert ops["what"] == "Due Fri 30 Oct (was Sun 11 Oct) · Urgent priority (was Medium) · by Sam"
+    assert ops["what"] == "Due Fri 30 Oct (was Sun 11 Oct) · Urgent priority (was Medium)"
     assert (ops["kind"], ops["project"]) == ("due", "Operations")
     assert ops["url"].endswith("/browse/OPERATIONS-2/")
     assert ops["href"] == f"#/plane/team?item={fake_plane.item('OPERATIONS-2')['id']}"
@@ -117,9 +117,9 @@ def test_what_moved_reads_as_one_line_per_item(fake_plane):
     fake_plane.edit("BD-14", assignees=[ME, SAM], updated_by=SAM)
     _pull()
     back = briefing.brief(later, TODAY)["moved"]
-    assert [(e["what"], e["tone"]) for e in back] == [("Now with you, Sam (was Sam) · by Sam", "sun")]
+    assert [(e["what"], e["tone"]) for e in back] == [("Now with you, Sam (was Sam)", "sun")]
     whole = briefing.brief(since, TODAY)["moved"]              # both edits: from you, to you and Sam
-    assert [e["what"] for e in whole if e["title"].startswith("BD-14")] == ["Now with you, Sam (was you) · by Sam"]
+    assert [e["what"] for e in whole if e["title"].startswith("BD-14")] == ["Now with you, Sam (was you)"]
 
 
 def test_the_briefing_has_the_teams_past_due_cycles_and_the_outbox(fake_plane):

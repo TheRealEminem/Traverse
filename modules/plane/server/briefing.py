@@ -3,8 +3,9 @@ moment, read from the change log (plane_changes); items that went past due meanw
 ending this week; and what waits for you in the Outbox. All of it comes from the mirror and the outbox: nothing here
 talks to Plane.
 
-One entry per item that moved, its changes in one line ("To do → In progress · now with Sam · by Sam"), "who"
-being whoever has it now, so the screen can group what moved by person as well as by project.
+One entry per item that moved, its changes in one line ("To do → In progress · by Sam"), "who" being whoever has it
+now, so the screen can group what moved by person as well as by project. "by Sam" is said only when Sam isn't one of the
+people who have the item now: the line names them already, so it would be the same name twice.
 """
 import json
 from datetime import date, timedelta
@@ -124,7 +125,7 @@ def _moved(since: str, today: date, chosen: list[str], names: _Names, where: Whe
         found.sort(key=lambda p: WEIGHT.index(p[0]) if p[0] in WEIGHT else len(WEIGHT))
         kind = found[0][0]
         words = " · ".join(w for _, w in found)
-        if seen["by"]:
+        if seen["by"] and seen["by"] not in json.loads(item["assignees"] or "[]"):
             words += f" · by {names.person(seen['by'], me='you')}"
         out.append({**_item_entry(item, names, where), "what": words, "kind": kind, "tone": TONE.get(kind, "neutral"),
                     "when": seen["at"]})

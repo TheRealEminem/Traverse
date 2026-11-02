@@ -41,10 +41,10 @@ def test_a_project_and_its_work_arrive_as_a_linked_project_and_task():
 
 def test_untouched_fields_follow_the_other_side():
     item_id = _arrive(project_ref=None)
-    _there(text="Share the repos with Dale", due_on="2026-10-31", assignee_ref="elsewhere:sam", assignee_name="Sam")
+    _there(text="Share the repos with Sam", due_on="2026-10-31", assignee_ref="elsewhere:mick", assignee_name="Mickey")
     task = items.get(item_id)
     assert (task["text"], task["due_on"], task["assignee_ref"], task["assignee_name"]) == \
-        ("Share the repos with Dale", "2026-10-31", "elsewhere:sam", "Sam")
+        ("Share the repos with Sam", "2026-10-31", "elsewhere:mick", "Mickey")
     assert _about(item_id)["conflicts"] == [] and _about(item_id)["edited"] == []
 
 
