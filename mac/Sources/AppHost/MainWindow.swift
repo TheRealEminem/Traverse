@@ -13,6 +13,7 @@ import WebKit
 ///   "updates:<what>"  Settings → Updates: get, check, install, skip, unskip, beta-on, beta-off, go-back, try-again.
 ///                     The window answers each, and every change after, with an "app-updates" event on the page
 ///                     whose detail is Updater.report.
+/// and asks your Mac's Calendar through window.webkit.messageHandlers.calendar, which answers (CalendarBridge.swift).
 @MainActor
 final class MainWindow: NSObject, NSWindowDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     static let shared = MainWindow()
@@ -43,6 +44,7 @@ final class MainWindow: NSObject, NSWindowDelegate, WKUIDelegate, WKNavigationDe
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
         config.applicationNameForUserAgent = "\(AppConfig.name.replacingOccurrences(of: " ", with: ""))App/\(version)"
         config.userContentController.add(self, name: "app")
+        config.userContentController.addScriptMessageHandler(CalendarBridge.shared, contentWorld: .page, name: "calendar")
         // objectWillChange fires before the change, so the report is read on the next turn of the main loop.
         updatesWatch = Updater.shared.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in self?.sendUpdates() }
