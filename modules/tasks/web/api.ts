@@ -181,6 +181,8 @@ export interface ProjectUpdate extends Update {
 export interface ProjectDetail extends ProjectSummary {
   milestones: Milestone[];
   latest_status: ProjectUpdate | null;
+  /** Open tasks not linked anywhere yet and not waiting to be sent (0 when the project isn't linked). */
+  unshared: number;
 }
 
 export type ProjectChanges = Partial<Pick<ProjectSummary, "name" | "summary" | "brief" | "status" | "health" | "start_on" | "due_on" | "owner_ref" | "owner_name" | "archived">>;
@@ -219,6 +221,8 @@ export const tasksApi = {
   unlink: (id: string) => request<TaskDetail>(`/tasks/${id}/synced`, { method: "DELETE" }),
   /** Asks for your changes to be sent where it's linked (a new task in a linked project: made there). Nothing is sent
    *  yet: it waits for your approval where it's going (task.sharing says where). */
+  /** Asks for each of the project's open tasks not linked yet to be made where the project is linked. */
+  shareProject: (id: string) => request<{ asked: number }>(`/tasks/projects/${id}/share`, json("POST")),
   share: (id: string) => request<TaskDetail & { asked: { fields: SyncedField[]; new: boolean } }>(`/tasks/${id}/share`, json("POST")),
   comment: (id: string, body: string) => request<Update>(`/tasks/${id}/updates`, json("POST", { body })),
   /** "Break it down": the AI proposes subtasks, in a job. */

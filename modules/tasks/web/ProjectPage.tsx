@@ -503,7 +503,7 @@ export default function ProjectPage({ params, board = false }: RouteProps & { bo
               {dueWords(due.text, due.tone)}
             </span>
           )}
-          <SyncedWith project={project} />
+          <SyncedWith project={project} onChanged={refresh} />
         </p>
       </header>
 
@@ -537,8 +537,23 @@ export default function ProjectPage({ params, board = false }: RouteProps & { bo
 }
 
 /** "Linked to Plane: Software", for a project kept in step with one elsewhere (named by that module). */
-function SyncedWith({ project }: { project: ProjectDetail }) {
-  const { app } = useShell();
+function SyncedWith({ project, onChanged }: { project: ProjectDetail; onChanged: () => void }) {
+  const { app, toast } = useShell();
+  const [sending, setSending] = useState(false);
+  const where = project.synced_with[0];
+  const there = where ? (app.modules.find((m) => m.id === where.module)?.name ?? where.module) : "";
+  const sendNew = async () => {
+    setSending(true);
+    try {
+      const { asked } = await tasksApi.shareProject(project.id);
+      toast(asked === 1 ? `Asked to send 1 task to ${there}.` : `Asked to send ${asked} tasks to ${there}.`, "success");
+      onChanged();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setSending(false);
+    }
+  };
   return (
     <>
       {project.synced_with.map((s) => (
@@ -547,6 +562,17 @@ function SyncedWith({ project }: { project: ProjectDetail }) {
           Linked to {app.modules.find((m) => m.id === s.module)?.name ?? s.module}: {s.title}
         </a>
       ))}
+      {where && project.unshared > 0 && (
+        <button
+          type="button"
+          className="btn btn-sm btn-soft"
+          disabled={sending}
+          data-tip={`Each one waits in ${there}'s outbox for you, unless that project sends new tasks on its own`}
+          onClick={() => void sendNew()}
+        >
+          Send {project.unshared === 1 ? "the 1 new task" : `the ${project.unshared} new tasks`} to {there}
+        </button>
+      )}
     </>
   );
 }

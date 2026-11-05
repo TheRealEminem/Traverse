@@ -158,6 +158,12 @@ MIGRATIONS = [
     ALTER TABLE plane_pushes ADD COLUMN update_ref TEXT;   -- kind comment: the Traverse update it posts ("tasks:<id>")
     CREATE INDEX plane_pushes_update ON plane_pushes(update_ref) WHERE update_ref IS NOT NULL;
     """,
+    """
+    -- Auto-send: a linked project whose new tasks go to Plane without waiting for Send (off unless you turn it on),
+    -- and which pushes went that way, so the log says so rather than "you approved it".
+    ALTER TABLE plane_links ADD COLUMN auto_send INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE plane_pushes ADD COLUMN auto INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 MIRROR_TABLES = ("plane_projects", "plane_members", "plane_states", "plane_labels", "plane_cycles", "plane_items")

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Empty } from "@core/components/blocks";
 import { NetworkIcon, PlusIcon } from "@core/components/icons";
-import { PageHeader, Select, Skeleton, StatusChip, useConfirm } from "@core/components/ui";
+import { PageHeader, Select, Skeleton, StatusChip, SwitchRow, useConfirm } from "@core/components/ui";
 import { useLive } from "@core/live";
 import { useQueryParams } from "@core/router";
 import { useShell } from "@core/shell";
@@ -267,6 +267,26 @@ function ProjectLink({
             </>
           )}
         </div>
+
+        {p.link && (
+          <SwitchRow
+            className="mt-2 border-t border-line"
+            label="Send new tasks to Plane on their own"
+            hint={
+              p.link.auto_send
+                ? `New tasks in ${p.link.title ?? "the Traverse project"}, including ones you accept from the inbox, are added to ${p.name} without waiting in the Outbox. Edits still wait for you, Claude's still wait, and nothing is ever deleted.`
+                : `Off: new tasks wait in the Outbox until you press Send. On: they're added to ${p.name} as soon as they're in ${p.link.title ?? "the Traverse project"}.`
+            }
+            checked={p.link.auto_send}
+            disabled={working}
+            onChange={(on) =>
+              void act(
+                () => planeApi.setAutoSend(p.id, on),
+                on ? `New tasks in ${p.link?.title ?? "the project"} will go to ${p.name} on their own.` : `New tasks will wait for you again.`,
+              )
+            }
+          />
+        )}
 
         {p.link && (
           <div className="mt-4">

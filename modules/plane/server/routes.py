@@ -103,9 +103,15 @@ def link_project(project_id: str, body: dict = Body(default={})):
 
 @router.patch("/links/{project_id}")
 def map_states(project_id: str, body: dict = Body(...)):
-    """{"state_map": {"waiting": "<state id>"}}: which Plane state each Traverse status means in this project."""
+    """{"state_map": {"waiting": "<state id>"}}: which Plane state each Traverse status means in this project.
+    {"auto_send": true}: its new tasks go to Plane without waiting for Send."""
     with answers():
-        return linking.set_map(project_id, body.get("state_map") or {})
+        found = None
+        if "auto_send" in body:
+            found = linking.set_auto_send(project_id, body["auto_send"])
+        if body.get("state_map") or found is None:
+            found = linking.set_map(project_id, body.get("state_map") or {})
+        return found
 
 
 @router.delete("/links/{project_id}", status_code=204)
