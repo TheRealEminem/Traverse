@@ -178,6 +178,9 @@ def requested(payload: dict) -> None:
         link = db.one("SELECT project_id FROM plane_links WHERE local_ref = ?", (payload["project_ref"],))
         if link is None:
             return
+        if db.one("SELECT 1 FROM plane_pushes WHERE local_ref = ? AND kind = 'create' AND status = 'sending'", (local,)):
+            log.info("Not asking to make %s again: it's on its way to Plane", local)
+            return
         kind, project_id, item = "create", link["project_id"], None
     else:
         return
@@ -203,8 +206,25 @@ def requested(payload: dict) -> None:
                    "updated_at) VALUES (?, ?, ?, ?, ?, ?, 'waiting', ?, ?)",
                    (push_id, kind, local, project_id, item["id"] if item else None, json.dumps(changes), stamp, stamp))
     links.add(local, _ref(push_id), "share")
-    jobs.enqueue("plane", KIND, push_id, approve=True, reason="Waiting for you to send it")
+    if kind == "create" and linking.auto_send(payload.get("project_ref")) and not mcp.calling() and _sendable(changes):
+        # Auto-send is on for this project: a new item goes without waiting for Send. Never for Claude's tools, whose
+        # proposals always wait for you, and never for an edit, which may overwrite someone's work.
+        _set(push_id, status="sending", approved_at=db.now(), auto=1)
+        jobs.enqueue("plane", KIND, push_id)          # an earlier one parked for this task goes ahead
+    else:
+        jobs.enqueue("plane", KIND, push_id, approve=True, reason="Waiting for you to send it")
     events.publish("plane.pushes.changed", {"push": push_id})
+
+
+def _sendable(changes: list[dict]) -> bool:
+    return any(e["include"] and not e.get("skip") for e in changes)
+
+
+def added(payload: dict) -> None:
+    """contracts.WORK_ADDED: new open work in a Traverse project. Ignored unless the Plane project linked to it sends
+    new work on its own (auto-send); then it's a request to make it there, sent without waiting for you."""
+    if linking.auto_send(payload.get("project_ref")):
+        requested(payload)
 
 
 def _comment_entry(body: str, written_by: str | None) -> dict:
@@ -270,7 +290,7 @@ def approve(push_id: str) -> None:
         raise ValueError("Choose Plane's or yours for what changed in Plane first")
     if not any(e["include"] and not e.get("skip") for e in changes):
         raise ValueError("Choose at least one thing to send")
-    _set(push_id, status="sending", approved_at=db.now(), note=None)
+    _set(push_id, status="sending", approved_at=db.now(), note=None, auto=0)
     jobs.enqueue("plane", KIND, push_id)    # the parked job goes ahead (or a new one, after something went wrong)
 
 
@@ -588,7 +608,7 @@ def _view(push: dict, ctx: dict) -> dict:
     return {
         "id": push["id"], "kind": push["kind"], "status": push["status"], "note": push["note"],
         "created_at": push["created_at"], "approved_at": push["approved_at"], "sent_at": push["sent_at"],
-        "checked_at": push["checked_at"], "undo_of": push["undo_of"],
+        "checked_at": push["checked_at"], "undo_of": push["undo_of"], "auto": bool(push["auto"]),
         "undone": undone and {"id": undone["id"], "status": undone["status"], "sent_at": undone["sent_at"]},
         "task": task and {"title": task["title"], "href": task["href"]},
         "item": item and {"id": item["id"], "key": ctx["where"].key(item), "name": item["name"],
