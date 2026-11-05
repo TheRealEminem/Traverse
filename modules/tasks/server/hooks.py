@@ -34,6 +34,7 @@ def take_actions(payload: dict) -> None:
         elif project_id:                     # waiting in no project: it follows the source into its project
             db.execute("UPDATE tasks_items SET project_id = ?, sort = ? WHERE id = ?",
                        (project_id, store.sort_last("tasks_items", *items._scope(project_id, None, None)), row["id"]))
+            items.offer(row["id"])
     kept = {r["text"] for r in db.query("SELECT text FROM tasks_items WHERE source_ref = ?", (source,))}
     for found in wanted:
         text = found["text"]

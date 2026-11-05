@@ -278,6 +278,27 @@ def set_map(project_id: str, changes: dict) -> dict:
     return view(project_id)
 
 
+def set_auto_send(project_id: str, on: bool) -> dict:
+    """Auto-send: the Traverse project's new open tasks (made there, accepted from the inbox, or moved in) are added
+    to this Plane project without waiting for Send. Only new items: edits to linked tasks still wait in the outbox, and
+    nothing is ever deleted. Tasks already in the project when it's turned on aren't sent ("Send the new ones" does
+    that). Off by default."""
+    project = _project(project_id)
+    if not isinstance(on, bool):
+        raise ValueError("auto_send is true or false")
+    if _link_row(project_id) is None:
+        raise ValueError(f"Link {project['name']} to a Traverse project first")
+    db.execute("UPDATE plane_links SET auto_send = ?, updated_at = ? WHERE project_id = ?", (int(on), db.now(), project_id))
+    events.publish("plane.links.changed", {"project_id": project_id})
+    return view(project_id)
+
+
+def auto_send(local_project_ref: str | None) -> bool:
+    """Whether the Plane project linked to this Traverse project ("tasks:<id>") sends new tasks on its own."""
+    row = db.one("SELECT auto_send FROM plane_links WHERE local_ref = ?", (local_project_ref,)) if local_project_ref else None
+    return bool(row and row["auto_send"])
+
+
 def local_deleted(payload: dict) -> None:
     """contracts.ITEM_DELETED: a Traverse project linked to a Plane project is gone, so the link is too."""
     db.execute("DELETE FROM plane_links WHERE local_ref = ?", (payload["ref"],))
@@ -388,7 +409,7 @@ def view(project_id: str) -> dict:
         "id": project["id"], "identifier": project["identifier"], "name": project["name"],
         "link": row and {"local_ref": row["local_ref"], "title": local["title"] if local else None,
                          "href": local["href"] if local else None, "created_at": row["created_at"],
-                         "state_map": state_map(project_id)},
+                         "state_map": state_map(project_id), "auto_send": bool(row["auto_send"])},
         "preset": default_map(project_id),
         "states": [{"id": s["id"], "name": s["name"], "group": s["state_group"], "color": s["color"]}
                    for s in states(project_id)],
