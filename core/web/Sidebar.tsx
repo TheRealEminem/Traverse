@@ -1,12 +1,10 @@
-// The sidebar: the app's mark, Lockdown's sign while it's on, the main action, search across every module, and each
-// module's navigation.
-import { useEffect, useRef, useState } from "react";
+// The sidebar: the app's mark, Lockdown's sign while it's on, the main action, search across every module (it opens
+// the ⌘K box, Search.tsx), and each module's navigation.
 import type { ReactNode } from "react";
-import { api } from "./api";
-import type { SearchGroup } from "./api";
-import { CloseIcon, HomeIcon, SearchIcon, SlidersIcon } from "./components/icons";
+import { HomeIcon, SearchIcon, SlidersIcon } from "./components/icons";
 import { Logo } from "./components/illustrations";
 import type { ModuleWeb } from "./registry";
+import { mac, openSearch } from "./Search";
 import { useShell } from "./shell";
 import { LockdownSign } from "./views/Lockdown";
 
@@ -38,11 +36,7 @@ export function NavCount({ n }: { n: number | null | undefined }) {
 
 export default function Sidebar({ modules, path, opaque }: { modules: ModuleWeb[]; path: string; opaque?: boolean }) {
   const { app } = useShell();
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchGroup[] | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
   const primary = modules.find((m) => m.primary)?.primary;
-  const mac = navigator.platform.toLowerCase().includes("mac");
   const showHome = modules.length > 1 || modules.some((m) => m.home);
   const under = (p: string) => path === p || path.startsWith(p + "/");
   // Only the most specific entry is current: on "tasks/projects", Projects, not My tasks ("tasks") as well.
@@ -50,26 +44,6 @@ export default function Sidebar({ modules, path, opaque }: { modules: ModuleWeb[
     .flatMap((m) => (m.nav ?? []).map((item) => item.path))
     .filter(under)
     .sort((a, b) => b.length - a.length)[0];
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  useEffect(() => {
-    const q = query.trim();
-    if (!q) return setResults(null);
-    const t = setTimeout(() => api.search(q).then(setResults, () => setResults([])), 160);
-    return () => clearTimeout(t);
-  }, [query]);
-
-  useEffect(() => setQuery(""), [path]);
 
   return (
     <aside className={`chrome relative z-10 flex h-full w-[288px] shrink-0 flex-col border-r border-line shadow-chrome ${opaque ? "chrome-opaque" : ""}`}>
@@ -90,66 +64,38 @@ export default function Sidebar({ modules, path, opaque }: { modules: ModuleWeb[
             {primary.label}
           </button>
         )}
-        <div className="relative">
-          <SearchIcon size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-            placeholder="Search"
-            aria-label="Search everything"
-            className="field h-9 w-full border-transparent bg-forest/[.045] py-0 pl-9 pr-12 shadow-none hover:border-line focus:bg-surface"
-          />
-          <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
-            {query ? (
-              <button onClick={() => setQuery("")} className="icon-btn h-6 w-6" aria-label="Clear search">
-                <CloseIcon size={14} />
-              </button>
-            ) : (
-              <kbd className="kbd pointer-events-none [@media(pointer:coarse)]:hidden">{mac ? "⌘K" : "Ctrl K"}</kbd>
-            )}
-          </span>
-        </div>
+        <button
+          onClick={openSearch}
+          aria-label="Search everything"
+          aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
+          className="field flex h-9 w-full items-center gap-2.5 border-transparent bg-forest/[.045] py-0 pl-3 pr-2 text-left text-ink-faint shadow-none hover:border-line"
+        >
+          <SearchIcon size={16} />
+          <span className="flex-1">Search</span>
+          <kbd className="kbd pointer-events-none [@media(pointer:coarse)]:hidden">{mac ? "⌘K" : "Ctrl K"}</kbd>
+        </button>
       </div>
 
-      {!results && modules.map((m) => m.sidebarTop && <m.sidebarTop key={m.id} />)}
+      {modules.map((m) => m.sidebarTop && <m.sidebarTop key={m.id} />)}
 
-      {results ? (
-        <nav className="fade-edges-y mt-3 flex-1 overflow-y-auto px-3 pb-4 pt-1" aria-label="Search results">
-          {results.length === 0 && <p className="px-3 pt-3 text-hint text-ink-soft">Nothing matches “{query.trim()}”.</p>}
-          {results.map((g) => (
-            <section key={g.module} className="animate-fade-in">
-              <h3 className="eyebrow px-3 pb-1.5 pt-3">{g.module_name}</h3>
-              {g.hits.map((h) => (
-                <a key={h.ref} href={h.href} className="mb-0.5 block rounded-md px-3 py-2 transition-colors duration-150 hover:bg-forest/[.05]">
-                  <div className="truncate text-ui font-medium">{h.title}</div>
-                  {h.snippet && <div className="mt-0.5 line-clamp-2 text-meta leading-snug text-ink-soft">{h.snippet}</div>}
-                </a>
-              ))}
-            </section>
-          ))}
-        </nav>
-      ) : (
-        <nav className="mt-3 flex-1 space-y-0.5 overflow-y-auto px-3" aria-label="Sections">
-          {showHome && <NavLink icon={<HomeIcon size={16} />} label="Home" href="#/" active={path === ""} />}
-          {modules.flatMap((m) =>
-            (m.nav ?? []).map((item) => {
-              const Badge = item.badge;
-              return (
-                <NavLink
-                  key={m.id + item.path}
-                  icon={item.icon}
-                  label={item.label}
-                  href={`#/${item.path}`}
-                  active={item.path === current}
-                  badge={Badge ? <Badge /> : undefined}
-                />
-              );
-            }),
-          )}
-        </nav>
-      )}
+      <nav className="mt-3 flex-1 space-y-0.5 overflow-y-auto px-3" aria-label="Sections">
+        {showHome && <NavLink icon={<HomeIcon size={16} />} label="Home" href="#/" active={path === ""} />}
+        {modules.flatMap((m) =>
+          (m.nav ?? []).map((item) => {
+            const Badge = item.badge;
+            return (
+              <NavLink
+                key={m.id + item.path}
+                icon={item.icon}
+                label={item.label}
+                href={`#/${item.path}`}
+                active={item.path === current}
+                badge={Badge ? <Badge /> : undefined}
+              />
+            );
+          }),
+        )}
+      </nav>
 
       <div className="border-t border-line px-3 py-2">
         <NavLink icon={<SlidersIcon size={16} />} label="Settings" href="#/settings" active={path === "settings"} />

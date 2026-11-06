@@ -103,9 +103,11 @@ def search(q: str, limit: int) -> list[dict]:
         if r["kind"] == "project":
             out.append({"id": r["id"], "title": r["title"], "snippet": "Project"})
         else:
-            row = db.one("SELECT status FROM tasks_items WHERE id = ?", (r["id"],))
+            row = db.one("SELECT i.status, p.name AS project FROM tasks_items i LEFT JOIN tasks_projects p "
+                         "ON p.id = i.project_id WHERE i.id = ?", (r["id"],))
             label = vocab.ITEM_STATUSES.get(row["status"], {}).get("label", "") if row else ""
-            out.append({"id": r["id"], "title": r["title"], "snippet": label})
+            out.append({"id": r["id"], "title": r["title"],
+                        "snippet": " · ".join(x for x in (label, row and row["project"]) if x)})   # "Doing · Operations"
     return out
 
 

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from core.server import backup, config, db, jobs, module, settings
+from core.server import backup, config, db, jobs, links, module, settings
 
 
 @pytest.fixture(autouse=True)
@@ -309,6 +309,40 @@ def test_the_export_is_readable_json_without_settings_or_keys(client, monkeypatc
     assert "sk-ant-secret" not in text and "ai.anthropic_api_key" not in text
     assert data["app"] == config.APP_ID and data["modules"]["probe2"]["items"] == [{"id": "a", "title": "Kept"}]
     assert r["counts"]["probe2"]["items"] == 1 and oct((backup.EXPORT_DIR / r["name"]).stat().st_mode & 0o777) == "0o600"
+
+
+def test_the_export_keeps_how_things_link_and_what_the_ai_cost(client, probe_item):
+    a, b = probe_item("One"), probe_item("Two")
+    links.add(a, b, "related")
+    db.execute("INSERT INTO core_ai_usage (id, at, module, job, call, provider, model, input_tokens, output_tokens) "
+               "VALUES ('u1', '2026-10-21T10:00:00+00:00', 'probe', 'test', 'complete', 'ollama', 'qwen', 10, 5)")
+    try:
+        r = client.post("/api/export").json()
+        data = json.loads((backup.EXPORT_DIR / r["name"]).read_text())
+        assert {"from_ref": a, "to_ref": b, "kind": "related"}.items() <= next(
+            x for x in data["core"]["links"] if x["from_ref"] == a).items()
+        assert "u1" in [u["id"] for u in data["core"]["ai_usage"]]          # other tests' calls may be logged too
+        assert r["counts"]["core"]["ai_usage"] == len(data["core"]["ai_usage"])
+    finally:
+        links.remove(a, b, "related")
+        db.execute("DELETE FROM core_ai_usage WHERE id = 'u1'")
+
+
+def test_every_module_of_the_app_is_in_the_export(client):
+    data = json.loads((backup.EXPORT_DIR / client.post("/api/export").json()["name"]).read_text())
+    for mid in config.enabled_modules():
+        m = module.get(mid)
+        if m and m.migrations:                                      # a module that keeps anything says what it keeps
+            assert m.export and mid in data["modules"], f"{mid} keeps tables but isn't in the export"
+
+
+def test_an_export_can_be_downloaded_and_nothing_else_can(client):
+    name = client.post("/api/export").json()["name"]
+    r = client.get(f"/api/exports/{name}")
+    assert r.status_code == 200 and r.json()["app"] == config.APP_ID
+    assert name in r.headers["content-disposition"]
+    for bad in ("../app.db", f"{config.APP_ID}-20260101-000000.db", "nope.json"):
+        assert client.get(f"/api/exports/{bad}").status_code == 404
 
 
 def test_a_new_version_keeps_a_copy_before_it_migrates(monkeypatch):

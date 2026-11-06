@@ -194,7 +194,7 @@ the 8780–8799 range, and keep a list here:
 | `settings`, `choices` | Defaults stored as `<id>.<name>`, with allowed values. Edited on the Settings page. |
 | `jobs` | `{kind: handler(job)}`: background work this module knows how to do. `lanes` (optional): `{kind: "cloud" or a function of the target}` to let a kind run four at a time when it only waits on a web API. |
 | `recurring` | `{kind: seconds}` (or a function returning seconds, `0` = paused): the host queues that job on a schedule (`core/server/schedule.py`), so it runs on the job runner like any other. The target is always `"scheduled"`; finished rows are cleared as the next is queued. Handlers must be safe to run twice. |
-| `export` | `() -> {name: [records…]}`: what the module holds as plain data. The host's Settings, Your data, Export writes every module's into one JSON file in the data folder's `exports/` (no settings, so no keys). |
+| `export` | `() -> {name: [records…]}`: what the module holds as plain data. The host's Settings, Your data, Export writes every module's into one JSON file in the data folder's `exports/`, with the host's links between things and the AI usage log beside them (no settings, so no keys), and a browser can download it from `/api/exports/<name>`. |
 | `subscribe` | `{event or "prefix.*": handler(payload)}`: what it listens to. |
 | `search` | `(q, limit) -> [{id, title, snippet}]`: its part of the sidebar search. |
 | `describe` | `id -> {title, href}`: how its things appear in other modules' links and in search. |
@@ -360,12 +360,18 @@ other for data, while each stays its own app:
 
 - **Routes** are the URL hash (`#/notes/<id>`), so a link anywhere (including from the Mac app's menu) can open any page.
   `#/` is Home and `#/settings` is Settings. An app with one module and no Home card opens straight into that module.
-- **Sidebar:** the mark and name, the primary button, search across everything (⌘K), Home (when there's more
-  than one module), each module's nav items with badges, and Settings at the bottom. Below 1024px it becomes a
-  drawer behind a frosted top bar.
-- **Settings:** Appearance (Day/Dusk/System), your name, AI (provider, fallback, key, model picker, a connection
-  test), Claude (the MCP server's token, with the command for Claude Code and the config for Claude Desktop to copy),
-  your family apps, then one section per module, then Your data and Quit.
+- **Home:** the modules' cards. When a module starts the day (`start`), a strip at the top points to it ("Start the
+  day", then "Your day is in <module>") rather than repeating it.
+- **Sidebar:** the mark and name, the primary button, the search field, Home (when there's more than one module),
+  each module's nav items with badges, and Settings at the bottom. Below 1024px it becomes a drawer behind a frosted
+  top bar, which has a search button.
+- **Search** (`Search.tsx`): one box, opened by ⌘K (Ctrl K) anywhere, the sidebar's field or the top bar's button.
+  Every module's `search`, grouped by module, then the app's places (Home, each nav item, Settings) whose names
+  match; with nothing typed, the places. ↑ ↓ move, Enter opens, Esc clears and then closes.
+- **Settings:** a row of links to its sections, then Appearance (Day/Dusk/System), your name, AI (provider, fallback,
+  key, model picker, a connection test), Claude (the MCP server's token, with the command for Claude Code and the
+  config for Claude Desktop to copy), your family apps, then one section per module, then Your data and Quit.
+  `#/settings?section=<id>` opens at one (a module's is its id: `?section=notes`).
 - **Look and copy** follow `DESIGN.md`. `scripts/check` enforces the mechanical rules.
 
 ## 10. The Mac app (`mac/`)

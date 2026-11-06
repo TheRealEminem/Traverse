@@ -1,6 +1,6 @@
 {
-  "commit": "bb7615a24433097429a288d98ded48eb17a623f8",
-  "subject": "Windows and Linux builds: the same newer actions as the other workflows",
+  "commit": "d2a00773816920513f7fb041f8fb6c808fedc2fc",
+  "subject": "One search box (\u2318K), a day strip on Home, a contents row in Settings, and Tasks' card and search say more",
   "synced_on": "2026-11-05",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }
