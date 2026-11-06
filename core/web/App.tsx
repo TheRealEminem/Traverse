@@ -1,9 +1,9 @@
-// The host app: sign-in, the shell (sidebar, top bar on narrow windows, content column), and routing to the
-// host's own views and every enabled module's views.
+// The host app: sign-in, the shell (sidebar, top bar on narrow windows, content column, the ⌘K search box), and
+// routing to the host's own views and every enabled module's views.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AUTH_EVENT, api, setSystem, showInAppMenu } from "./api";
 import type { AppInfo } from "./api";
-import { BackIcon, ForwardIcon, MenuIcon } from "./components/icons";
+import { BackIcon, ForwardIcon, MenuIcon, SearchIcon } from "./components/icons";
 import { Ambient, Logo } from "./components/illustrations";
 import { Toast, TooltipLayer, useConfirm } from "./components/ui";
 import type { ToastState } from "./components/ui";
@@ -11,6 +11,7 @@ import { startChangeFeed, useChanges } from "./live";
 import { modulesFor } from "./registry";
 import type { ModuleWeb, RouteProps } from "./registry";
 import { match, navigate, useHistoryPlace, useRoute } from "./router";
+import SearchPalette, { openSearch } from "./Search";
 import { ShellProvider } from "./shell";
 import type { Shell } from "./shell";
 import Sidebar from "./Sidebar";
@@ -277,6 +278,9 @@ export default function App() {
               <span className="min-w-0 truncate font-display text-lead font-semibold tracking-[-0.02em]">{info!.name}</span>
               <LockdownSign compact />
             </span>
+            <button className="icon-btn ml-auto h-10 w-10 lg:hidden" aria-label="Search everything" onClick={openSearch}>
+              <SearchIcon size={20} />
+            </button>
           </div>
           <div key={path} className={`relative mx-auto w-full px-5 pb-24 pt-7 sm:px-8 lg:pt-9 ${fullWidth ? "max-w-[1400px] lg:px-8" : "max-w-[872px] lg:px-10"}`}>
             <View params={params} />
@@ -287,6 +291,7 @@ export default function App() {
         const Background = m.background;
         return Background ? <Background key={m.id} /> : null;
       })}
+      <SearchPalette modules={modules} />
       <TooltipLayer />
       <Toast toast={toast} onClose={() => setToast(null)} />
       {confirmDialog}

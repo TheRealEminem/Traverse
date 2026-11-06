@@ -17,6 +17,11 @@ MIGRATIONS = [
     # Later changes go here as new steps, e.g. "ALTER TABLE notes_items ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
 ]
 
+def export() -> dict:
+    """Everything this module holds, as plain data for the host's JSON export."""
+    return {"notes": db.query("SELECT * FROM notes_items ORDER BY created_at")}
+
+
 LIST_COLUMNS = "id, title, created_at, updated_at"
 
 

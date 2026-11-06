@@ -1,7 +1,8 @@
 // Settings: what the app keeps for you. Back up now and a few points to go back to; under Advanced, every copy on disk,
-// the folder, and a plain JSON copy of everything (ARCHITECTURE.md §7, DESIGN.md §7).
+// the folder, and a plain JSON copy of everything (every module's, and how things link), which a browser can download
+// (ARCHITECTURE.md §7, DESIGN.md §7).
 import { useState } from "react";
-import { api, can, revealFile, words } from "../api";
+import { api, can, inApp, revealFile, words } from "../api";
 import type { BackupItem, BackupSlot } from "../api";
 import { Section } from "../components/blocks";
 import { AlertIcon, CheckIcon, ChevronDownIcon, DownloadIcon, FolderIcon, RefreshIcon, TrashIcon } from "../components/icons";
@@ -64,7 +65,7 @@ function choices(items: BackupItem[], slots: Record<BackupSlot, string | null> |
 }
 
 export default function YourData() {
-  const { toast } = useShell();
+  const { app, toast } = useShell();
   const [confirm, dialog] = useConfirm();
   const { data, reload } = useLive(api.backups);
   const [busy, setBusy] = useState<string | null>(null);
@@ -105,8 +106,13 @@ export default function YourData() {
   });
   const exportAll = () => run("export", async () => {
     const r = await api.exportAll();
-    const counts = Object.values(r.counts).flatMap((c) => Object.entries(c).map(([k, n]) => `${n} ${k}`));
-    setExported({ name: r.name, folder: r.folder, text: `${counts.join(", ")} · ${size(r.bytes)}` });
+    const names = Object.fromEntries(app.modules.map((m) => [m.id, m.name]));
+    const total = (c: Record<string, number>) => Object.values(c).reduce((a, b) => a + b, 0);
+    const parts = Object.entries(r.counts)
+      .filter(([id]) => id !== "core")
+      .map(([id, c]) => `${total(c)} from ${names[id] ?? id}`);
+    const links = r.counts.core?.links;
+    setExported({ name: r.name, folder: r.folder, text: `${parts.join(", ")}${links ? `, ${links} links between them` : ""} · ${size(r.bytes)}` });
   });
 
   const items = data?.items ?? [];
@@ -193,7 +199,17 @@ export default function YourData() {
                 {exported && (
                   <p className="flex animate-fade-in items-start gap-1.5 py-3.5 text-hint leading-snug text-forest-deep">
                     <CheckIcon size={16} className="mt-px shrink-0" />
-                    <span className="break-words">Saved {exported.name} in {exported.folder} ({exported.text}).</span>
+                    <span className="break-words">
+                      Saved {exported.name} in {exported.folder} ({exported.text}).
+                      {!inApp && (
+                        <>
+                          {" "}
+                          <a className="font-medium underline decoration-forest/30 underline-offset-2 hover:decoration-forest" href={`/api/exports/${exported.name}`} download>
+                            Download it
+                          </a>
+                        </>
+                      )}
+                    </span>
                   </p>
                 )}
               </div>
