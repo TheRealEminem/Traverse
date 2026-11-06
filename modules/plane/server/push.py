@@ -617,8 +617,9 @@ def _view(push: dict, ctx: dict) -> dict:
     }
 
 
-def outbox() -> dict:
-    """GET /api/plane/outbox: what waits for you, newest last, and the latest of what was sent."""
+def outbox(since: str | None = None) -> dict:
+    """GET /api/plane/outbox: what waits for you, newest last, and the latest of what was sent. since: how many were
+    sent from that time on (and how many of those by auto-send), counted rather than read from the latest 50."""
     waiting = db.query(f"SELECT * FROM plane_pushes WHERE status IN {OPEN} ORDER BY created_at")
     sent = db.query("SELECT * FROM plane_pushes WHERE status = 'sent' ORDER BY sent_at DESC LIMIT 50")
     rows = waiting + sent
@@ -632,8 +633,13 @@ def outbox() -> dict:
         "jobs": jobs.latest("plane", [r["id"] for r in waiting]),
         "where": linking.Where(),
     }
-    return {"dry_run": dry_run(pull.config()), "configured": pull.configured(),
-            "waiting": [_view(r, ctx) for r in waiting], "sent": [_view(r, ctx) for r in sent]}
+    out = {"dry_run": dry_run(pull.config()), "configured": pull.configured(),
+           "waiting": [_view(r, ctx) for r in waiting], "sent": [_view(r, ctx) for r in sent]}
+    if since:
+        n = db.one("SELECT count(*) AS sent, coalesce(sum(auto), 0) AS auto FROM plane_pushes "
+                   "WHERE status = 'sent' AND sent_at >= ?", (since,))
+        out["sent_since"] = {"sent": n["sent"], "auto": n["auto"]}
+    return out
 
 
 def count() -> int:

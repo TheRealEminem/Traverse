@@ -455,3 +455,14 @@ def test_deleting_or_unlinking_in_traverse_sends_nothing_to_plane(plane, client)
     _pull()
     assert plane.writes == [] and {r.method for r in plane.requests} == {"GET"}
     assert plane.item("OPERATIONS-10")["target_date"] == "2026-10-16" and plane.item("BD-8")
+
+
+def test_the_outbox_counts_what_was_sent_since_a_time_beyond_the_latest_50(plane, client):
+    for n in range(60):
+        db.execute("INSERT INTO plane_pushes (id, kind, local_ref, project_id, item_id, changes, status, auto, sent_at, "
+                   "created_at, updated_at) VALUES (?, 'create', ?, ?, NULL, '[]', 'sent', ?, '2026-11-05T10:00:00.000Z', "
+                   "'2026-11-05T09:00:00.000Z', '2026-11-05T10:00:00.000Z')", (f"cnt{n}", f"tasks:cnt{n}", PROJECTS["SOFTWARE"], n % 2))
+    box = client.get("/api/plane/outbox", params={"since": "2026-11-05T00:00:00.000Z"}).json()
+    assert len(box["sent"]) == 50 and box["sent_since"] == {"sent": 60, "auto": 30}
+    assert client.get("/api/plane/outbox", params={"since": "2026-11-06T00:00:00.000Z"}).json()["sent_since"]["sent"] == 0
+    assert "sent_since" not in client.get("/api/plane/outbox").json()
