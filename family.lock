@@ -1,6 +1,6 @@
 {
-  "commit": "a019ae23acbf38aa0ea1f5d048060b2de34c8f33",
-  "subject": "AI usage table: its step can run twice, and the version before can still read it after Go back",
-  "synced_on": "2026-11-05",
+  "commit": "70cc8870b2fed2654c9e98be568391ee24453123",
+  "subject": "Search: Enter never opens an answer to an earlier query, and Escape, arrows and Tab work wherever focus is in the box",
+  "synced_on": "2026-11-06",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }

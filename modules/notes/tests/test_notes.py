@@ -1,6 +1,8 @@
+import json
+
 import pytest
 
-from core.server import config, contracts, events, jobs, settings
+from core.server import backup, config, contracts, events, jobs, settings
 
 needs_tasks = pytest.mark.skipif("tasks" not in config.enabled_modules(), reason="the tasks module is off in app.json")
 
@@ -64,3 +66,11 @@ def test_deleting_a_note_keeps_its_tasks_but_unlinks_them(client, fake_ai):
     assert client.delete(f"/api/notes/{note_id}").status_code == 204
     kept = [t for t in client.get("/api/tasks").json() if t["text"] == "Keep me"]
     assert kept and kept[0]["source_ref"] is None
+
+
+def test_notes_are_in_the_export(client):
+    note_id = client.post("/api/notes", json={"title": "Kept", "body": "Worth keeping."}).json()["id"]
+    export = client.post("/api/export").json()
+    assert export["counts"]["notes"]["notes"] >= 1
+    data = json.loads((backup.EXPORT_DIR / export["name"]).read_text())
+    assert note_id in [n["id"] for n in data["modules"]["notes"]["notes"]]

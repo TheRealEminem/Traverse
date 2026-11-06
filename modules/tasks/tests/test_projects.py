@@ -67,8 +67,10 @@ def test_projects_keep_your_order():
 def test_search_finds_projects_and_items_and_describe_names_them():
     p = projects.create("Riverbend relaunch", summary="New site by December")
     item = items.create("Draft the riverbend outline")
+    inside = items.create("Book the riverbend photographer", project_id=p, status="doing")
     found = {r["id"]: r for r in hooks.search("riverbend", 10)}
     assert found[p]["snippet"] == "Project" and found[item]["snippet"] == "To do"
+    assert found[inside]["snippet"] == "Doing · Riverbend relaunch"
     assert module.describe(f"tasks:{p}")["title"] == "Riverbend relaunch"
     assert module.describe(f"tasks:{item}")["title"] == "Draft the riverbend outline"
     assert module.describe(f"tasks:{item}")["href"] == f"#/tasks/t/{item}"

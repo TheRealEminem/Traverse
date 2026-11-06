@@ -17,4 +17,5 @@ MODULE = Module(
     jobs={"summarize": work.summarize},
     search=store.search,
     describe=store.describe,
+    export=store.export,
 )

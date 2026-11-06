@@ -184,6 +184,7 @@ export interface Outbox {
   configured: boolean;
   waiting: Push[];
   sent: Push[];
+  sent_since?: { sent: number; auto: number }; // asked with `since`: counted on the server, not from the latest 50
 }
 
 export const planeApi = {
@@ -204,7 +205,7 @@ export const planeApi = {
   unlink: (projectId: string) => request<void>(`/plane/links/${projectId}`, { method: "DELETE" }),
   /** Brings items into Traverse as linked tasks (or every open item assigned to you). Changes nothing in Plane. */
   bring: (body: { items: string[] } | { mine: true }) => request<Brought>("/plane/bring", json("POST", body)),
-  outbox: () => request<Outbox>("/plane/outbox"),
+  outbox: (since?: string) => request<Outbox>(since ? `/plane/outbox?since=${encodeURIComponent(since)}` : "/plane/outbox"),
   outboxCount: () => request<{ waiting: number }>("/plane/outbox/count"),
   /** Approves a push: Traverse reads the item from Plane again and writes only if nothing it sends changed there. */
   send: (id: string) => request<Push>(`/plane/pushes/${id}/send`, json("POST")),
