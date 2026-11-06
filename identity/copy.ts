@@ -11,4 +11,5 @@ export const welcomeLead =
 /** Settings → Your data: what a restore replaces, and what an export holds. */
 export const restoreBody =
   "Everything Traverse holds is replaced with what it held then: your projects, tasks and settings, keys included. A backup of how things are now is kept first, so you can undo this.";
-export const exportHint = "A readable JSON file of your projects and tasks, with no settings or keys. Saved in the data folder's exports.";
+export const exportHint =
+  "A readable JSON file of everything Traverse keeps: Muster, projects and tasks, the copy of Plane and what you sent, the inbox, and how they link. No settings or keys. Saved in the data folder's exports.";
