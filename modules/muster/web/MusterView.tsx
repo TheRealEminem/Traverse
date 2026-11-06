@@ -229,6 +229,8 @@ function group(entries: Entry[], by: By): [string, Entry[]][] {
 
 function Moved({ day, className }: { day: Day; className?: string }) {
   const pick = usePicking(day);
+  const { app } = useShell();
+  const tools = app.modules.filter((m) => m.optional && m.active).map((m) => m.name);
   const [by, setBy] = useState<By>("project");
   const moved = day.briefing.sections.moved;
   const since = day.first ? "in the last day" : `since your last Muster, ${momentWords(day.since, day.day)}`;
@@ -236,7 +238,7 @@ function Moved({ day, className }: { day: Day; className?: string }) {
     <Part
       icon={<MovedIcon size={16} />}
       title="What moved"
-      blurb={`In Traverse and in Plane, ${since}.`}
+      blurb={`${tools.length ? `In Traverse and in ${tools.join(" and ")}` : "In Traverse"}, ${since}.`}
       className={className}
       delay={180}
       aside={
@@ -255,7 +257,7 @@ function Moved({ day, className }: { day: Day; className?: string }) {
       }
     >
       {moved.length === 0 ? (
-        <p className="px-1 py-1 text-ui text-ink-soft">Nothing has moved {day.first ? "in the last day" : "since then"}. Plane’s changes show here from the first pull that records them.</p>
+        <p className="px-1 py-1 text-ui text-ink-soft">Nothing has moved {day.first ? "in the last day" : "since then"}.{tools.length ? ` Changes in ${tools.join(" and ")} show here from the first pull that records them.` : ""}</p>
       ) : (
         group(moved, by).map(([name, entries]) => (
           <div key={name}>

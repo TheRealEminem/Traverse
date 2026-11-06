@@ -5,6 +5,7 @@ transaction, so a pull cut off half way writes nothing, and a pull of an unchang
 something changed, linked tasks are told what their items look like now (linking.publish_linked).
 """
 import logging
+import threading
 
 from core.server import db, events, jobs, settings
 from core.server.jobs import Job
@@ -15,6 +16,9 @@ from .client import PlaneClient, PlaneError
 log = logging.getLogger("plane.pull")
 
 TARGET = "scheduled"            # the schedule's target too, so "Pull now" and the clock never run two at once
+# Held by a pull from its first read to its last write, and by a push (push.py) while it reads and writes an item, so
+# the two never overlap: an item a push made after a pull read the project would otherwise read as gone from Plane.
+LOCK = threading.Lock()
 
 
 def config() -> dict:
@@ -82,11 +86,12 @@ def pull(job: Job) -> None:
     cfg = config()
     if not configured(cfg):
         raise ValueError("Add your Plane API key and workspace in Settings → Plane first.")
-    with client(cfg) as c:
-        snapshot = read(c, list(cfg.get("projects") or []), job.stage)
-        requests = c.requests
-    job.stage("Saving")
-    changed = store.apply(snapshot)
+    with LOCK:
+        with client(cfg) as c:
+            snapshot = read(c, list(cfg.get("projects") or []), job.stage)
+            requests = c.requests
+        job.stage("Saving")
+        changed = store.apply(snapshot)
     me = snapshot["me"] or {}
     if me.get("id") and store.meta("me") != me["id"]:
         store.set_meta("me", me["id"])

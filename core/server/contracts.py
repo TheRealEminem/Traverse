@@ -42,7 +42,7 @@ class WorkProjectArrived(TypedDict):
     source: str              # where it lives, for the screen ("Plane")
 
 
-# Something elsewhere should become a local, linked copy ("Bring into Traverse"). It goes into the local project
+# Something elsewhere should become a local, linked copy ("Bring into this app"). It goes into the local project
 # synced with project_ref, and is linked "tasks:<id>" → ref, kind "synced". Arriving again is an update.
 # With local_ref, it's something that was made there from here (WORK_SHARE_REQUESTED for a new one): the local thing
 # becomes the linked copy, with these values as both sides' starting point, instead of a new copy being made.
@@ -89,6 +89,13 @@ class WorkShareRequested(TypedDict):
     fields: dict             # only the changed fields, named as in WORK_FIELDS (a new one: all of them)
     base: dict               # those fields as both sides last agreed ({} for a new one)
     project_ref: str | None  # the local project ("tasks:<project id>"): where a new one goes, through its link
+
+
+# New open work turned up in a local project that's linked somewhere (made there, accepted from the inbox, or moved
+# in), and isn't linked itself. Nobody asked to send it: whoever keeps that side ignores it, unless you've told it to
+# send a project's new work on its own (an "auto-send" switch, off by default). Then it treats this as
+# WORK_SHARE_REQUESTED for a new one, which has the same shape. Rules still hold: only new work, never a delete.
+WORK_ADDED = "work.added"
 
 
 # Someone ticked (or unticked) a piece of work outside the module it belongs to: a pick in the day's plan. The module

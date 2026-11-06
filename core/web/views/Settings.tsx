@@ -1,41 +1,24 @@
-// Settings: the host's own sections (appearance, you, Lockdown, AI, Claude, family apps), then one section per module,
-// then your data and the app.
-import { useEffect, useState } from "react";
-import { api, inApp, quitApp, sendUpdates } from "../api";
+// Settings: the host's own sections (appearance, you, AI, the app), then one section per module, then the connections
+// to outside tools (Connect a tool).
+import { useEffect, useRef, useState } from "react";
+import { api, can, inApp, quitApp, sendUpdates, words } from "../api";
 import type { FamilyStatus, ProviderId, ProviderInfo, SystemInfo, UpdateReport } from "../api";
 import { Section, SecretSetting, TextSetting } from "../components/blocks";
 import { ChooseAi } from "../components/ChooseAi";
+import { ModelPicker } from "../components/ModelPicker";
 import { OllamaSetup } from "../components/OllamaSetup";
-import { CheckIcon, AlertIcon, BackIcon, DownloadIcon, LaptopIcon, MonitorIcon, MoonIcon, NetworkIcon, PowerIcon, RefreshIcon, SparkleIcon, SunIcon, UsersIcon, LeafIcon } from "../components/icons";
+import { CheckIcon, AlertIcon, BackIcon, DownloadIcon, LaptopIcon, LockIcon, MonitorIcon, MoonIcon, NetworkIcon, PowerIcon, RefreshIcon, SparkleIcon, SunIcon, UsersIcon, LeafIcon } from "../components/icons";
 import { ControlRow, PageHeader, Segmented, Select, Spinner, StatusChip, SwitchRow } from "../components/ui";
 import { useLive } from "../live";
 import { modulesFor } from "../registry";
+import { useQueryParams } from "../router";
 import { useSettings, useShell } from "../shell";
 import type { ThemePref } from "../theme";
+import { UsageRows } from "./Usage";
 import AIUsage from "./AIUsage";
 import ClaudeAccess from "./ClaudeAccess";
-import Lockdown from "./Lockdown";
+import { useLockdown } from "./Lockdown";
 import YourData from "./YourData";
-
-function ModelPicker({ provider, value, onSave }: { provider: ProviderId; value: string; onSave: (v: string) => void }) {
-  const [models, setModels] = useState<string[] | null>(null);
-  const [typing, setTyping] = useState(false);
-  useEffect(() => {
-    setModels(null);
-    api.providerModels(provider).then((r) => setModels(r.models), () => setModels([]));
-  }, [provider]);
-  if (models === null) return <Spinner className="text-ink-faint" />;
-  if (typing || models.length === 0) {
-    return <TextSetting label="Model" value={value} onSave={onSave} mono placeholder={provider === "ollama" ? "automatic" : "model id"} />;
-  }
-  const options = [
-    ...(provider === "ollama" ? [{ value: "", label: "Automatic", hint: "The best installed model" }] : []),
-    ...models.map((m) => ({ value: m, label: m })),
-    ...(value && !models.includes(value) ? [{ value, label: value, hint: "Not found" }] : []),
-    { value: "\u0000other", label: "Other…", hint: "Type a model id" },
-  ];
-  return <Select label="Model" size="sm" className="w-full sm:w-64" value={value} options={options} onChange={(v) => (v === "\u0000other" ? setTyping(true) : onSave(v))} />;
-}
 
 function ProviderFields({ id, values, hints, save }: { id: ProviderId; values: Record<string, unknown>; hints: Record<string, string | null>; save: (c: Record<string, string>) => void }) {
   const { toast } = useShell();
@@ -76,7 +59,8 @@ function ProviderFields({ id, values, hints, save }: { id: ProviderId; values: R
         </ControlRow>
       )}
       <ControlRow label="Model">
-        <ModelPicker provider={id} value={v(`${id}_model`)} onSave={(x) => save({ [`ai.${id}_model`]: x })} />
+        <ModelPicker provider={id} value={v(`${id}_model`)} onSave={(x) => save({ [`ai.${id}_model`]: x })}
+          blank={id === "ollama" ? { label: "Automatic", hint: "The best installed model" } : undefined} />
       </ControlRow>
       <div className="py-3.5">
         <button className="btn btn-sm btn-soft" disabled={testing} onClick={() => void test().catch((e) => toast(e.message, "error"))}>
@@ -97,7 +81,7 @@ function ProviderFields({ id, values, hints, save }: { id: ProviderId; values: R
 /** "Apple M4 · 16 GB memory · 20 GB free", for setup and Settings. */
 export function macLine(info: SystemInfo): string {
   const a = info.advice;
-  return [a.chip, `${a.ram_gb} GB memory`, `${a.disk_free_gb} GB free`].filter(Boolean).join(" · ");
+  return [a.chip, a.gpu, `${a.ram_gb} GB memory`, `${a.disk_free_gb} GB free`].filter(Boolean).join(" · ");
 }
 
 /** What this Mac can do, and getting a model onto it. */
@@ -106,7 +90,7 @@ function OnThisMac() {
   return (
     <Section
       icon={<LaptopIcon size={16} />}
-      title="On this Mac"
+      title={`On ${words.here}`}
       blurb="A model that runs here is free and private: nothing you write is sent anywhere."
       delay={30}
     >
@@ -125,11 +109,39 @@ function OnThisMac() {
 function ChooseWhereAiRuns() {
   const [open, setOpen] = useState(false);
   return (
-    <Section icon={<LaptopIcon size={16} />} title="You can now run everything on this Mac" blurb="Choose where AI runs: on this Mac, in the cloud, or a mix. Nothing changes until you choose." delay={20}>
+    <Section icon={<LaptopIcon size={16} />} title={`You can now run everything on ${words.here}`} blurb={`Choose where AI runs: on ${words.here}, in the cloud, or a mix. Nothing changes until you choose.`} delay={20}>
       {open ? <div className="py-3.5"><ChooseAi onChosen={() => setOpen(false)} skippable={() => setOpen(false)} /></div> : (
         <div className="py-3.5"><button className="btn btn-sm btn-soft" onClick={() => setOpen(true)}>Choose where AI runs</button></div>
       )}
     </Section>
+  );
+}
+
+/** Lockdown: one switch, shared by the family apps on this Mac. */
+function Privacy({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  const status = useLockdown();
+  const [params] = useQueryParams();
+  const here = useRef<HTMLDivElement>(null);
+  const asked = params.get("section") === "lockdown";
+  useEffect(() => {
+    if (asked) here.current?.scrollIntoView({ block: "start" });
+  }, [asked]);
+  const parked = status?.parked ?? 0;
+  return (
+    <div ref={here} className="scroll-mt-6">
+      <Section icon={<LockIcon size={16} />} title="Privacy" blurb={`Everything is kept on ${words.here}. Lockdown makes sure nothing is sent out either.`}>
+        <SwitchRow
+          label="Lockdown"
+          hint={
+            on
+              ? `On: only AI that runs on ${words.here} is used. No update checks of its own, no downloads, and anything that talks to another service (a research service, a note app, a calendar, a shared Sheet, picture look-ups) is switched off.${parked ? ` ${parked} ${parked === 1 ? "thing waits" : "things wait"} for it to be off, and will go ahead by itself.` : ""}`
+              : "Off: you choose which services to use, and each is described where you turn it on. Turn this on to switch them all off at once."
+          }
+          checked={on}
+          onChange={onChange}
+        />
+      </Section>
+    </div>
   );
 }
 
@@ -142,14 +154,14 @@ function FamilyApps({ data, onSharing }: { data: FamilyStatus | null; onSharing:
     return (
       <Section icon={<NetworkIcon size={16} />} title="Your family apps" blurb="Trailmix family apps on one Mac can share keys, preferences and what they know.">
         <p className="py-3.5 text-hint text-ink-soft">
-          Off for this copy of {app.name}: it isn't running as the Mac app. Set TRAILMIX_FAMILY_DIR to a folder to join one.
+          Off for this copy of {app.name}: it isn't running as {words.app}. Set TRAILMIX_FAMILY_DIR to a folder to join one.
         </p>
       </Section>
     );
   }
   const others = data.apps.filter((a) => !a.self);
   return (
-    <Section icon={<NetworkIcon size={16} />} title="Your family apps" blurb="Trailmix family apps on this Mac share keys and preferences, and ask each other for what they know.">
+    <Section icon={<NetworkIcon size={16} />} title="Your family apps" blurb={`Trailmix family apps on ${words.here} share keys and preferences, and ask each other for what they know.`}>
       <SwitchRow
         label="Share keys and preferences"
         hint={
@@ -173,7 +185,7 @@ function FamilyApps({ data, onSharing }: { data: FamilyStatus | null; onSharing:
           ))}
         </ul>
       ) : (
-        <p className="py-3.5 text-hint text-ink-soft">No other family apps have opened on this Mac yet. When one does, it shows here.</p>
+        <p className="py-3.5 text-hint text-ink-soft">No other family apps have opened on {words.here} yet. When one does, it shows here.</p>
       )}
     </Section>
   );
@@ -196,12 +208,12 @@ function useUpdates() {
 function Updates() {
   const { app } = useShell();
   const u = useUpdates();
-  const blurb = "New versions install from here or from the menu bar, in about a minute. Your data stays.";
-  if (!inApp || !u || !u.enabled) {
+  const blurb = `New versions install from here or from ${words.tray}, in about a minute. Your data stays.`;
+  if (!can("updates") || !u || !u.enabled) {
     return (
       <Section icon={<DownloadIcon size={16} />} title="Updates" blurb={blurb}>
         <p className="py-3.5 text-hint text-ink-soft">
-          {!inApp ? `Open ${app.name} from Applications to check for updates.` : `This copy of ${app.name} doesn't update itself (a development build).`}
+          {!inApp ? `Open ${app.name} from ${words.apps} to check for updates.` : `This copy of ${app.name} doesn't update itself (a development build).`}
         </p>
       </Section>
     );
@@ -216,8 +228,8 @@ function Updates() {
     case "failed": status = u.error ?? "The update didn't work."; break;
     case "checking": status = "Checking for updates…"; break;
     case "offline": status = "Couldn't reach GitHub to check. It tries again in a few hours."; break;
-    case "locked-down": status = "Lockdown is on, so nothing checks for updates or downloads them."; break;
     case "up-to-date": status = `You have the newest version${u.beta ? ", betas included" : ""}.`; break;
+    case "locked-down": status = "Lockdown is on, so nothing checks for updates or downloads them."; break;
     default: status = `${app.name} checks for updates a few times a day.`;
   }
   return (
@@ -280,9 +292,17 @@ export default function Settings() {
   const { data: providers } = useLive<ProviderInfo[]>(api.providers);
   const { data: family } = useLive<FamilyStatus>(api.family);
   const [setup, setSetup] = useState<ProviderId | null>(null);
-  const modules = modulesFor(app.modules.map((m) => m.id)).filter((m) => m.settings);
+  const [params] = useQueryParams();
+  const connect = useRef<HTMLDivElement>(null);
+  const asked = params.get("section") === "connect";
+  useEffect(() => {
+    if (asked && values) connect.current?.scrollIntoView({ block: "start" });
+  }, [asked, values]);
+  const modules = modulesFor(app.modules.filter((m) => !m.optional).map((m) => m.id)).filter((m) => m.settings);
+  const connections = modulesFor(app.modules.filter((m) => m.optional).map((m) => m.id)).filter((m) => m.settings);
+  const connected = app.modules.filter((m) => m.optional && m.active).map((m) => m.name);
   if (!values) return null;
-  const options = (providers ?? []).map((p) => ({ value: p.id, label: p.label, hint: p.kind === "local" ? "Runs on this Mac" : "Cloud" }));
+  const options = (providers ?? []).map((p) => ({ value: p.id, label: p.label, hint: p.kind === "local" ? `Runs on ${words.here}` : "Cloud" }));
   const primary = values["ai.provider"] as ProviderId;
   const setupId = setup ?? primary;
   const setupOptions = (providers ?? []).map((p) => ({ value: p.id, label: p.label, hint: p.ready ? "Ready" : p.kind === "local" ? "Not running" : "Needs setup" }));
@@ -310,8 +330,6 @@ export default function Settings() {
         </ControlRow>
       </Section>
 
-      <Lockdown shared={!!family?.sharing} />
-
       {!values["ai.path"] && <ChooseWhereAiRuns />}
 
       <OnThisMac />
@@ -319,7 +337,7 @@ export default function Settings() {
       <Section
         icon={<SparkleIcon size={16} />}
         title="AI"
-        blurb={`One choice for every part of the app. Local models never leave this Mac.${family?.sharing ? " Shared with your other family apps." : ""}`}
+        blurb={`One choice for every part of the app. Local models never leave ${words.here}.${family?.sharing ? " Shared with your other family apps." : ""}`}
         delay={60}
       >
         <ControlRow label="Provider" hint={providers?.find((p) => p.id === primary)?.reason || "Used first."}>
@@ -339,7 +357,10 @@ export default function Settings() {
           <Select label="Provider to set up" size="sm" className="w-full sm:w-64" value={setupId} options={setupOptions} onChange={(x) => setSetup(x as ProviderId)} />
         </ControlRow>
         <ProviderFields key={setupId} id={setupId} values={values} hints={hints} save={save} />
+        <UsageRows />
       </Section>
+
+      <Privacy on={!!values["core.lockdown"]} onChange={(on) => void save({ "core.lockdown": on })} />
 
       <AIUsage />
 
@@ -352,6 +373,28 @@ export default function Settings() {
         return <ModuleSettings key={m.id} />;
       })}
 
+      {connections.length > 0 && (
+        <div ref={connect} className="scroll-mt-6">
+          <Section
+            icon={<NetworkIcon size={16} />}
+            title="Connect a tool"
+            blurb={
+              connected.length
+                ? `${app.name} reads your project tool and sends changes only when you approve them.`
+                : `${app.name} works on its own. To keep your team's project tool as the shared place, set one up below.`
+            }
+          >
+            <p className="py-3.5 text-hint text-ink-soft">
+              {connected.length ? `Connected: ${connected.join(", ")}.` : `Not connected yet. Available: ${connections.map((m) => m.name).join(", ")}.`}
+            </p>
+          </Section>
+          {connections.map((m) => {
+            const ModuleSettings = m.settings!;
+            return <ModuleSettings key={m.id} />;
+          })}
+        </div>
+      )}
+
       <YourData />
 
       <Updates />
@@ -363,7 +406,7 @@ export default function Settings() {
             Run setup again
           </button>
         </ControlRow>
-        <ControlRow label={`Quit ${app.name}`} hint={inApp ? "Closes the window and the menu bar app." : "Stops the server; open the app again to come back."}>
+        <ControlRow label={`Quit ${app.name}`} hint={inApp ? `Closes the window and the app in ${words.tray}.` : "Stops the server; open the app again to come back."}>
           <button className="btn btn-sm btn-danger-ghost" onClick={() => (inApp ? quitApp() : void api.shutdown())}>
             <PowerIcon size={16} />
             Quit

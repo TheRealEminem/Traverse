@@ -37,10 +37,14 @@ class Module:
     count: Callable[[sqlite3.Connection], dict[str, int]] | None = None  # (a database, e.g. a backup's) -> {"people": 381}: to label backups
     offers: dict[str, Callable[[dict], object]] = field(default_factory=dict)  # "people.search" -> handler(args): what other family apps may ask it (family.py)
     people: Callable[[str, int], list[dict]] | None = None         # (q, limit) -> [{id, name, email?, detail?, is_self?}]: its part of the people directory (people.py)
+    ai_jobs: dict[str, dict] = field(default_factory=dict)         # job -> {"label", "hint", "weight": "light" | "heavy", "choice": () -> "auto" | provider | "rules"}: the AI work it does, so setup can place it (setup.py)
     tools: list = field(default_factory=list)                      # [mcp.Tool]: what Claude may do here, through the host's MCP server (mcp.py)
     brief: Callable[[str, date], dict] | None = None               # (since, today) -> {"today"|"waiting"|"moved"|"ahead": [entries]}: its part of the day's briefing (briefing.py)
-    ai_jobs: dict[str, dict] = field(default_factory=dict)         # job -> {"label", "hint", "weight": "light" | "heavy", "choice": () -> "auto" | provider | "rules"}: the AI work it does, so setup can place it (setup.py)
     startup: Callable[[], None] | None = None
+    # A connection to a tool outside this app (Plane, later others): None = always on. Given, it says whether the
+    # connection is set up. Until it is, the app hides this module's pages and tools but still shows its settings,
+    # so you can connect it without a restart.
+    active: Callable[[], bool] | None = None
 
 
 _loaded: dict[str, Module] = {}
@@ -77,6 +81,15 @@ def get(module_id: str) -> Module | None:
 
 def all_modules() -> list[Module]:
     return list(_loaded.values())
+
+
+def is_active(m: Module) -> bool:
+    return m.active is None or bool(m.active())
+
+
+def active_modules() -> list[Module]:
+    """The loaded modules that are on: all of them, except connections that aren't set up yet."""
+    return [m for m in _loaded.values() if is_active(m)]
 
 
 def describe(ref: str) -> dict | None:

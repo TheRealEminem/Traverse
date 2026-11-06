@@ -18,6 +18,9 @@ for _name in [n for n in os.environ if n.startswith((f"{_prefix}_AI_", "APP_AI_"
         "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_API_KEY", "OPENAI_BASE_URL", "GEMINI_API_KEY",
         "DEEPSEEK_API_KEY", "OLLAMA_URL", "OLLAMA_MODEL"]:
     os.environ.pop(_name, None)
+# A model server running on this machine isn't reached either: a job a test leaves queued would wait on a real model
+# (and out-wait jobs.drain). Nothing listens on this port, so "Ollama isn't reachable" comes back at once, as on CI.
+os.environ["OLLAMA_URL"] = "http://127.0.0.1:9"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -67,8 +70,8 @@ def lockdown_on():
     settings.update({lockdown.KEY: True})
     yield
     jobs.drain()
-    settings.update({lockdown.KEY: False})
     db.execute("DELETE FROM core_jobs WHERE status = 'waiting' AND wait_reason LIKE ?", (lockdown.REASON + "%",))
+    settings.update({lockdown.KEY: False})      # after the delete: turning it off is what sends parked work on its way
 
 
 @pytest.fixture
@@ -80,7 +83,7 @@ def fake_ai(monkeypatch):
         prompts: list[str] = []
         tokens = (1200, 300)
 
-        def __call__(self, prompt, system=None, choice="auto", purpose=None):
+        def __call__(self, prompt, system=None, choice="auto", purpose=None, models=None):
             self.prompts.append(prompt)
 
             def answer(pid, meter):
@@ -106,7 +109,7 @@ def fake_structured(monkeypatch):
         def __init__(self):
             self.calls: list[dict] = []
 
-        def __call__(self, prompt, system, schema, choice="auto", max_tokens=None, purpose=None):
+        def __call__(self, prompt, system, schema, choice="auto", max_tokens=None, purpose=None, models=None):
             self.calls.append({"prompt": prompt, "system": system, "schema": schema, "choice": choice})
 
             def answer(pid, meter):

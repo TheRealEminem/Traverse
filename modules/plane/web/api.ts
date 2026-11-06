@@ -110,7 +110,14 @@ export interface LinkedProject {
   id: string;
   identifier: string;
   name: string;
-  link: { local_ref: string; title: string | null; href: string | null; created_at: string; state_map: Record<Status, string | null> } | null;
+  link: {
+    local_ref: string;
+    title: string | null;
+    href: string | null;
+    created_at: string;
+    state_map: Record<Status, string | null>;
+    auto_send: boolean; // the Traverse project's new tasks go to Plane without waiting for Send
+  } | null;
   preset: Record<Status, string | null>;
   states: PlaneState[];
   open: number;
@@ -163,6 +170,7 @@ export interface Push {
   sent_at: string | null;
   checked_at: string | null;
   undo_of: string | null;
+  auto: boolean; // sent on its own: a new item in a project with auto-send on
   undone: { id: string; status: PushStatus; sent_at: string | null } | null;
   task: { title: string; href: string } | null;
   item: { id: string; key: string; name: string; url: string | null; removed: boolean } | null;
@@ -190,6 +198,9 @@ export const planeApi = {
   link: (projectId: string, localRef?: string) => request<LinkedProject>(`/plane/links/${projectId}`, json("POST", localRef ? { local_ref: localRef } : {})),
   mapStates: (projectId: string, stateMap: Partial<Record<Status, string>>) =>
     request<LinkedProject>(`/plane/links/${projectId}`, json("PATCH", { state_map: stateMap })),
+  /** Auto-send: the linked Traverse project's new tasks are added to this Plane project without waiting for Send. */
+  setAutoSend: (projectId: string, on: boolean) =>
+    request<LinkedProject>(`/plane/links/${projectId}`, json("PATCH", { auto_send: on })),
   unlink: (projectId: string) => request<void>(`/plane/links/${projectId}`, { method: "DELETE" }),
   /** Brings items into Traverse as linked tasks (or every open item assigned to you). Changes nothing in Plane. */
   bring: (body: { items: string[] } | { mine: true }) => request<Brought>("/plane/bring", json("POST", body)),

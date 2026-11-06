@@ -3,7 +3,8 @@
 Modules call complete(prompt, system) and get (text, provider used), or structured(prompt, system, Schema) and
 get (a validated Schema object, provider used). Which provider answers, with which model, and the fallback
 when it fails are app-wide settings ("ai.*"), chosen once in Settings → AI. A module can name a provider for
-one of its jobs (choice="anthropic"); "auto" means the app-wide one.
+one of its jobs (choice="anthropic"), and a model per provider for it (models={"anthropic": "claude-sonnet-5-5"});
+"auto" and a provider not named in models mean the app-wide ones.
 Local models are unloaded right after use (keep_alive 0) so they don't sit in memory.
 Every provider's attempt goes through attempt(), which writes what it used and cost to the usage log (pricing.py).
 While Lockdown is on (lockdown.py), only providers on this Mac are ready (configured()), and attempt() stops the
@@ -23,7 +24,7 @@ from urllib.parse import urlparse
 import httpx
 from pydantic import BaseModel
 
-from . import lockdown, module, pricing, resources, settings
+from . import lockdown, model_catalog, module, pricing, resources, settings, usage
 
 OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "0")  # "0" = unload right after the last call
 TIMEOUT = httpx.Timeout(600, connect=8)
@@ -51,6 +52,7 @@ DEFAULTS = {
     "heavy_provider": "auto",    # for the jobs modules call heavy (reading a long document): "auto" = the same as provider
     "ollama_url": os.getenv("OLLAMA_URL", "http://localhost:11434"),
     "ollama_model": os.getenv("OLLAMA_MODEL", ""),  # empty = the best installed one
+    "model_suggestion_dismissed": "",  # the suggested model someone said "not now" to (shared, so once for every family app)
     "anthropic_model": "claude-opus-5-5",
     "anthropic_api_key": "",
     "openai_model": "gpt-5-mini",
@@ -88,28 +90,31 @@ class Locked(AIError, lockdown.Blocked):
     parks with this reason and goes again when Lockdown is off."""
 
 
-LOCKED_OUT = f"{lockdown.REASON}, so only AI on this Mac is used"
+LOCKED_OUT = lockdown.WHY
 
 
 # ── For modules ────────────────────────────────────────────────────────
 
-def complete(prompt: str, system: str | None = None, choice: str = "auto", purpose: str | None = None) -> tuple[str, str]:
+def complete(prompt: str, system: str | None = None, choice: str = "auto", purpose: str | None = None,
+             models: dict[str, str] | None = None) -> tuple[str, str]:
     """(text, provider id). Tries your provider, then your fallback. Raises AIError with every reason.
-    purpose: what this is for in a few words, so Settings → AI → Usage can say where the spending went."""
-    cfg = settings.section("ai")
-    with pricing.purpose(purpose):
+    purpose: what this is for in a few words, so Settings → AI → Usage can say where the spending went.
+    models: a model to use instead of the app-wide one, by provider id (see with_models)."""
+    cfg = with_models(settings.section("ai"), models)
+    with usage.purpose(purpose):
         return run_chain(choice, cfg, "complete", lambda pid, meter: generate(pid, cfg, prompt, system, meter=meter))
 
 
 def structured(prompt: str, system: str | None, schema: type[BaseModel], choice: str = "auto",
-               max_tokens: int | None = None, purpose: str | None = None) -> tuple[BaseModel, str]:
+               max_tokens: int | None = None, purpose: str | None = None,
+               models: dict[str, str] | None = None) -> tuple[BaseModel, str]:
     """(an instance of schema, provider id). The reply is constrained to the schema where the provider can do
     that, and checked either way. Optional fields may come back as None. max_tokens: the output budget
-    (default 32000 for Claude, 16000 elsewhere). purpose: as for complete(). Raises AIError; check .provider_down."""
+    (default 32000 for Claude, 16000 elsewhere). purpose, models: as for complete(). Raises AIError; check .provider_down."""
     from . import ai_adapters
 
-    cfg = settings.section("ai")
-    with pricing.purpose(purpose):
+    cfg = with_models(settings.section("ai"), models)
+    with usage.purpose(purpose):
         return run_chain(choice, cfg, "structured",
                          lambda pid, meter: ai_adapters.generate_structured(pid, cfg, prompt, system, schema, max_tokens, meter))
 
@@ -144,9 +149,16 @@ def apply_path(path: str, cloud: str = "") -> None:
     settings.update(changes)
 
 
-def describe(choice: str = "auto") -> dict:
+def with_models(cfg: dict, models: dict[str, str] | None) -> dict:
+    """The AI settings with a job's own models laid over the app-wide ones. A blank model or an unknown provider
+    changes nothing, so a job's model only ever goes to the provider it was chosen for."""
+    picked = {f"{pid}_model": m.strip() for pid, m in (models or {}).items() if pid in PROVIDERS and (m or "").strip()}
+    return {**cfg, **picked} if picked else cfg
+
+
+def describe(choice: str = "auto", models: dict[str, str] | None = None) -> dict:
     """Which provider and model a job would use right now, and whether it's ready. For Settings screens."""
-    cfg = settings.section("ai")
+    cfg = with_models(settings.section("ai"), models)
     pid = chain(choice, cfg)[0]
     ready, reason = configured(pid, cfg)
     return {"provider": pid, "label": label(pid, cfg), "model": model_for(pid, cfg) if ready else "",
@@ -222,21 +234,17 @@ def model_for(pid: str, cfg: dict) -> str:
     return (cfg.get(f"{pid}_model") or "").strip() or DEFAULTS.get(f"{pid}_model", "")
 
 
-_PREFERRED_FAMILIES = ("qwen3", "qwen2.5", "gemma3", "llama3.1", "llama3.2", "mistral", "phi4", "llama3")
-
-
 def preferred_ollama_model(tags: list[dict]) -> str:
-    """The installed model most likely to follow instructions well: a known family, the biggest up to ~14B."""
+    """The installed model most likely to follow instructions well: the best family in the model catalog, then the
+    biggest up to ~14B. A model the catalog doesn't list is still used, after the listed ones."""
     def params(m: dict) -> float:
         text = (m.get("details") or {}).get("parameter_size", "")
         found = re.match(r"([\d.]+)\s*([BM])", text, re.I)
         return float(found.group(1)) / (1000 if found.group(2).upper() == "M" else 1) if found else 0.0
 
     def rank(m: dict) -> tuple:
-        name = m["name"].lower()
-        family = next((i for i, f in enumerate(_PREFERRED_FAMILIES) if name.startswith(f)), len(_PREFERRED_FAMILIES))
         size = params(m)
-        return (family, size > 15, -size)
+        return (model_catalog.rank(m["name"]), size > 15, -size)
 
     usable = [m for m in tags if "embed" not in m["name"].lower()]
     return min(usable, key=rank)["name"] if usable else ""
@@ -325,6 +333,8 @@ def _ollama_tags(cfg: dict, fresh: bool = False) -> list[dict]:
     hears of, so one answer (or one failure to answer, which can take the whole timeout when the address is a machine
     that's off) stands for TAGS_SECONDS. fresh: ask now whatever was kept (a button someone just pressed)."""
     url = cfg["ollama_url"]
+    if not lockdown.may_reach(url):     # an Ollama on another machine is beyond this computer too
+        return []
     now = time.monotonic()
     with _tags_lock:
         kept = _tags.get(url)
@@ -388,6 +398,8 @@ def _ollama(cfg: dict, prompt: str, system: str | None, keep_alive: str, meter: 
         raise AIError(f"Ollama isn't reachable at {cfg['ollama_url']} (or has no models installed)", provider_down=True)
     body = {"model": model, "prompt": prompt, "stream": False, "keep_alive": keep_alive,
             "options": {"num_ctx": OLLAMA_NUM_CTX, "num_predict": OLLAMA_NUM_PREDICT, "temperature": 0.2}}
+    if model_catalog.can_think(model):
+        body["think"] = False    # a thinking model would spend the answer budget on hidden reasoning
     if system:
         body["system"] = system
     data = _post(f"{cfg['ollama_url']}/api/generate", json=body, timeout=OLLAMA_TIMEOUT).json()
@@ -518,11 +530,10 @@ def _openai_compatible(base: str, key: str, model: str, prompt: str, system: str
 
 
 def _gemini(cfg: dict, prompt: str, system: str | None, meter: pricing.Meter) -> str:
-    meter.model = cfg["gemini_model"]
+    model = meter.model = model_for("gemini", cfg)
     body: dict = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
     if system:
         body["systemInstruction"] = {"parts": [{"text": system}]}
-    model = model_for("gemini", cfg)
     r = _post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
               json=body, headers={"x-goog-api-key": cfg["gemini_api_key"]})
     try:
@@ -597,11 +608,12 @@ def list_models(pid: str) -> list[str]:
     return sorted(m["id"] for m in r.json().get("data", []))
 
 
-def usage() -> dict:
-    """Settings → AI: what calls cost this month and over the last 30 days, by provider and by module, and the
-    latest calls (pricing.summary), with the names to show."""
+def usage_report() -> dict:
+    """Settings → AI: the one tally (core_ai_usage) in both its views. usage.summary(): this month and last, by purpose,
+    model and day. pricing.summary(): the last 30 days by provider and by module, and the latest calls, with the names
+    to show."""
     cfg = settings.section("ai")
-    data = pricing.summary()
+    data = {**usage.summary(), **pricing.summary()}
 
     def provider(pid: str) -> str:
         return label(pid, cfg) if pid in PROVIDERS else pid
@@ -624,11 +636,12 @@ class _Probe(BaseModel):
     number: int
 
 
-def test(pid: str) -> str:
-    """A real structured round trip with a tiny schema: proves the key, the model and the way jobs will call it."""
+def test(pid: str, model: str = "") -> str:
+    """A real structured round trip with a tiny schema: proves the key, the model and the way jobs will call it.
+    model: one a job uses instead of the provider's own."""
     from . import ai_adapters
 
-    cfg = settings.section("ai")
+    cfg = with_models(settings.section("ai"), {pid: model})
     started = time.perf_counter()
     got = attempt(pid, cfg, "structured", lambda p, meter: ai_adapters.generate_structured(
         p, cfg, "Set answer to the word OK and number to 7.", "You answer in the JSON format you are given.", _Probe,
