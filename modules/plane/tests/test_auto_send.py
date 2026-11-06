@@ -1,10 +1,14 @@
 """Auto-send: a linked project whose new tasks go to Plane without waiting for Send (off by default). End to end
 against the fake Plane: tasks made on the project page, accepted from the inbox, moved in, and sent in a batch with
 "Send the new ones". What reached Plane is read from the fake's record of every write."""
+import threading
+import time
+
 import pytest
 
 from core.server import db, jobs, mcp, settings
 from modules.inbox.server.extract import Proposal, Reading
+from modules.plane.server import pull
 from modules.plane.tests.fakeplane import PROJECTS
 from modules.tasks.server import items
 
@@ -208,3 +212,30 @@ def test_accepted_with_no_project_then_filed_into_one_follows_it_to_plane(plane,
     client.post(f"/api/inbox/proposals/{second['id']}/accept")         # the first follows the capture in
     jobs.drain()
     assert sorted(_made(plane)) == ["Call the printer", "Order labels"]
+
+
+def test_a_task_sent_while_a_pull_reads_isnt_taken_for_removed(plane, client, monkeypatch):
+    """A pull that read the project before a push made the item, and saved after, used to mark the new item "Removed in
+    Plane" (auto-send makes this likelier): the two now take turns (pull.LOCK)."""
+    project = _link(client, auto=True)
+    read, go = threading.Event(), threading.Event()
+    real_read = pull.read
+
+    def slow_read(*args, **kwargs):
+        found = real_read(*args, **kwargs)
+        read.set()
+        go.wait(5)
+        return found
+
+    monkeypatch.setattr(pull, "read", slow_read)
+    pull.pull_now()
+    assert read.wait(5)
+    r = client.post("/api/tasks", json={"text": "Made mid-pull", "project_id": project})
+    assert r.status_code in (200, 201), r.text
+    tid = r.json()["id"]
+    time.sleep(0.3)                                                    # its push waits for the pull to finish
+    go.set()
+    jobs.drain()
+    task = client.get(f"/api/tasks/{tid}").json()
+    assert task["synced"] and not task["synced"]["removed_at"] and _made(plane) == ["Made mid-pull"]
+    assert not db.one("SELECT removed_at FROM plane_items WHERE id = ?", (task["synced"]["ref"].split(":")[1],))["removed_at"]
