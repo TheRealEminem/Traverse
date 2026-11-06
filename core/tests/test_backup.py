@@ -328,6 +328,19 @@ def test_the_export_keeps_how_things_link_and_what_the_ai_cost(client, probe_ite
         db.execute("DELETE FROM core_ai_usage WHERE id = 'u1'")
 
 
+def test_the_export_leaves_out_ai_error_text_which_can_echo_a_key(client):
+    db.execute("INSERT INTO core_ai_usage (id, at, module, job, call, provider, model, input_tokens, output_tokens, error) "
+               "VALUES ('u2', '2026-10-21T10:00:00+00:00', 'probe', 'test', 'complete', 'custom', 'm', 1, 0, "
+               "'401 from https://user:hunter2secret@host/v1 sk-leaky')")
+    try:
+        r = client.post("/api/export").json()
+        text = (backup.EXPORT_DIR / r["name"]).read_text()
+        assert "hunter2secret" not in text and "sk-leaky" not in text
+        assert "u2" in [u["id"] for u in json.loads(text)["core"]["ai_usage"]]
+    finally:
+        db.execute("DELETE FROM core_ai_usage WHERE id = 'u2'")
+
+
 def test_every_module_of_the_app_is_in_the_export(client):
     data = json.loads((backup.EXPORT_DIR / client.post("/api/export").json()["name"]).read_text())
     for mid in config.enabled_modules():

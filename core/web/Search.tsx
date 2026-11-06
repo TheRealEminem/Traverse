@@ -85,7 +85,7 @@ export default function SearchPalette({ modules }: { modules: ModuleWeb[] }) {
   const rows = useMemo<Row[]>(() => {
     const places = placesFor(modules, q).slice(0, q ? 4 : 20);
     if (!q) return places;
-    const hits = (found?.groups ?? []).flatMap((g) =>
+    const hits = (found?.q === q ? found.groups : []).flatMap((g) =>
       g.hits.map((h) => ({ key: h.ref, group: g.module_name, title: h.title, snippet: h.snippet || undefined, href: h.href })),
     );
     return [...hits, ...places];
@@ -111,9 +111,12 @@ export default function SearchPalette({ modules }: { modules: ModuleWeb[] }) {
     } else if (e.key === "ArrowUp" || (e.key === "p" && e.ctrlKey)) {
       e.preventDefault();
       setActive((a) => (rows.length ? (a - 1 + rows.length) % rows.length : 0));
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && e.target === inputRef.current) {
       e.preventDefault();
-      go(rows[active]);
+      if (!searching) go(rows[active]);
+    } else if (e.key === "Tab") {
+      e.preventDefault();                       // focus stays in the box: ↑ ↓ move through the results
+      inputRef.current?.focus();
     } else if (e.key === "Escape") {
       e.preventDefault();
       if (query) setQuery("");
@@ -127,14 +130,13 @@ export default function SearchPalette({ modules }: { modules: ModuleWeb[] }) {
       className="fixed inset-0 z-50 flex animate-fade-in justify-center bg-[var(--scrim)] px-4 pt-[min(14vh,120px)] backdrop-blur-[3px]"
       onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}
     >
-      <div role="dialog" aria-modal="true" aria-label="Search" className="flex h-fit max-h-[min(72vh,560px)] w-full max-w-[600px] animate-dialog-in flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-lg">
+      <div role="dialog" aria-modal="true" aria-label="Search" onKeyDown={onKeyDown} className="flex h-fit max-h-[min(72vh,560px)] w-full max-w-[600px] animate-dialog-in flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-lg">
         <div className="flex items-center gap-3 border-b border-line px-4">
           {searching ? <Spinner className="text-ink-faint" /> : <SearchIcon size={18} className="shrink-0 text-ink-faint" />}
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={onKeyDown}
             placeholder={`Search ${app.name}, or go to…`}
             role="combobox"
             aria-expanded="true"
@@ -159,6 +161,7 @@ export default function SearchPalette({ modules }: { modules: ModuleWeb[] }) {
                   role="option"
                   aria-selected={n === active}
                   href={row.href}
+                  tabIndex={-1}
                   onClick={(e) => {
                     e.preventDefault();
                     go(row);
