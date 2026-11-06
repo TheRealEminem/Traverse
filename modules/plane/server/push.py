@@ -38,7 +38,6 @@ A field's entry in `changes`:
 """
 import json
 import logging
-import threading
 from datetime import datetime, timedelta
 
 from core.server import db, events, jobs, links, mcp, module
@@ -53,7 +52,7 @@ KIND = "push"
 NEEDS_YOU = ("waiting", "stopped", "failed")
 OPEN = (*NEEDS_YOU, "sending")
 PRIORITY_LABEL = {"none": "None", "low": "Low", "medium": "Medium", "high": "High", "urgent": "Urgent"}
-_writing = threading.Lock()     # one push at a time, so two can't read and write the same item at once
+_writing = pull.LOCK            # one push at a time, and never during a pull (pull.LOCK)
 
 
 def dry_run(cfg: dict) -> bool:
