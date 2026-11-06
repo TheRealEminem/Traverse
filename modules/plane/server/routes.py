@@ -134,9 +134,10 @@ def bring_in(body: dict = Body(...)):
 # ── The outbox (chunk 7) ──────────────────────────────────────────────
 
 @router.get("/outbox")
-def outbox():
-    """What waits for you to send to Plane, field by field, and what was sent (with Undo)."""
-    return push.outbox()
+def outbox(since: str | None = None):
+    """What waits for you to send to Plane, field by field, and what was sent (with Undo). since (ISO time): also how
+    many were sent from then on, which the latest 50 can't say."""
+    return push.outbox(since)
 
 
 @router.get("/outbox/count")

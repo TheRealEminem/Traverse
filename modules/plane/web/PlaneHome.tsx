@@ -28,13 +28,14 @@ function asks(p: Push): string {
   return `${p.kind === "undo" ? "Undo: " : ""}${words.charAt(0).toUpperCase()}${words.slice(1)}${p.item ? ` · ${p.item.key}` : ""}`;
 }
 
+const startOfToday = () => new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+
 export default function PlaneHome() {
-  const { data: box } = useLive(planeApi.outbox);
+  const { data: box } = useLive(() => planeApi.outbox(startOfToday()));
   const waiting = [...(box?.waiting ?? [])].sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status));
   const stopped = waiting.filter((p) => p.status === "stopped").length;
-  const today = new Date().toDateString();
-  const sentToday = (box?.sent ?? []).filter((p) => p.sent_at && new Date(p.sent_at).toDateString() === today);
-  const byAuto = sentToday.filter((p) => p.auto).length;
+  const sentToday = box?.sent_since?.sent ?? 0;
+  const byAuto = box?.sent_since?.auto ?? 0;
   const summary = !box
     ? "…"
     : !box.configured
@@ -43,7 +44,7 @@ export default function PlaneHome() {
         ? `${waiting.length} waiting for you${stopped ? `, ${stopped} changed in Plane too` : ""}`
         : "Nothing waiting";
   const notes = [
-    sentToday.length ? `${plural(sentToday.length, "change")} sent today${byAuto ? `, ${byAuto} by auto-send` : ""}.` : "",
+    sentToday ? `${plural(sentToday, "change")} sent today${byAuto ? `, ${byAuto} by auto-send` : ""}.` : "",
     box?.dry_run ? "Dry run is on: Send only checks." : "",
   ].filter(Boolean);
   return (
