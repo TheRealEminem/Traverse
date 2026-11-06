@@ -82,8 +82,8 @@ def url() -> str:
 
 
 def tools() -> list[tuple[str, module.Module, Tool]]:
-    """Every enabled module's tools, as (the name Claude sees, the module, the tool)."""
-    return [(f"{m.id}_{t.name}", m, t) for m in module.all_modules() for t in m.tools]
+    """Every active module's tools, as (the name Claude sees, the module, the tool)."""
+    return [(f"{m.id}_{t.name}", m, t) for m in module.active_modules() for t in m.tools]
 
 
 # ── The protocol (JSON-RPC 2.0) ───────────────────────────────────────

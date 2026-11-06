@@ -9,7 +9,7 @@ import urllib.error
 
 import pytest
 
-from core.server import jobs, mcp, module, settings
+from core.server import config, jobs, mcp, module, settings
 from core.server.mcp import Tool
 from core.server import mcp_bridge
 
@@ -79,7 +79,7 @@ def test_initialize_agrees_a_version_and_says_what_it_is(client, token):
     result = r.json()["result"]
     assert result["protocolVersion"] == "2025-06-18"
     assert result["capabilities"] == {"tools": {"listChanged": False}}
-    assert result["serverInfo"]["name"] == "traverse" and result["serverInfo"]["title"] == "Traverse"
+    assert result["serverInfo"]["name"] == config.APP_ID and result["serverInfo"]["title"] == config.NAME
     assert "never approve anything" in result["instructions"]
     newer = _rpc(client, token, "initialize", {"protocolVersion": "2099-01-01"}).json()["result"]
     assert newer["protocolVersion"] == mcp.PROTOCOL_VERSIONS[0]      # one it speaks; the client decides
@@ -152,7 +152,7 @@ def test_a_refusal_is_the_tools_sentence_and_a_bug_says_where_to_look(client, to
     no = _call(client, token, "probe_echo", word="no")
     assert no == {"content": [{"type": "text", "text": "The probe won't say no."}], "isError": True}
     boom = _call(client, token, "probe_echo", word="boom")
-    assert boom["isError"] is True and "Traverse's log" in boom["content"][0]["text"]
+    assert boom["isError"] is True and f"{config.NAME}'s log" in boom["content"][0]["text"]
     unknown = _rpc(client, token, "tools/call", {"name": "probe_nothing", "arguments": {}}).json()
     assert unknown["error"]["code"] == -32602
 
@@ -211,9 +211,9 @@ def test_settings_show_the_token_once_then_only_its_end(client):
     token = _token_in(made["setup"])
     assert len(token) >= 40
     assert made["on"] is True and made["hint"] == f"…{token[-4:]}"
-    assert made["setup"]["claude_code"] == (f'claude mcp add --scope user --transport http traverse {mcp.url()} '
+    assert made["setup"]["claude_code"] == (f'claude mcp add --scope user --transport http {config.APP_ID} {mcp.url()} '
                                             f'--header "Authorization: Bearer {token}"')
-    desktop = json.loads(made["setup"]["claude_desktop"])["mcpServers"]["traverse"]
+    desktop = json.loads(made["setup"]["claude_desktop"])["mcpServers"][config.APP_ID]
     assert desktop == {"command": sys.executable, "args": ["-B", str(mcp.BRIDGE), mcp.url()], "env": {"MCP_TOKEN": token}}
     again = client.get("/api/mcp").json()
     assert token not in json.dumps(again) and again["hint"] == f"…{token[-4:]}"

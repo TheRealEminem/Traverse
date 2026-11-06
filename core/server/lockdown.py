@@ -1,20 +1,28 @@
-"""Lockdown: one switch that stops every call to the cloud, for when nothing should leave this Mac.
+"""Lockdown: nothing leaves this computer. The family's rule 9 (TRAILMIX.md), one switch for every family app on this Mac.
 
-`core.lockdown` is one of the settings shared with the other family apps (family.py), so turning it on in one app
-turns it on in every family app on this Mac that shares keys and preferences. While it's on:
+`core.lockdown` is one of the settings shared with the other family apps (family.py), so turning it on in one app turns
+it on in every family app on this Mac that shares keys and preferences. While it's on:
 
 - **AI:** only models on this Mac answer (Ollama, or an OpenAI-compatible server, at a local address). ai.configured()
-  says the others aren't ready, and ai.attempt() stops them before anything is sent; the usage log shows each stop,
+  says why the others aren't ready, and ai.attempt() stops them before anything is sent; the usage log shows each stop,
   at no cost.
-- **Updates:** the Mac app asks GET /api/lockdown before it checks for or downloads an update, and doesn't while it's
-  on (or while the server can't say).
-- **Modules:** anything else that reaches out asks first: `may_reach(url)` to know, `check(url)` right before the
-  request leaves. Plane's client checks before every request, so pulls and pushes stop.
+- **Updates:** the app makes no update checks of its own. The Mac app asks GET /api/lockdown before it checks for or
+  downloads an update, and doesn't while it's on (or while the server can't say).
+- **Ollama and its models** aren't downloaded, and every module's feature that talks to the outside stops. A module
+  asks before each such thing:
 
-An address on this Mac (localhost) is never the cloud, so a local Ollama, Plane or Trailmix keeps working.
+      if why := lockdown.blocked("Syncing the Google Sheet"):
+          raise SomethingError(why)          # a request that can't wait
+      lockdown.check(url)                    # right before a request leaves; raises Blocked
+      lockdown.may_reach(url)                # to know in advance
+
+An address on this Mac (localhost) is never the cloud, so a local Ollama or Trailmix keeps working. What a module does
+with data already on this Mac (imports, search, backups) is not affected. A new feature that reaches out must ask, and
+add itself to the test that proves nothing goes out (core/tests/test_lockdown.py for the host, each module's own for
+its sync jobs).
 
 Work stopped by Lockdown isn't an error. check() raises Blocked, a jobs.Wait, so a job that meets it parks with the
-reason "Lockdown is on" (wait_reason starts with REASON) and goes again by itself once Lockdown is off: resume(), run
+reason "Lockdown mode is on" (wait_reason starts with REASON) and goes again by itself once Lockdown is off: resume(), run
 when the setting is saved here and every few seconds by watch(), which also notices another app turning it off.
 """
 import ipaddress
@@ -28,8 +36,9 @@ from . import db, jobs, settings
 log = logging.getLogger("core.lockdown")
 
 KEY = "core.lockdown"
-REASON = "Lockdown is on"
-SENTENCE = f"{REASON}, so nothing leaves this Mac. Turn it off in Settings → Lockdown to go ahead."
+REASON = "Lockdown mode is on"
+WHY = f"{REASON} (Settings → Privacy)"
+SENTENCE = f"{REASON}, so nothing leaves this computer. Turn it off in Settings → Privacy to go ahead."
 WATCH_SECONDS = 5
 
 
@@ -42,11 +51,16 @@ class Blocked(jobs.Wait):
 
 
 def on() -> bool:
-    return settings.get_all().get(KEY) is True
+    return bool(settings.get_all().get(KEY))
+
+
+def blocked(what: str) -> str | None:
+    """Why `what` can't happen now, in words for a person, or None when it may."""
+    return f"{what} is off while Lockdown is on (Settings → Privacy)." if on() else None
 
 
 def local(url: str | None) -> bool:
-    """The address is this Mac: localhost, or a loopback IP (127.x.x.x, ::1)."""
+    """The address is this computer: localhost, or a loopback IP (127.x.x.x, ::1)."""
     host = (urlparse(url or "").hostname or "").lower()
     if host == "localhost":
         return True
@@ -56,9 +70,12 @@ def local(url: str | None) -> bool:
         return False
 
 
+on_this_computer = local
+
+
 def may_reach(url: str | None = None) -> bool:
     """"May I reach the cloud?": whether this app may send a request to `url` now (with no url, anywhere beyond this
-    Mac). Yes when Lockdown is off, or the address is this Mac."""
+    computer). Yes when Lockdown is off, or the address is this computer."""
     return local(url) or not on()
 
 
@@ -111,21 +128,3 @@ def watch() -> None:
 def status() -> dict:
     """For the app's chrome, Settings and the Mac app's updater (GET /api/lockdown)."""
     return {"on": on(), "parked": len(parked())}
-
-
-# ── The family's names for the same questions ─────────────────────────
-# Shared code written against the family's lockdown.py (ollama_setup.py, and the other family apps' modules) asks
-# these; here they answer from the same switch.
-
-WHY = SENTENCE
-
-
-def blocked(what: str) -> str | None:
-    """Why `what` can't happen now, in words for a person, or None when it may. For work that is simply switched
-    off while Lockdown is on (a download, a sync started by hand); a job that should wait for it uses check()."""
-    return f"{what} is off while Lockdown is on (Settings → Lockdown)." if on() else None
-
-
-def on_this_computer(url: str) -> bool:
-    """The family's name for local()."""
-    return local(url)

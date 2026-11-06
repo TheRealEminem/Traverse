@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from . import pricing
+from . import model_catalog, pricing
 from .ai import (AIError, PROVIDERS, TIMEOUT, _CLAUDE_FALLBACK_MODELS, _error_text, claude_error, claude_usage, label,
                  model_for, ollama_usage, openai_usage, require, too_long, wait_for_memory)
 from .ai_schema import blank_to_none, parse_json_text, portable_schema, strict_schema
@@ -131,6 +131,8 @@ def _ollama(cfg: dict, system: str, prompt: str, schema: type[BaseModel], meter:
         "options": {"num_ctx": ollama_context(len(system) + len(prompt)), "num_predict": OLLAMA_OUTPUT_BUDGET,
                     "temperature": 0.1},
     }
+    if model_catalog.can_think(model):
+        body["think"] = False    # a thinking model would spend the output budget on hidden reasoning
     try:
         r = httpx.post(f"{url}/api/chat", json=body, timeout=httpx.Timeout(OLLAMA_TIMEOUT_SECONDS, connect=8))
     except httpx.HTTPError as e:

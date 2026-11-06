@@ -6,7 +6,7 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from core.server import ai, ai_adapters, db, jobs, resources, schedule
+from core.server import ai, ai_adapters, computer, db, hardware, jobs, resources, schedule
 
 GB = resources.GB
 Mem = namedtuple("Mem", "total available percent")
@@ -21,6 +21,8 @@ def mac(monkeypatch):
         monkeypatch.setattr(resources, "_disk", lambda: Disk(disk_total * GB, (disk_total - disk_free) * GB, disk_free * GB))
         monkeypatch.setattr(resources, "memory_pressure", lambda: pressure)
         monkeypatch.setattr(resources, "chip", lambda: name)
+        monkeypatch.setattr(hardware, "profile", lambda: {"cpu": "Apple M4", "gpus": hardware.mac_hardware("Apple M4")[1], "npu": "Apple Neural Engine",
+                                                          "ai_memory_gb": 11.2, "ai_runs_on": "unified"})
     return make
 
 
@@ -35,7 +37,7 @@ def test_short_of_memory_still_goes_ahead_when_the_mac_can_swap(mac):
 
 
 @pytest.mark.parametrize("numbers, says", [
-    (dict(ram=8, free_ram=1), "more than this Mac can spare"),
+    (dict(ram=8, free_ram=1), f"more than {computer.word('here')} can spare"),
     (dict(ram=16, free_ram=3, disk_free=20, disk_total=500), "little room to swap"),
     (dict(ram=16, free_ram=3, pressure=4), "critical memory pressure"),
 ])

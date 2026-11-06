@@ -23,12 +23,16 @@ export interface ModuleWeb {
   routes: { path: string; view: ComponentType<RouteProps>; /** Use the full window width instead of the reading column (a canvas, a wide table). */ wide?: boolean }[];
   /** The sidebar's big button. The first enabled module that has one gets it. */
   primary?: { label: string; icon: ReactNode; run: () => void | Promise<void> };
+  /** Something of the module's at the top of the sidebar's navigation, such as a switcher. */
+  sidebarTop?: ComponentType;
   /** A card on Home, where every module shows what's new. */
   home?: ComponentType;
   /** Show the Home block across the full width, without the card around it (for a module that lays out its own sections). */
   homeWide?: boolean;
   /** A section on the Settings page. */
   settings?: ComponentType;
+  /** One screen of the first run, after the host's own ("Bring your people in"). Call next() to go on; it can be skipped. */
+  setupStep?: { title: string; view: ComponentType<{ next: () => void }> };
   /**
    * The first page of the day. Asked when the app opens at Home (and when its window comes back on a new day): a path
    * to show instead, without "#/", or null. The first enabled module with an answer wins.
@@ -40,8 +44,6 @@ export interface ModuleWeb {
    * working without it, as it doesn't run in a server install nobody has open.
    */
   background?: ComponentType;
-  /** One screen of the first run, after the host's own ("Bring your people in"). Call next() to go on; it can be skipped. */
-  setupStep?: { title: string; view: ComponentType<{ next: () => void }> };
 }
 
 const found = import.meta.glob<{ default: ModuleWeb }>("../../modules/*/web/index.tsx", { eager: true });

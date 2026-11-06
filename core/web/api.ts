@@ -33,12 +33,14 @@ export interface AppInfo {
   name: string;
   tagline: string;
   version: string;
-  modules: { id: string; name: string }[];
+  modules: { id: string; name: string; /** A connection to an outside tool: off until it is set up. */ optional: boolean; active: boolean }[];
   auth_required: boolean;
   /** Lockdown is on: nothing leaves this computer (core/server/lockdown.py). */
   lockdown: boolean;
   /** False until the first-run screens have been finished (or skipped); an install that was already in use starts true. */
   setup_done: boolean;
+  /** Which system this is and what the shell can do. */
+  computer: PlatformInfo;
 }
 
 /** A thing's latest background job, as the server reports it next to the thing. */
@@ -57,7 +59,7 @@ export interface LockdownStatus {
   on: boolean;
   parked: number;
 }
-export const LOCKDOWN = "Lockdown is on";
+export const LOCKDOWN = "Lockdown mode is on"; // lockdown.REASON
 
 /** The job is parked until Lockdown is off: it goes ahead by itself then, so there's nothing to press. */
 export function heldByLockdown(job: Job | null | undefined): boolean {
@@ -136,13 +138,52 @@ export interface AIUsage {
   prices_checked: string;
 }
 
-/** Running inside the Mac app's own window (rather than a browser): it can be asked to quit, or to show a file,
- *  and it lists the sidebar's sections in its menu bar menu. */
+/** Running inside the app's own window (the Mac app, or the desktop app for Windows and Linux) rather than a
+ *  browser. Both shells offer the same bridge; `can()` says what this one can do. */
 type AppBridge = { postMessage: (message: string) => void };
 const bridge = (window as unknown as { webkit?: { messageHandlers?: { app?: AppBridge } } }).webkit?.messageHandlers?.app;
 export const inApp = !!bridge;
 export const quitApp = () => bridge?.postMessage("quit");
-export const revealInFinder = (path: string) => bridge?.postMessage(`reveal:${path}`);
+/** Shows a file or folder in Finder, File Explorer or the file manager (`words.files`). */
+export const revealFile = (path: string) => bridge?.postMessage(`reveal:${path}`);
+
+/** Which system this is, and what the app's shell can do (core/server/computer.py). */
+export type ShellCan = "quit" | "reveal" | "updates" | "login";
+export interface Words {
+  /** "this Mac", "this PC" or "this computer" */
+  here: string;
+  /** "Finder", "File Explorer" or "your file manager" */
+  files: string;
+  /** "the menu bar" or "the system tray" */
+  tray: string;
+  /** "the Mac app" or "the desktop app" */
+  app: string;
+  /** Where apps are opened from: "Applications", "the Start menu" or "your apps menu" */
+  apps: string;
+  /** "Terminal", "PowerShell" or "a terminal" */
+  terminal: string;
+}
+export interface PlatformInfo {
+  os: "mac" | "windows" | "linux";
+  words: Words;
+  shell: "mac" | "desktop" | null;
+  can: ShellCan[];
+}
+/** The words for this system, set from the app info as it loads (the Mac's until then). Write `On ${words.here}`,
+ *  never "this Mac", in anything a person reads. */
+export const words: Words = { here: "this Mac", files: "Finder", tray: "the menu bar", app: "the Mac app", apps: "Applications", terminal: "Terminal" };
+export let computer: PlatformInfo = { os: "mac", words, shell: null, can: [] };
+export function setSystem(info: PlatformInfo | undefined) {
+  if (!info) return;
+  Object.assign(words, info.words);
+  computer = { ...info, words };
+}
+/** Whether the app's own window can do this here. False in a browser, and for what a platform's shell lacks. */
+export const can = (what: ShellCan) => inApp && computer.can.includes(what);
+/** A file in a folder the server named, with this system's separator (Windows wants "\\"). */
+export const joinPath = (folder: string, name: string) => `${folder}${computer.os === "windows" ? "\\" : "/"}${name}`;
+/** "this Mac" → "This Mac", for the start of a sentence. */
+export const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 export const showInAppMenu = (sections: { label: string; path: string }[]) => bridge?.postMessage(`menu:${JSON.stringify(sections)}`);
 
 /** Where the Mac app's updates stand (Updater.report in mac/), sent by its window as an "app-updates" event. */
@@ -229,32 +270,26 @@ export interface PersonChoice {
   name: string;
 }
 
-/** Claude's access through the MCP server (core/server/mcp.py). The token itself comes back only inside `setup`, once. */
-export interface McpStatus {
-  on: boolean;
-  hint: string | null;
-  url: string;
-  tools: { name: string; title: string; module: string; writes: boolean }[];
-}
-export interface McpSetup {
-  claude_code: string;
-  claude_desktop: string;
-}
-
 /** What this Mac can do (core/server/resources.py): its memory, disk and chip, and the path that suits it. */
 export interface SystemInfo {
   snapshot: { chip: string; ram_total_gb: number; ram_available_gb: number; disk_free_gb: number; memory_pressure: number };
-  advice: { verdict: "local" | "mixed" | "cloud"; chip: string; ram_gb: number; disk_free_gb: number; notes: string[] };
+  advice: { verdict: "local" | "mixed" | "cloud"; chip: string; gpu: string; npu: string; ram_gb: number; disk_free_gb: number; notes: string[] };
 }
 
 /** Ollama on this Mac (core/server/ollama_setup.py). */
 export interface OllamaStatus {
   can_install: boolean;
   installed: boolean;
+  /** Linux: what to run yourself, since the app runs nothing as root. Null elsewhere. */
+  install_command: string | null;
+  install_page: string | null;
+  start_command: string | null;
   reachable: boolean;
   models: string[];
   using: string;
   recommended: string;
+  /** A newer model than the one in use, when the catalog has one that suits this computer; null otherwise. */
+  suggestion: { model: string; replaces: string } | null;
   locked: boolean;
   install: { active: boolean; status: string; progress: number | null; error: string | null } | null;
   pull: { model: string; active: boolean; status: string; progress: number | null; error: string | null } | null;
@@ -285,6 +320,18 @@ export interface SetupState {
   providers: ProviderInfo[];
 }
 
+/** Claude's access through the MCP server (core/server/mcp.py). The token itself comes back only inside `setup`, once. */
+export interface McpStatus {
+  on: boolean;
+  hint: string | null;
+  url: string;
+  tools: { name: string; title: string; module: string; writes: boolean }[];
+}
+export interface McpSetup {
+  claude_code: string;
+  claude_desktop: string;
+}
+
 export type BackupKind = "auto" | "manual" | "before-restore" | "before-update";
 export type BackupSlot = "latest" | "hour" | "day" | "week";
 
@@ -302,6 +349,16 @@ export interface BackupFile {
 export interface BackupItem extends BackupFile {
   counts: Record<string, number>;
   slots: BackupSlot[];
+}
+
+export interface UsageSummary {
+  this_month: { cost: number; calls: number; tokens: number; unpriced: number };
+  last_month: { cost: number; calls: number; tokens: number; unpriced: number };
+  warn_over: number;
+  prices_as_of: string;
+  by_source: { name: string; calls: number; cost: number; tokens: number }[];
+  by_model: { provider: string; model: string; local: boolean; priced: boolean; calls: number; cost: number; tokens_in: number; tokens_out: number }[];
+  by_day: { day: string; cost: number; calls: number }[];
 }
 
 export const api = {
@@ -326,7 +383,9 @@ export const api = {
   mcpOff: () => request<void>("/mcp/token", { method: "DELETE" }),
   providers: () => request<ProviderInfo[]>("/ai/providers"),
   providerModels: (id: ProviderId) => request<{ models: string[] }>(`/ai/providers/${id}/models`),
-  providerTest: (id: ProviderId) => request<{ message: string }>(`/ai/providers/${id}/test`, json("POST")),
+  usage: () => request<UsageSummary>("/ai/usage"),
+  providerTest: (id: ProviderId, model = "") =>
+    request<{ message: string }>(`/ai/providers/${id}/test${model ? `?model=${encodeURIComponent(model)}` : ""}`, json("POST")),
   aiUsage: () => request<AIUsage>("/ai/usage"),
   lockdown: () => request<LockdownStatus>("/lockdown"),
 
@@ -338,6 +397,7 @@ export const api = {
   ollama: () => request<OllamaStatus>("/ollama"),
   ollamaInstall: () => request<{ started: boolean }>("/ollama/install", json("POST")),
   ollamaPull: (model = "") => request<{ started: boolean }>("/ollama/pull", json("POST", { model })),
+  ollamaDismissSuggestion: (model: string) => request<{ ok: true }>("/ollama/dismiss-suggestion", json("POST", { model })),
 
   search: (q: string) => request<SearchGroup[]>(`/search?q=${encodeURIComponent(q)}`),
   people: (q: string, limit = 8) => request<PeopleResult>(`/people?q=${encodeURIComponent(q)}&limit=${limit}`),
