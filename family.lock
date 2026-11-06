@@ -1,6 +1,6 @@
 {
-  "commit": "ef719e438b08d569c8241f116736a9c2e160d5eb",
-  "subject": "Merge branch 'main' into overnight/from-chunk-13",
-  "synced_on": "2026-11-05",
+  "commit": "0a3f0f409c91e9e3a473c1848cc74662a9602b6b",
+  "subject": "Search: Enter never opens an answer to an earlier query, and Escape, arrows and Tab work wherever focus is in the box",
+  "synced_on": "2026-11-06",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }
