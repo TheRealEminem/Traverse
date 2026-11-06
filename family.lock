@@ -1,6 +1,6 @@
 {
-  "commit": "95d9da5d7adb95fdaf93adea36aaf036d73c48fe",
-  "subject": "AI usage table: its step can run twice, and the version before can still read it after Go back",
+  "commit": "ef719e438b08d569c8241f116736a9c2e160d5eb",
+  "subject": "Merge branch 'main' into overnight/from-chunk-13",
   "synced_on": "2026-11-05",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }
