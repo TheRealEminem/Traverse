@@ -99,7 +99,10 @@ final class Updater: ObservableObject {
         }
     }
 
-    /// Looks for a new version. `manual`: you asked (Check for updates…), so show "Checking…" meanwhile.
+    /// Lockdown (the family's rule 9: nothing leaves this computer). The server reports it in /api/app.
+
+    /// Looks for a new version. `manual`: you asked (Check for updates…), so show "Checking…" meanwhile. Under
+    /// Lockdown only that goes out: the automatic checks stay home.
     func check(manual: Bool = false) async {
         guard let feed = Self.feed, !working else { return }
         switch await Self.lockedDown() {
