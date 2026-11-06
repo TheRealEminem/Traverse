@@ -1,6 +1,6 @@
 {
-  "commit": "d2a00773816920513f7fb041f8fb6c808fedc2fc",
-  "subject": "One search box (\u2318K), a day strip on Home, a contents row in Settings, and Tasks' card and search say more",
+  "commit": "f95337a7a5d641347779b2038cb568a318093319",
+  "subject": "Home leaves out a connection that isn't set up, so its card doesn't nag",
   "synced_on": "2026-11-05",
   "note": "The TrailmixFamily commit this app's shared code comes from. Change it with scripts/sync-family."
 }

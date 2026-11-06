@@ -42,7 +42,7 @@ function DayStart({ module: m }: { module: ModuleWeb }) {
 
 export default function Home() {
   const { app, theme } = useShell();
-  const modules = modulesFor(app.modules.map((m) => m.id));
+  const modules = modulesFor(app.modules.filter((m) => m.active).map((m) => m.id));
   const cards = modules.filter((m) => m.home);
   const day = modules.find((m) => m.start && m.nav?.length);
   return (

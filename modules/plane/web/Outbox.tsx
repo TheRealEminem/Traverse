@@ -130,7 +130,7 @@ function DryRun() {
           Send checks each change against Plane and says what it would write, but writes nothing. Turn it off in Settings → Plane when you're ready.
         </p>
       </div>
-      <a className="btn btn-sm btn-soft" href="#/settings">
+      <a className="btn btn-sm btn-soft" href="#/settings?section=plane">
         Open Settings
       </a>
     </div>

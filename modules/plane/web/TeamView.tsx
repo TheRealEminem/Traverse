@@ -631,7 +631,7 @@ function NotSetUp({ team }: { team: Team }) {
           : "Paste your Plane API key and workspace in Settings → Plane. Traverse reads Plane, and sends only what you approve."}
       </Empty>
       <div className="mt-4 flex justify-center">
-        <a className="btn btn-md btn-primary" href="#/settings">
+        <a className="btn btn-md btn-primary" href="#/settings?section=plane">
           Open Settings
         </a>
       </div>

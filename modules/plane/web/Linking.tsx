@@ -104,7 +104,7 @@ export default function Linking() {
           Pick the projects in Settings → Plane. Once they're read, you can link each one to a Traverse project here.
         </Empty>
         <div className="mt-4 flex justify-center">
-          <a className="btn btn-md btn-primary" href="#/settings">
+          <a className="btn btn-md btn-primary" href="#/settings?section=plane">
             Open Settings
           </a>
         </div>
