@@ -64,4 +64,5 @@ MODULE = Module(
     people=people.find,
     tools=tools.TOOLS,
     brief=briefing.brief,
+    active=pull.configured,                     # Traverse works on its own until a Plane key and workspace are saved
 )
