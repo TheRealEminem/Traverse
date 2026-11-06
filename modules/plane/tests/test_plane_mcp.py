@@ -164,7 +164,8 @@ FORBIDDEN_ANYWHERE = {"update_work_item", "create_work_item", "create_comment", 
 
 def test_no_tools_code_names_a_way_to_send_approve_or_change_settings():
     """The runtime guards above stop it; this keeps the tools' own code from even trying."""
-    files = {Path(inspect.getsourcefile(t.handler)) for _, _, t in mcp.tools() if t.handler.__module__ != __name__}
+    # Every module's tools, set up or not: a connection that is off hides its tools from Claude, not from this check.
+    files = {Path(inspect.getsourcefile(t.handler)) for m in module.all_modules() for t in m.tools if t.handler.__module__ != __name__}
     assert {f.parent.parent.name for f in files} >= {"tasks", "plane", "inbox"}
     for path in files:
         for node in ast.walk(ast.parse(path.read_text())):
