@@ -256,6 +256,30 @@ def share(item_id: str) -> dict:
     return {"fields": groups, "new": row is None}
 
 
+def unshared(project_id: str) -> list[str]:
+    """The project's open top-level tasks that aren't linked anywhere and aren't waiting to be sent: what "Send the
+    new ones" would ask for. Empty when the project isn't linked."""
+    if not links.targets(links.ref("tasks", project_id), "synced"):
+        return []
+    rows = db.query("SELECT id FROM tasks_items i WHERE project_id = ? AND parent_id IS NULL AND status IN "
+                    f"({','.join('?' * len(vocab.OPEN))}) AND NOT EXISTS (SELECT 1 FROM tasks_synced s "
+                    "WHERE s.item_id = i.id) ORDER BY sort, created_at", (project_id, *vocab.OPEN))
+    ids = [r["id"] for r in rows]
+    waiting = links.targets_of([links.ref("tasks", i) for i in ids], "share")
+    return [i for i in ids if not waiting.get(links.ref("tasks", i))]
+
+
+def share_new(project_id: str) -> dict:
+    """Asks for each of unshared(project_id) to be made where the project is linked (share, one by one). Returns
+    {"asked": how many}."""
+    found = unshared(project_id)
+    if not found and not links.targets(links.ref("tasks", project_id), "synced"):
+        raise ValueError("This project isn't linked anywhere, so there's nowhere to send its tasks")
+    for item_id in found:
+        share(item_id)
+    return {"asked": len(found)}
+
+
 def can_comment(item_id: str, project_id: str | None = None) -> dict:
     """The tasks_synced row of a task whose other side can take a comment, or ValueError saying why it can't.
     project_id: the task must be in that project (a project's update goes on one of its own tasks)."""

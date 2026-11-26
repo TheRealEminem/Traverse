@@ -438,7 +438,7 @@ function Sent({ push: p, focused, delay, onChanged }: { push: Push; focused: boo
       </ul>
       <p className="mt-3 text-meta text-ink-soft">
         <span data-tip={p.sent_at ? formatDate(p.sent_at) : undefined}>Sent {p.sent_at ? relativeTime(p.sent_at) : ""}</span>
-        {p.approved_at && <> · approved by you {relativeTime(p.approved_at)}</>}
+        {p.approved_at && (p.auto ? <> · sent on its own (auto-send is on for {p.project?.name ?? "its project"})</> : <> · approved by you {relativeTime(p.approved_at)}</>)}
         {p.note && <> · {p.note}</>}
         {p.kind === "create" && <> · Traverse never deletes in Plane, so a new item can't be undone from here</>}
         {p.kind === "comment" && <> · Traverse never edits or deletes comments in Plane, so this one stays as it is</>}

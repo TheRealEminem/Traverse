@@ -91,6 +91,13 @@ class WorkShareRequested(TypedDict):
     project_ref: str | None  # the local project ("tasks:<project id>"): where a new one goes, through its link
 
 
+# New open work turned up in a local project that's linked somewhere (made there, accepted from the inbox, or moved
+# in), and isn't linked itself. Nobody asked to send it: whoever keeps that side ignores it, unless you've told it to
+# send a project's new work on its own (an "auto-send" switch, off by default). Then it treats this as
+# WORK_SHARE_REQUESTED for a new one, which has the same shape. Rules still hold: only new work, never a delete.
+WORK_ADDED = "work.added"
+
+
 # Someone ticked (or unticked) a piece of work outside the module it belongs to: a pick in the day's plan. The module
 # whose ref it is marks it done or open again; anything else ignores it. Work kept somewhere else too changes only
 # here: it reaches the other side, like any change, only when you send it.
