@@ -25,23 +25,6 @@ from . import db, jobs, lockdown
 
 log = logging.getLogger("core.ai")
 
-_purpose: contextvars.ContextVar[str] = contextvars.ContextVar("ai_purpose", default="")
-
-
-@contextlib.contextmanager
-def purpose(name: str | None):
-    """Calls made inside are logged under this name (as the job) when no job is running: ai.complete(purpose=...),
-    the family's way for a module to say what a call was for. Nesting keeps the outermost name."""
-    if not name or _purpose.get():
-        yield
-        return
-    token = _purpose.set(name)
-    try:
-        yield
-    finally:
-        _purpose.reset(token)
-
-
 CHECKED = "2026-10-21"   # when the tables below were last read from the providers' pages
 
 
@@ -180,6 +163,44 @@ def cost(provider: str, model: str, input_tokens: int | None, output_tokens: int
 
 # ── Counting a call ────────────────────────────────────────────────────
 
+_purpose: contextvars.ContextVar[str] = contextvars.ContextVar("ai_purpose", default="")
+OTHER = "Other"
+
+
+@contextlib.contextmanager
+def purpose(name: str | None):
+    """Calls made inside are tallied under this name ("Note summaries"), so the usage panel can say what the spending
+    went to. Nesting keeps the outermost name."""
+    if not name or _purpose.get():
+        yield
+        return
+    token = _purpose.set(name)
+    try:
+        yield
+    finally:
+        _purpose.reset(token)
+
+
+def write(*, provider: str, model: str, call: str = "complete", input_tokens: int | None = None,
+          cached_tokens: int | None = None, output_tokens: int | None = None, cost: float | None = None,
+          error: str | None = None, local: bool = False, searches: int = 0, source: str | None = None,
+          asker: tuple[str, str] | None = None, when: datetime | None = None) -> None:
+    """The one row every counted AI call becomes (core_ai_usage). cost: dollars, None when it isn't known. Never
+    raises: a call doesn't fail over its own bookkeeping."""
+    try:
+        job = jobs.current()
+        module, kind = asker or ((job.module, job.kind) if job else ("", ""))
+        db.execute(
+            "INSERT INTO core_ai_usage (id, at, module, job, call, provider, model, input_tokens, cached_tokens, "
+            "output_tokens, cost, failed, error, source, searches, local) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (db.new_id(), _stamp(when or datetime.now(timezone.utc)), module, kind, call, provider, model or "",
+             input_tokens, cached_tokens, output_tokens, cost, int(error is not None), (error or "")[:300] or None,
+             source or _purpose.get() or OTHER, searches, int(local)),
+        )
+    except Exception:  # noqa: BLE001 - the answer matters more than its receipt
+        log.exception("couldn't record an AI call's usage")
+
 def count(value) -> int | None:
     """A token count from a reply, or None when it isn't one."""
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
@@ -201,6 +222,7 @@ class Meter:
     def __init__(self, provider: str, model: str = "", free: bool = False, asker: tuple[str, str] | None = None):
         self.provider, self.model, self.free = provider, model, free
         self.asker = asker
+        self.searches = 0            # web searches the call paid for (Gemini research), counted apart from tokens
         self.requests: list[_Request] = []
 
     def add(self, input_tokens: int | None, output_tokens: int | None, cached: int = 0, model: str | None = None) -> None:
@@ -234,21 +256,12 @@ class Meter:
     def record(self, call: str, error: str | None = None, stopped: bool = False) -> None:
         """Writes the attempt to the usage log. Never raises: a call doesn't fail over its own bookkeeping.
         stopped: Lockdown stopped it before anything was sent (error is Lockdown's reason), so it cost nothing."""
-        try:
-            when = datetime.now(timezone.utc)
-            job = jobs.current()
-            module, kind = self.asker or ((job.module, job.kind) if job else ("", _purpose.get()))
-            inp, cached, out = self.tokens()
-            spent = 0.0 if stopped else None if error and not self.requests else self.cost(when)
-            model = next((r.model for r in reversed(self.requests) if r.model), self.model)
-            db.execute(
-                "INSERT INTO core_ai_usage (id, at, module, job, call, provider, model, input_tokens, cached_tokens, "
-                "output_tokens, cost, failed, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (db.new_id(), _stamp(when), module, kind, call, self.provider, model or "", inp, cached, out, spent,
-                 int(error is not None), (error or "")[:300] or None),
-            )
-        except Exception:  # noqa: BLE001 - the answer matters more than its receipt
-            log.exception("couldn't record an AI call's usage")
+        when = datetime.now(timezone.utc)
+        inp, cached, out = self.tokens()
+        spent = 0.0 if stopped else None if error and not self.requests else self.cost(when)
+        model = next((r.model for r in reversed(self.requests) if r.model), self.model)
+        write(provider=self.provider, model=model, call=call, input_tokens=inp, cached_tokens=cached, output_tokens=out,
+              cost=spent, error=error, local=self.free, searches=self.searches, asker=self.asker, when=when)
 
 
 # ── Totals for Settings ────────────────────────────────────────────────

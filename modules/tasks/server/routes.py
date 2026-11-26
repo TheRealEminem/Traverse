@@ -109,7 +109,8 @@ def get_project(project_id: str):
         raise HTTPException(404, "Project not found")
     if project["latest_status"]:
         project["latest_status"] = synced.update_sharing([project["latest_status"]])[0]
-    return {**project, "synced_with": _synced_with(links.ref("tasks", project_id))}
+    return {**project, "synced_with": _synced_with(links.ref("tasks", project_id)),
+            "unshared": len(synced.unshared(project_id))}
 
 
 def _synced_with(ref: str) -> list[dict]:
@@ -133,6 +134,16 @@ def delete_project(project_id: str):
 def move_project(project_id: str, body: dict = Body(...)):
     with answers("Project not found"):
         return projects.move(project_id, body.get("after_id"))
+
+
+@router.post("/projects/{project_id}/share")
+def share_project(project_id: str):
+    """"Send the new ones": asks for every open task of the project that isn't linked yet to be made where the
+    project is linked. Each waits for your approval there, unless that project sends new work on its own."""
+    if projects.get(project_id) is None:
+        raise HTTPException(404, "Project not found")
+    with answers():
+        return synced.share_new(project_id)
 
 
 @router.post("/projects/{project_id}/milestones", status_code=201)

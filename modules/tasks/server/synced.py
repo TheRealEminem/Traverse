@@ -23,7 +23,7 @@ its things have a copy here without reading this module's tables; a project is l
 import json
 import logging
 
-from core.server import contracts, db, events, links, module
+from core.server import config, contracts, db, events, links, module
 
 from . import items, projects, store, vocab
 
@@ -251,9 +251,33 @@ def share(item_id: str) -> dict:
                    "base": {}, "project_ref": project_ref}
     events.publish(contracts.WORK_SHARE_REQUESTED, payload)
     if not links.targets(local, "share"):
-        raise ValueError("Nothing took it. The part of Traverse that sends it there may be turned off.")
+        raise ValueError(f"Nothing took it. The part of {config.NAME} that sends it there may be turned off.")
     store.changed(item["project_id"], item_id=item_id)
     return {"fields": groups, "new": row is None}
+
+
+def unshared(project_id: str) -> list[str]:
+    """The project's open top-level tasks that aren't linked anywhere and aren't waiting to be sent: what "Send the
+    new ones" would ask for. Empty when the project isn't linked."""
+    if not links.targets(links.ref("tasks", project_id), "synced"):
+        return []
+    rows = db.query("SELECT id FROM tasks_items i WHERE project_id = ? AND parent_id IS NULL AND status IN "
+                    f"({','.join('?' * len(vocab.OPEN))}) AND NOT EXISTS (SELECT 1 FROM tasks_synced s "
+                    "WHERE s.item_id = i.id) ORDER BY sort, created_at", (project_id, *vocab.OPEN))
+    ids = [r["id"] for r in rows]
+    waiting = links.targets_of([links.ref("tasks", i) for i in ids], "share")
+    return [i for i in ids if not waiting.get(links.ref("tasks", i))]
+
+
+def share_new(project_id: str) -> dict:
+    """Asks for each of unshared(project_id) to be made where the project is linked (share, one by one). Returns
+    {"asked": how many}."""
+    found = unshared(project_id)
+    if not found and not links.targets(links.ref("tasks", project_id), "synced"):
+        raise ValueError("This project isn't linked anywhere, so there's nowhere to send its tasks")
+    for item_id in found:
+        share(item_id)
+    return {"asked": len(found)}
 
 
 def can_comment(item_id: str, project_id: str | None = None) -> dict:
@@ -295,7 +319,7 @@ def comment(update_id: str, item_id: str | None = None) -> dict:
         "written_by": update["written_by"]})
     waiting = [d for d in (module.describe(r) for r in links.targets(ref, "share")) if d]
     if not waiting:
-        raise ValueError("Nothing took it. The part of Traverse that sends it there may be turned off.")
+        raise ValueError(f"Nothing took it. The part of {config.NAME} that sends it there may be turned off.")
     item = db.one("SELECT project_id FROM tasks_items WHERE id = ?", (item_id,))
     store.changed(update["project_id"] or item["project_id"], update_id=update_id)
     return {"title": waiting[0]["title"], "href": waiting[0]["href"]}

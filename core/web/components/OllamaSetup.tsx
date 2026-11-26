@@ -1,7 +1,7 @@
 // Getting a model that runs on this Mac: install Ollama, download the model that suits this Mac, then Ready.
 // Shared by the first-run setup and Settings → AI. Each step is a button; the work shows its progress.
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, words } from "../api";
 import type { OllamaStatus } from "../api";
 import { AlertIcon, CheckIcon, DownloadIcon, LockIcon } from "./icons";
 import { Spinner } from "./ui";
@@ -58,12 +58,27 @@ export function OllamaSetup({ onReady }: { onReady?: () => void }) {
 
   const failure = s.install?.error || s.pull?.error;
   let body;
-  if (!s.can_install && !s.reachable) {
+  if (s.install_command && !s.reachable) {
+    body = (
+      <>
+        <p className="text-hint text-ink-soft">Ollama is the free app that runs AI models on {words.here}. Its install script needs your password, so run this in {words.terminal}, and it shows up here:</p>
+        <code className="mt-2 block break-all font-mono text-meta">{s.install_command}</code>
+        {s.install_page && <a className="mt-2 inline-block text-hint underline" href={s.install_page} target="_blank" rel="noreferrer">Ollama's instructions</a>}
+      </>
+    );
+  } else if (s.start_command && !s.reachable) {
+    body = (
+      <>
+        <p className="text-hint text-ink-soft">Ollama is installed but not running. Run this in {words.terminal}, and it shows up here:</p>
+        <code className="mt-2 block break-all font-mono text-meta">{s.start_command}</code>
+      </>
+    );
+  } else if (!s.can_install && !s.reachable) {
     body = <p className="text-hint text-ink-soft">Ollama isn't running. Install it from ollama.com and open it, and it shows up here.</p>;
   } else if (!s.installed && !s.reachable) {
     body = (
       <>
-        <p className="text-hint text-ink-soft">Ollama is the free app that runs AI models on this Mac. It's a download of about 1 GB, checked against Ollama's own signature before it's installed.</p>
+        <p className="text-hint text-ink-soft">Ollama is the free app that runs AI models on {words.here}. It's a download of about 1 GB, checked against Ollama's own signature before it's installed.</p>
         <button className="btn btn-sm btn-soft mt-3" disabled={working || s.locked} onClick={() => void act(api.ollamaInstall)}>
           <DownloadIcon size={16} /> Install Ollama
         </button>
@@ -79,7 +94,7 @@ export function OllamaSetup({ onReady }: { onReady?: () => void }) {
   } else if (!ready) {
     body = (
       <>
-        <p className="text-hint text-ink-soft">Ollama is running but has no model yet. {s.recommended} suits this Mac.</p>
+        <p className="text-hint text-ink-soft">Ollama is running but has no model yet. {s.recommended} suits {words.here}.</p>
         <button className="btn btn-sm btn-soft mt-3" disabled={working || s.locked} onClick={() => void act(() => api.ollamaPull(s.recommended))}>
           <DownloadIcon size={16} /> Download {s.recommended}
         </button>
@@ -87,9 +102,26 @@ export function OllamaSetup({ onReady }: { onReady?: () => void }) {
     );
   } else {
     body = (
-      <p className="flex items-center gap-1.5 text-label text-forest-deep">
-        <CheckIcon size={16} /> Ready: {s.using || s.models[0]} runs on this Mac.
-      </p>
+      <>
+        <p className="flex items-center gap-1.5 text-label text-forest-deep">
+          <CheckIcon size={16} /> Ready: {s.using || s.models[0]} runs on {words.here}.
+        </p>
+        {s.suggestion && !s.pull?.active && (
+          <div className="mt-3">
+            <p className="text-hint text-ink-soft">
+              A newer model suits {words.here}: {s.suggestion.model}. It would be used instead of {s.suggestion.replaces}; the older one stays installed until you remove it from Ollama.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button className="btn btn-sm btn-soft" disabled={working || s.locked} onClick={() => void act(() => api.ollamaPull(s.suggestion!.model))}>
+                <DownloadIcon size={16} /> Download {s.suggestion.model}
+              </button>
+              <button className="btn btn-sm btn-ghost" disabled={working} onClick={() => void act(async () => { await api.ollamaDismissSuggestion(s.suggestion!.model); return { started: false }; })}>
+                Not now
+              </button>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 

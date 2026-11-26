@@ -17,7 +17,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import ai, auth, backup, briefing, config, db, events, family, jobs, links, lockdown, mcp, module, ollama_setup, people, resources, schedule, search, settings
+from . import (ai, auth, backup, briefing, computer, config, db, events, family, jobs, links, lockdown, mcp, module, ollama_setup,
+                people, resources, schedule, search, settings)
 from . import setup as first_run
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -25,7 +26,8 @@ log = logging.getLogger("core")
 
 # Shared by every module. your_name: "You" in anything that names people. appearance: Day, Dusk or the system's.
 # share_with_family: whether this app shares keys and preferences with the other family apps on this Mac (family.py).
-# lockdown: nothing leaves this Mac (lockdown.py); shared with the family.
+# lockdown: nothing leaves this computer (lockdown.py); shared with the family like the AI settings.
+# setup_done: whether first run has been answered (setup.py). This app's own, never shared.
 CORE_SETTINGS = {"your_name": "", "appearance": "system", "share_with_family": True, "lockdown": False, "setup_done": False}
 CORE_CHOICES = {"appearance": ("system", "light", "dusk")}
 
@@ -148,8 +150,10 @@ class LinkBody(BaseModel):
 def app_info():
     """Who this app is and what it's made of; the web app builds its navigation from this."""
     return {"id": config.APP_ID, "name": config.NAME, "tagline": config.IDENTITY.get("tagline", ""),
-            "version": config.VERSION, "modules": [{"id": m.id, "name": m.name} for m in module.all_modules()],
-            "auth_required": auth.required(), "lockdown": lockdown.on(), "setup_done": first_run.done()}
+            "version": config.VERSION, "auth_required": auth.required(), "lockdown": lockdown.on(), "setup_done": first_run.done(),
+            "computer": computer.info(),
+            "modules": [{"id": m.id, "name": m.name, "optional": m.active is not None, "active": module.is_active(m)}
+                        for m in module.all_modules()]}
 
 
 @core_router.get("/auth")
@@ -264,18 +268,18 @@ async def ai_models(pid: str):
 
 
 @core_router.post("/ai/providers/{pid}/test")
-async def ai_test(pid: str):
+async def ai_test(pid: str, model: str = ""):
     if pid not in ai.PROVIDERS:
         raise HTTPException(404, "No such provider")
     try:
-        return {"message": await run_in_threadpool(ai.test, pid)}
+        return {"message": await run_in_threadpool(ai.test, pid, model)}
     except ai.AIError as e:
         raise HTTPException(502, str(e)) from e
 
 
 @core_router.get("/ai/usage")
-def ai_usage():
-    return ai.usage()
+async def ai_usage():
+    return await run_in_threadpool(ai.usage_report)
 
 
 class PathBody(BaseModel):
@@ -339,6 +343,12 @@ def ollama_pull(body: PullBody):
     except PermissionError as e:
         raise HTTPException(403, str(e)) from e
     return {"started": started}
+
+
+@core_router.post("/ollama/dismiss-suggestion")
+def ollama_dismiss_suggestion(body: PullBody):
+    ollama_setup.dismiss_suggestion(body.model.strip())
+    return {"ok": True}
 
 
 @core_router.get("/system")
