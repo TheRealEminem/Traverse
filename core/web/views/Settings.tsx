@@ -1,6 +1,8 @@
 // Settings: the host's own sections (appearance, you, AI, the app), then one section per module, then the connections
-// to outside tools (Connect a tool).
-import { useEffect, useRef, useState } from "react";
+// to outside tools (Connect a tool). A row of links at the top jumps to each; #/settings?section=<id> opens at one
+// (a module's is its id, so ?section=notes), which is how other screens send you to a setting.
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { api, can, inApp, quitApp, sendUpdates, words } from "../api";
 import type { FamilyStatus, ProviderId, ProviderInfo, SystemInfo, UpdateReport } from "../api";
 import { Section, SecretSetting, TextSetting } from "../components/blocks";
@@ -120,15 +122,9 @@ function ChooseWhereAiRuns() {
 /** Lockdown: one switch, shared by the family apps on this Mac. */
 function Privacy({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
   const status = useLockdown();
-  const [params] = useQueryParams();
-  const here = useRef<HTMLDivElement>(null);
-  const asked = params.get("section") === "lockdown";
-  useEffect(() => {
-    if (asked) here.current?.scrollIntoView({ block: "start" });
-  }, [asked]);
   const parked = status?.parked ?? 0;
   return (
-    <div ref={here} className="scroll-mt-6">
+    <Part id="lockdown">
       <Section icon={<LockIcon size={16} />} title="Privacy" blurb={`Everything is kept on ${words.here}. Lockdown makes sure nothing is sent out either.`}>
         <SwitchRow
           label="Lockdown"
@@ -141,7 +137,7 @@ function Privacy({ on, onChange }: { on: boolean; onChange: (on: boolean) => voi
           onChange={onChange}
         />
       </Section>
-    </div>
+    </Part>
   );
 }
 
@@ -286,22 +282,86 @@ function Updates() {
   );
 }
 
+/** One of the page's sections, with an anchor the contents row and ?section= jump to. */
+function Part({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <div id={`settings-${id}`} className="scroll-mt-20 lg:scroll-mt-8">
+      {children}
+    </div>
+  );
+}
+
+function jump(id: string, behavior: ScrollBehavior = "smooth") {
+  document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior, block: "start" });
+}
+
+/** Opening at a section (?section=): the sections above it load their own data and grow, so it keeps the section in
+ *  view for a moment, until you scroll yourself. */
+function useOpenAt(id: string | null, ready: boolean) {
+  useEffect(() => {
+    if (!id || !ready) return;
+    let tries = 0;
+    const stop = () => {
+      clearInterval(timer);
+      ["wheel", "touchmove", "keydown"].forEach((e) => window.removeEventListener(e, stop));
+    };
+    const timer = setInterval(() => {
+      jump(id, "auto");
+      if (++tries >= 8) stop();
+    }, 120);
+    ["wheel", "touchmove", "keydown"].forEach((e) => window.addEventListener(e, stop, { passive: true }));
+    return stop;
+  }, [id, ready]);
+}
+
+/** The page's sections as a row of links: the page has grown long. */
+function Contents({ parts, onPick }: { parts: { id: string; label: string }[]; onPick: (id: string) => void }) {
+  return (
+    <nav aria-label="Sections of Settings" className="-mt-4 mb-8 flex animate-enter flex-wrap gap-1.5">
+      {parts.map((p) => (
+        <a
+          key={p.id}
+          href={`#/settings?section=${p.id}`}
+          onClick={(e) => {
+            e.preventDefault();
+            onPick(p.id);
+          }}
+          className="rounded-full border border-line bg-surface px-3 py-1 text-ui text-ink-soft transition-colors hover:border-forest/30 hover:text-ink"
+        >
+          {p.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
 export default function Settings() {
   const { app, theme, toast, reopenSetup } = useShell();
   const { values, hints, save } = useSettings();
   const { data: providers } = useLive<ProviderInfo[]>(api.providers);
   const { data: family } = useLive<FamilyStatus>(api.family);
   const [setup, setSetup] = useState<ProviderId | null>(null);
-  const [params] = useQueryParams();
-  const connect = useRef<HTMLDivElement>(null);
-  const asked = params.get("section") === "connect";
-  useEffect(() => {
-    if (asked && values) connect.current?.scrollIntoView({ block: "start" });
-  }, [asked, values]);
+  const [params, setParams] = useQueryParams();
+  useOpenAt(params.get("section"), !!values);
   const modules = modulesFor(app.modules.filter((m) => !m.optional).map((m) => m.id)).filter((m) => m.settings);
   const connections = modulesFor(app.modules.filter((m) => m.optional).map((m) => m.id)).filter((m) => m.settings);
   const connected = app.modules.filter((m) => m.optional && m.active).map((m) => m.name);
   if (!values) return null;
+  const parts = [
+    { id: "appearance", label: "Appearance" },
+    { id: "ai", label: "AI" },
+    { id: "lockdown", label: "Privacy" },
+    { id: "ai-usage", label: "AI usage" },
+    { id: "claude", label: "Claude" },
+    { id: "family", label: "Family apps" },
+    ...modules.map((m) => ({ id: m.id, label: m.name })),
+    ...(connections.length ? [{ id: "connect", label: "Connect a tool" }] : []),
+    { id: "data", label: "Your data" },
+  ];
+  const pick = (id: string) => {
+    jump(id);
+    setParams({ section: id });
+  };
   const options = (providers ?? []).map((p) => ({ value: p.id, label: p.label, hint: p.kind === "local" ? `Runs on ${words.here}` : "Cloud" }));
   const primary = values["ai.provider"] as ProviderId;
   const setupId = setup ?? primary;
@@ -310,71 +370,86 @@ export default function Settings() {
   return (
     <>
       <PageHeader title="Settings" subtitle={`Everything ${app.name} keeps is on this machine.`} />
+      <Contents parts={parts} onPick={pick} />
 
-      <Section icon={<SunIcon size={16} />} title="Appearance" blurb="Dusk is the same trail after sunset.">
-        <ControlRow label="Theme">
-          <Segmented<ThemePref>
-            label="Theme"
-            size="sm"
-            value={theme.pref}
-            onChange={theme.setPref}
-            options={[
-              { id: "light", label: "Day", icon: <SunIcon size={16} /> },
-              { id: "dusk", label: "Dusk", icon: <MoonIcon size={16} /> },
-              { id: "system", label: "System", icon: <MonitorIcon size={16} /> },
-            ]}
-          />
-        </ControlRow>
-        <ControlRow icon={<UsersIcon size={16} />} label="Your name" hint="Used instead of “You” wherever people are named.">
-          <TextSetting label="Your name" value={String(values["core.your_name"] ?? "")} onSave={(x) => save({ "core.your_name": x })} placeholder="e.g. Sam" />
-        </ControlRow>
-      </Section>
+      <Part id="appearance">
+        <Section icon={<SunIcon size={16} />} title="Appearance" blurb="Dusk is the same trail after sunset.">
+          <ControlRow label="Theme">
+            <Segmented<ThemePref>
+              label="Theme"
+              size="sm"
+              value={theme.pref}
+              onChange={theme.setPref}
+              options={[
+                { id: "light", label: "Day", icon: <SunIcon size={16} /> },
+                { id: "dusk", label: "Dusk", icon: <MoonIcon size={16} /> },
+                { id: "system", label: "System", icon: <MonitorIcon size={16} /> },
+              ]}
+            />
+          </ControlRow>
+          <ControlRow icon={<UsersIcon size={16} />} label="Your name" hint="Used instead of “You” wherever people are named.">
+            <TextSetting label="Your name" value={String(values["core.your_name"] ?? "")} onSave={(x) => save({ "core.your_name": x })} placeholder="e.g. Sam" />
+          </ControlRow>
+        </Section>
+      </Part>
 
       {!values["ai.path"] && <ChooseWhereAiRuns />}
 
       <OnThisMac />
 
-      <Section
-        icon={<SparkleIcon size={16} />}
-        title="AI"
-        blurb={`One choice for every part of the app. Local models never leave ${words.here}.${family?.sharing ? " Shared with your other family apps." : ""}`}
-        delay={60}
-      >
-        <ControlRow label="Provider" hint={providers?.find((p) => p.id === primary)?.reason || "Used first."}>
-          <Select label="Provider" size="sm" className="w-full sm:w-64" value={primary} options={options} onChange={(x) => save({ "ai.provider": x })} />
-        </ControlRow>
-        <ControlRow label="Fallback" hint="Tried if the first fails (offline, out of credit, and so on).">
-          <Select
-            label="Fallback"
-            size="sm"
-            className="w-full sm:w-64"
-            value={String(values["ai.fallback"])}
-            options={[{ value: "none", label: "None" }, ...options.filter((o) => o.value !== primary)]}
-            onChange={(x) => save({ "ai.fallback": x })}
-          />
-        </ControlRow>
-        <ControlRow label="Set up" hint="Each provider keeps its own key and model, so the jobs below can use different ones.">
-          <Select label="Provider to set up" size="sm" className="w-full sm:w-64" value={setupId} options={setupOptions} onChange={(x) => setSetup(x as ProviderId)} />
-        </ControlRow>
-        <ProviderFields key={setupId} id={setupId} values={values} hints={hints} save={save} />
-        <UsageRows />
-      </Section>
+      <Part id="ai">
+        <Section
+          icon={<SparkleIcon size={16} />}
+          title="AI"
+          blurb={`One choice for every part of the app. Local models never leave ${words.here}.${family?.sharing ? " Shared with your other family apps." : ""}`}
+          delay={60}
+        >
+          <ControlRow label="Provider" hint={providers?.find((p) => p.id === primary)?.reason || "Used first."}>
+            <Select label="Provider" size="sm" className="w-full sm:w-64" value={primary} options={options} onChange={(x) => save({ "ai.provider": x })} />
+          </ControlRow>
+          <ControlRow label="Fallback" hint="Tried if the first fails (offline, out of credit, and so on).">
+            <Select
+              label="Fallback"
+              size="sm"
+              className="w-full sm:w-64"
+              value={String(values["ai.fallback"])}
+              options={[{ value: "none", label: "None" }, ...options.filter((o) => o.value !== primary)]}
+              onChange={(x) => save({ "ai.fallback": x })}
+            />
+          </ControlRow>
+          <ControlRow label="Set up" hint="Each provider keeps its own key and model, so the jobs below can use different ones.">
+            <Select label="Provider to set up" size="sm" className="w-full sm:w-64" value={setupId} options={setupOptions} onChange={(x) => setSetup(x as ProviderId)} />
+          </ControlRow>
+          <ProviderFields key={setupId} id={setupId} values={values} hints={hints} save={save} />
+          <UsageRows />
+        </Section>
+      </Part>
 
       <Privacy on={!!values["core.lockdown"]} onChange={(on) => void save({ "core.lockdown": on })} />
 
-      <AIUsage />
+      <Part id="ai-usage">
+        <AIUsage />
+      </Part>
 
-      <ClaudeAccess />
+      <Part id="claude">
+        <ClaudeAccess />
+      </Part>
 
-      <FamilyApps data={family ?? null} onSharing={(on) => void save({ "core.share_with_family": on })} />
+      <Part id="family">
+        <FamilyApps data={family ?? null} onSharing={(on) => void save({ "core.share_with_family": on })} />
+      </Part>
 
       {modules.map((m) => {
         const ModuleSettings = m.settings!;
-        return <ModuleSettings key={m.id} />;
+        return (
+          <Part key={m.id} id={m.id}>
+            <ModuleSettings />
+          </Part>
+        );
       })}
 
       {connections.length > 0 && (
-        <div ref={connect} className="scroll-mt-6">
+        <Part id="connect">
           <Section
             icon={<NetworkIcon size={16} />}
             title="Connect a tool"
@@ -390,12 +465,18 @@ export default function Settings() {
           </Section>
           {connections.map((m) => {
             const ModuleSettings = m.settings!;
-            return <ModuleSettings key={m.id} />;
+            return (
+              <Part key={m.id} id={m.id}>
+                <ModuleSettings />
+              </Part>
+            );
           })}
-        </div>
+        </Part>
       )}
 
-      <YourData />
+      <Part id="data">
+        <YourData />
+      </Part>
 
       <Updates />
 

@@ -1,10 +1,11 @@
-// The plane module's web half: the Team view, Linking, the Outbox (with how many pushes wait for you), and its
-// section in Settings.
+// The plane module's web half: the Team view, Linking, the Outbox (with how many pushes wait for you), its card on
+// Home (what's waiting to send) and its section in Settings.
 import { NetworkIcon, UsersIcon, icon } from "@core/components/icons";
 import type { ModuleWeb } from "@core/registry";
 import { Send } from "lucide-react";
 import Linking from "./Linking";
 import Outbox, { OutboxCount } from "./Outbox";
+import PlaneHome from "./PlaneHome";
 import PlaneSettings from "./PlaneSettings";
 import TeamView from "./TeamView";
 
@@ -24,6 +25,7 @@ const plane: ModuleWeb = {
     { path: "plane/links", view: Linking },
     { path: "plane/outbox", view: Outbox },
   ],
+  home: PlaneHome,
   settings: PlaneSettings,
 };
 

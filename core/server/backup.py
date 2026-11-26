@@ -1,4 +1,4 @@
-"""Backups and restore, and a plain-JSON export of what you have.
+"""Backups and restore, and a plain-JSON export of what you have (every module's, and the links between them).
 
 A backup is a complete copy of the database made with SQLite's own online backup, so it is consistent even while the
 app is writing, and it holds everything every module keeps, plus settings and keys. They live in the data
@@ -26,6 +26,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 from . import config, db, events, jobs, module
 
@@ -40,6 +41,7 @@ HOURLY_AFTER_MINUTES = 50        # the hourly one is skipped if there is already
 NOT_DATA = ("core_jobs",)        # bookkeeping that changes by itself (the backup job is one), so not a reason to copy
 KINDS = ("before-update", "before-restore", "manual", "auto")    # the label a copy shows when it has several
 _NAME = re.compile(rf"^{re.escape(config.APP_ID)}-\d{{8}}-\d{{6}}(?:-(manual|before-restore|before-update))?\.db$")
+_EXPORT_NAME = re.compile(rf"^{re.escape(config.APP_ID)}-export-\d{{8}}-\d{{6}}\.json$")
 
 router = APIRouter()
 
@@ -409,8 +411,16 @@ def handle_hourly(job: jobs.Job) -> None:
 
 # ── Export ────────────────────────────────────────────────────────────
 
+def _usage() -> list[dict]:
+    """The AI usage log without its `error` text: a provider's error can echo a key or a URL with a password in it, and
+    the export promises to hold no keys."""
+    cols = [r["name"] for r in db.query("PRAGMA table_info(core_ai_usage)") if r["name"] != "error"]
+    return db.query(f"SELECT {', '.join(cols)} FROM core_ai_usage ORDER BY at")
+
+
 def export_all() -> dict:
-    """Everything the modules hold, as one readable JSON file in the data folder's `exports/`. No settings, so no keys."""
+    """Everything the modules hold, as one readable JSON file in the data folder's `exports/`, with the host's own
+    records beside them: the links between things in different modules, and the AI usage log. No settings, so no keys."""
     EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     try:
         EXPORT_DIR.chmod(0o700)
@@ -418,12 +428,15 @@ def export_all() -> dict:
         pass
     now = _now()
     body = {"app": config.APP_ID, "version": config.VERSION, "exported_at": now.isoformat(),
+            "core": {"links": db.query("SELECT * FROM core_links ORDER BY created_at"),
+                     "ai_usage": _usage()},
             "modules": {m.id: m.export() for m in module.all_modules() if m.export}}
     path = EXPORT_DIR / f"{config.APP_ID}-export-{now.strftime('%Y%m%d-%H%M%S')}.json"
     path.write_text(json.dumps(body, indent=1, ensure_ascii=False, default=str))
     path.chmod(0o600)
+    held = {"core": body["core"], **body["modules"]}
     return {"name": path.name, "folder": str(EXPORT_DIR), "bytes": path.stat().st_size,
-            "counts": {mid: {k: len(v) for k, v in data.items() if isinstance(v, list)} for mid, data in body["modules"].items()}}
+            "counts": {mid: {k: len(v) for k, v in data.items() if isinstance(v, list)} for mid, data in held.items()}}
 
 
 # ── API ───────────────────────────────────────────────────────────────
@@ -472,3 +485,12 @@ def delete_backup(name: str):
 @router.post("/export")
 def export():
     return export_all()
+
+
+@router.get("/exports/{name}")
+def download_export(name: str):
+    """An export, to save from a browser (the Mac app opens the data folder instead)."""
+    path = EXPORT_DIR / name
+    if not _EXPORT_NAME.match(name) or not path.is_file():
+        raise HTTPException(404, "There's no export by that name")
+    return FileResponse(path, media_type="application/json", filename=name)
